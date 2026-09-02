@@ -1,0 +1,105 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    function isKnownUser() {
+      return isSignedIn() && exists(/databases/$(database)/documents/users/$(request.auth.uid));
+    }
+    function isAdmin() {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+    function isSubadmin() {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'subadmin';
+    }
+    // The nurse currently holding the Overall Nurse role for a given week
+    // (see /nurseReportRoles/{weekId}) — used to gate first-time archiving.
+    function isOverallForWeek(wid) {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/nurseReportRoles/$(wid))
+        && get(/databases/$(database)/documents/nurseReportRoles/$(wid)).data.overallNurse.uid == request.auth.uid;
+    }
+
+    // User profiles / roles
+    match /users/{uid} {
+      allow read: if isKnownUser();
+      allow create: if isSignedIn() && isAdmin();
+      // Admins can update anything. A signed-in user may also edit their own
+      // profile (name, phone, department, etc.) but may not change their own
+      // role or email through this path.
+      allow update: if isAdmin() || (
+        isSignedIn() && request.auth.uid == uid &&
+        request.resource.data.role == resource.data.role &&
+        request.resource.data.email == resource.data.email
+      );
+      allow delete: if isAdmin();
+
+      // Push tokens for drug-due alerts (js/push.js). A nurse manages only
+      // her own device tokens; the alert Cloud Function reads across all
+      // users via the Admin SDK, which bypasses these rules entirely.
+      match /pushTokens/{tokenId} {
+        allow read, write: if isSignedIn() && request.auth.uid == uid;
+      }
+    }
+
+    // Drug-due alarm policy (sound/appearance/repeat/quiet-hours/frequencies)
+    // set by an admin in admin.html and applied on every device in
+    // js/push.js. Any signed-in user needs read access — it's their own
+    // device's alarm behavior that depends on it — but only an admin may
+    // change ward-wide alarm policy.
+    match /settings/{settingId} {
+      allow read: if isKnownUser();
+      allow write: if isAdmin();
+    }
+
+    // Nurses Report — the weekly Overall Nurse assignment, and each day's
+    // 24-hour ward census. Any known user may claim/hand off the Overall
+    // Nurse role or edit ward figures — the app itself gates who sees the
+    // Overall Nurse page, matching how admin-only UI is gated elsewhere
+    // without every collection needing its own role check here.
+    match /nurseReportRoles/{weekId} {
+      allow read, write: if isKnownUser();
+    }
+    match /nurseReports/{dateId} {
+      allow read, write: if isKnownUser();
+
+      match /wards/{wardKey} {
+        allow read, write: if isKnownUser();
+      }
+    }
+
+    // Ward Charts Archive — the finalized, permanent daily record. One
+    // "overall_<dateId>" doc plus one "ward_<wardKey>_<dateId>" doc per
+    // ward are created together (see nurses-report/overall-nurse.html's
+    // Save to Archive action). Any known user may read/search the
+    // archive. Only the Overall Nurse for the report's week (checked via
+    // the weekId carried on the write itself), an admin, or a subadmin
+    // may create an archive entry the first time; once it exists, only an
+    // admin or subadmin may change it (correcting a figure or note) — even
+    // the Overall Nurse who filed it cannot edit it afterwards. Archive
+    // files are permanent: delete is never allowed, by anyone.
+    match /archives/{archiveId} {
+      allow read: if isKnownUser();
+      allow create: if isKnownUser()
+        && (isAdmin() || isSubadmin() || isOverallForWeek(request.resource.data.weekId));
+      allow update: if isAdmin() || isSubadmin();
+      allow delete: if false;
+    }
+
+    // Patients and every chart subcollection under them
+    match /patients/{patientId} {
+      allow read, create, update: if isKnownUser();
+      allow delete: if isAdmin();
+
+      match /{chartCollection}/{chartDoc} {
+        allow read, create, update, delete: if isKnownUser();
+      }
+    }
+  }
+}
