@@ -67,6 +67,25 @@ service cloud.firestore {
       allow delete: if isSignedIn() && resource.data.uid == request.auth.uid;
     }
 
+    // Ward-wide community feed (Community page) — a single shared board any
+    // signed-in staff member can post to and read. Author name/gender are
+    // denormalized onto each post at write time so the feed never needs a
+    // users/ lookup per post. A post may only be edited/deleted by the
+    // nurse who wrote it — never by another nurse, not even an admin.
+    match /communityPosts/{postId} {
+      allow read: if isKnownUser();
+      allow create: if isSignedIn() && request.resource.data.uid == request.auth.uid;
+      allow update, delete: if isSignedIn() && resource.data.uid == request.auth.uid;
+
+      // Replies on a post. Same authorship rule as the post itself — only
+      // the comment's own author may edit or remove it.
+      match /comments/{commentId} {
+        allow read: if isKnownUser();
+        allow create: if isSignedIn() && request.resource.data.uid == request.auth.uid;
+        allow update, delete: if isSignedIn() && resource.data.uid == request.auth.uid;
+      }
+    }
+
     // Ward-name overrides, column-label overrides, and admin-added custom
     // columns for the Nurses Report tables — any known user reads it (it
     // drives what's shown on the Overall Statistics table and every ward

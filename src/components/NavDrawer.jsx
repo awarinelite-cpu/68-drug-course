@@ -58,6 +58,7 @@ export default function NavDrawer() {
           </button>
           <button className="gnav-link" onClick={() => go("/profile")}><span className="gnav-icon">&#128100;</span>My Profile</button>
           <button className="gnav-link" onClick={() => go("/my-patients")}><span className="gnav-icon">&#128101;</span>My Patients</button>
+          <button className="gnav-link" onClick={() => go("/community")}><span className="gnav-icon">&#128172;</span>Community</button>
           <button className="gnav-link" onClick={() => go("/nurses-report/role-select")}><span className="gnav-icon">&#128203;</span>Nurses Report</button>
           <button className="gnav-link" onClick={() => go(patientId ? "/charts/calculators?patient=" + encodeURIComponent(patientId) : "/charts/calculators")}><span className="gnav-icon">&#129518;</span>Calculators</button>
           <button className="gnav-link" onClick={() => go("/charts/lab-reference")}><span className="gnav-icon">&#128300;</span>Lab Reference</button>

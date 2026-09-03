@@ -680,3 +680,38 @@ h1.period-label { margin: 0; display: flex; align-items: center; flex-wrap: wrap
 /* Taller than the default .chart-wrap — needs room for a label per ward
    (19 wards) on a horizontal bar chart, not just a handful of columns. */
 #wardBreakdownWrap { height: 480px; }
+
+/* Community feed (Community.jsx) */
+.composer { display: flex; gap: 10px; align-items: flex-start; }
+.composer-avatar { flex-shrink: 0; }
+.composer textarea { flex: 1; min-height: 60px; resize: vertical; }
+.composer-actions { display: flex; justify-content: flex-end; margin-top: 8px; }
+.post { border: 1px solid #e5e7eb; border-radius: 8px; padding: 14px; margin-bottom: 12px; }
+.post-head { display: flex; gap: 10px; align-items: center; }
+.post-avatar { flex-shrink: 0; }
+.post-name { font-weight: bold; font-size: 14px; color: #111827; }
+.post-meta { font-size: 11px; color: #9ca3af; }
+.post-body { font-size: 14px; color: #111827; margin: 10px 0 6px; white-space: pre-wrap; word-break: break-word; }
+.post-edited { font-size: 11px; color: #9ca3af; font-style: italic; }
+.post-actions { display: flex; gap: 14px; margin-top: 8px; }
+.post-action-btn {
+  background: none; border: none; color: #6b7280; font-size: 12px; font-weight: bold;
+  cursor: pointer; padding: 2px 0;
+}
+.post-action-btn:hover { color: #2563eb; }
+.post-action-btn.danger:hover { color: #dc2626; }
+.comments { margin-top: 10px; padding-top: 10px; border-top: 1px solid #f3f4f6; display: none; }
+.comments.open { display: block; }
+.comment { display: flex; gap: 8px; margin-bottom: 10px; }
+.comment-avatar { flex-shrink: 0; }
+.comment-bubble { background: #f9fafb; border-radius: 8px; padding: 8px 10px; flex: 1; min-width: 0; }
+.comment-name { font-weight: bold; font-size: 12px; color: #111827; }
+.comment-text { font-size: 13px; color: #111827; margin-top: 2px; white-space: pre-wrap; word-break: break-word; }
+.comment-meta { font-size: 10px; color: #9ca3af; margin-top: 4px; display: flex; gap: 10px; }
+.comment-meta button { background: none; border: none; padding: 0; font-size: 10px; font-weight: bold; color: #9ca3af; cursor: pointer; }
+.comment-meta button:hover { color: #2563eb; }
+.comment-form { display: flex; gap: 8px; margin-top: 6px; }
+.comment-form input { flex: 1; padding: 8px 10px; font-size: 13px; }
+.comment-form button { flex-shrink: 0; }
+.edit-box { width: 100%; margin-top: 6px; }
+.edit-actions { display: flex; gap: 8px; margin-top: 6px; justify-content: flex-end; }
