@@ -715,3 +715,38 @@ h1.period-label { margin: 0; display: flex; align-items: center; flex-wrap: wrap
 .comment-form button { flex-shrink: 0; }
 .edit-box { width: 100%; margin-top: 6px; }
 .edit-actions { display: flex; gap: 8px; margin-top: 6px; justify-content: flex-end; }
+
+/* ---------- Messages page ---------- */
+.msg-tabs { display: flex; gap: 6px; margin-bottom: 14px; }
+.msg-tab-btn {
+  flex: 1; background: #f3f4f6; border: none; border-radius: 8px; padding: 10px;
+  font-weight: bold; font-size: 12px; color: #6b7280; cursor: pointer;
+}
+.msg-tab-btn.active { background: #2563eb; color: #fff; }
+.msg-pane { display: none; }
+.msg-pane.active { display: block; }
+
+.chat-item {
+  display: flex; gap: 10px; align-items: center; border: 1px solid #e5e7eb;
+  border-radius: 8px; padding: 12px; margin-bottom: 10px; cursor: pointer; position: relative;
+}
+.chat-item:hover { border-color: #2563eb; }
+.chat-avatar-wrap { position: relative; flex-shrink: 0; }
+.online-dot {
+  position: absolute; bottom: 0; right: 0; width: 11px; height: 11px; border-radius: 50%;
+  background: #16a34a; border: 2px solid #fff;
+}
+.chat-main { min-width: 0; flex: 1; }
+.chat-name { font-weight: bold; font-size: 14px; color: #111827; }
+.chat-preview { font-size: 12px; color: #6b7280; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.chat-preview.typing-preview { color: #16a34a; font-style: italic; }
+.chat-when { font-size: 11px; color: #9ca3af; flex-shrink: 0; }
+.unread-dot { width: 9px; height: 9px; border-radius: 50%; background: #2563eb; flex-shrink: 0; }
+.group-avatar {
+  width: 40px; height: 40px; border-radius: 50%; background: #6b7280; color: #fff;
+  display: flex; align-items: center; justify-content: center; font-size: 18px; flex-shrink: 0;
+}
+
+.nurse-pick { display: flex; align-items: center; gap: 10px; border: 1px solid #e5e7eb; border-radius: 8px; padding: 10px 12px; margin-bottom: 8px; cursor: pointer; }
+.nurse-pick.picked { border-color: #2563eb; background: #eff6ff; }
+.nurse-pick input { flex-shrink: 0; width: 18px; height: 18px; }
