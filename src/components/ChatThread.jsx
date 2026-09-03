@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import {
   collection, doc, getDoc, setDoc, addDoc, updateDoc, deleteDoc, serverTimestamp, orderBy, query, onSnapshot
 } from "firebase/firestore";
-import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import { ref, uploadBytes, uploadBytesResumable, getDownloadURL } from "firebase/storage";
 import { db, storage } from "../firebase.js";
 import { avatarMarkup } from "../lib/avatar.js";
 import Topbar from "./Topbar.jsx";
@@ -217,7 +217,12 @@ export default function ChatThread({ convoId, currentUid, currentProfile, nurseB
     }
     let stream;
     try {
-      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      // Mono + a modest sample rate is plenty for speech and keeps the raw
+      // capture (and therefore the encoded file) small before it ever hits
+      // the encoder — most mobile mics default to stereo/48kHz otherwise.
+      stream = await navigator.mediaDevices.getUserMedia({
+        audio: { channelCount: 1, sampleRate: 16000, echoCancellation: true, noiseSuppression: true }
+      });
     } catch (e) {
       alert("Couldn't access the microphone: " + (e.message || 'permission denied'));
       return;
@@ -225,7 +230,12 @@ export default function ChatThread({ convoId, currentUid, currentProfile, nurseB
     recordingStreamRef.current = stream;
     recordedChunksRef.current = [];
     const mimeType = MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : '';
-    const mr = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
+    // 24kbps is comfortably clear for spoken voice notes and cuts the file
+    // to roughly a fifth the size of the browser's uncapped default
+    // bitrate — that's the main lever on upload time over mobile data.
+    const recorderOpts = { audioBitsPerSecond: 24000 };
+    if (mimeType) recorderOpts.mimeType = mimeType;
+    const mr = new MediaRecorder(stream, recorderOpts);
     mr.addEventListener('dataavailable', (ev) => { if (ev.data && ev.data.size > 0) recordedChunksRef.current.push(ev.data); });
     mr.addEventListener('stop', onRecordingStopped);
     mr.start();
@@ -264,13 +274,19 @@ export default function ChatThread({ convoId, currentUid, currentProfile, nurseB
     const blob = new Blob(chunks, { type: mrType || 'audio/webm' });
     if (blob.size < 500) return; // too short / silent tap
 
-    setUploading('Uploading voice note…');
+    setUploading('Uploading voice note… 0%');
     try {
       const ext = (mrType && mrType.includes('mp4')) ? 'm4a' : 'webm';
       const path = 'chatUploads/' + convoId + '/' + Date.now() + '_voice.' + ext;
       const fileRef = ref(storage, path);
-      await uploadBytes(fileRef, blob, { contentType: mrType || 'audio/webm' });
-      const url = await getDownloadURL(fileRef);
+      const url = await new Promise((resolve, reject) => {
+        const task = uploadBytesResumable(fileRef, blob, { contentType: mrType || 'audio/webm' });
+        task.on('state_changed',
+          (snap) => setUploading('Uploading voice note… ' + Math.round((snap.bytesTransferred / snap.totalBytes) * 100) + '%'),
+          reject,
+          () => getDownloadURL(task.snapshot.ref).then(resolve, reject)
+        );
+      });
       await addDoc(collection(db, 'conversations', convoId, 'messages'), {
         senderUid: currentUid, text: '', audioUrl: url,
         replyTo: null,
