@@ -6,6 +6,7 @@ import { useAuth } from "../../contexts/AuthContext.jsx";
 import { useGoBack } from "../../hooks/useGoBack.js";
 import {
   WARDS, SHIFT_STAT_FIELDS, SHIFTS, PATIENT_FIELDS, PATIENT_STATUS_OPTIONS,
+  DEMOGRAPHIC_FIELDS, computeDemographicTotals,
   reportDateId, occDelta, blankShift, defaultWardDoc
 } from "../../lib/nurses-report-common.js";
 import Topbar from "../../components/Topbar.jsx";
@@ -147,6 +148,36 @@ function ShiftTable({ wardDoc, census, movementTotals, editable, onBeds, onField
   );
 }
 
+function DemographicsTable({ wardDoc, totals, editable, onField }) {
+  return (
+    <table className="shift">
+      <thead>
+        <tr>
+          <th>Shift</th>
+          {DEMOGRAPHIC_FIELDS.map(f => <th key={f.key}>{f.label}</th>)}
+        </tr>
+      </thead>
+      <tbody>
+        {SHIFTS.map((s) => (
+          <tr key={s.key}>
+            <td className="shift-name">{s.label}</td>
+            {DEMOGRAPHIC_FIELDS.map((f) => (
+              <td key={f.key}>
+                <input type="number" inputMode="numeric" disabled={!editable}
+                  value={wardDoc.shifts[s.key][f.key]} onChange={(e) => onField(s.key, f.key, e.target.value)} />
+              </td>
+            ))}
+          </tr>
+        ))}
+        <tr className="total-row">
+          <td className="shift-name">Total</td>
+          {DEMOGRAPHIC_FIELDS.map(f => <td key={f.key}>{totals[f.key]}</td>)}
+        </tr>
+      </tbody>
+    </table>
+  );
+}
+
 export default function WardNurse() {
   const { profile } = useAuth();
   const navigate = useNavigate();
@@ -225,6 +256,7 @@ export default function WardNurse() {
 
   const census = useMemo(() => wardDoc ? computeCensus(wardDoc) : null, [wardDoc]);
   const movementTotals = useMemo(() => wardDoc ? computeMovementTotals(wardDoc) : null, [wardDoc]);
+  const demographicTotals = useMemo(() => wardDoc ? computeDemographicTotals(wardDoc) : null, [wardDoc]);
 
   const isAdmin = profile?.role === 'admin';
   const editable = wardDoc ? ((isAdmin && adminEditOverride) || !wardDoc.locked) : false;
@@ -237,7 +269,7 @@ export default function WardNurse() {
       setWardDoc(doc_);
     }
     const ref = doc(db, 'nurseReports', dateId, 'wards', wardKey);
-    const finalDoc = { ...doc_, occ: census.occ, vac: census.vac, ...movementTotals };
+    const finalDoc = { ...doc_, occ: census.occ, vac: census.vac, ...movementTotals, ...demographicTotals };
     try {
       await setDoc(ref, { ...finalDoc, updatedAt: serverTimestamp(), updatedBy: profile.name || 'Unknown' }, { merge: true });
       setSaveStatus({ text: 'Saved.', error: false });
@@ -253,7 +285,7 @@ export default function WardNurse() {
     if (hasNightUpdate && !doc_.shifts.pm.nurseOnDuty && profile?.name) {
       doc_ = { ...doc_, shifts: { ...doc_.shifts, pm: { ...doc_.shifts.pm, nurseOnDuty: profile.name } } };
     }
-    const finalDoc = { ...doc_, occ: census.occ, vac: census.vac, ...movementTotals };
+    const finalDoc = { ...doc_, occ: census.occ, vac: census.vac, ...movementTotals, ...demographicTotals };
     const ref = doc(db, 'nurseReports', dateId, 'wards', wardKey);
     const payload = {
       ...finalDoc, submitted: true, locked: true,
@@ -321,6 +353,13 @@ export default function WardNurse() {
               <div className="table-wrap">
                 <ShiftTable wardDoc={wardDoc} census={census} movementTotals={movementTotals} editable={editable}
                   onBeds={updateBeds} onField={updateShiftField} onDuty={updateDuty} />
+              </div>
+            </div>
+
+            <div className="card-box">
+              <h2>Patient Demographics</h2>
+              <div className="table-wrap">
+                <DemographicsTable wardDoc={wardDoc} totals={demographicTotals} editable={editable} onField={updateShiftField} />
               </div>
             </div>
 

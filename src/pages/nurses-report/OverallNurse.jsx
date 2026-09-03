@@ -6,7 +6,8 @@ import {
 import { db } from "../../firebase.js";
 import { useAuth } from "../../contexts/AuthContext.jsx";
 import {
-  WARDS, STAT_FIELDS, SHIFT_STAT_FIELDS, SHIFTS, PATIENT_FIELDS, reportDateId, reportPeriodLabel,
+  WARDS, STAT_FIELDS, SHIFT_STAT_FIELDS, SHIFTS, PATIENT_FIELDS, DEMOGRAPHIC_FIELDS,
+  reportDateId, reportPeriodLabel,
   wardReportPeriodLabel, weekId, occDelta, defaultWardDoc,
   loadWardNameOverrides, saveWardNameOverride,
   loadHeaderLabelOverrides, saveHeaderLabelOverride, headerLabel, GROUP_LABEL_IDS,
@@ -334,6 +335,13 @@ export default function OverallNurse() {
     totals[f.key] = sum;
   });
 
+  const demoTotals = {};
+  DEMOGRAPHIC_FIELDS.forEach(f => {
+    let sum = 0;
+    WARDS.forEach(w => { const v = wardData[w.key] ? wardData[w.key][f.key] : undefined; sum += typeof v === 'number' ? v : 0; });
+    demoTotals[f.key] = sum;
+  });
+
   const submittedWards = WARDS.filter(w => wardData[w.key] && wardData[w.key].submitted);
 
   // Files the current 24-hour period to the permanent Ward Charts Archive:
@@ -565,6 +573,35 @@ export default function OverallNurse() {
             </table>
           </div>
           <div className="save-status" style={{ color: saveStatus.error ? '#dc2626' : '#6b7280' }}>{saveStatus.text}</div>
+        </div>
+
+        <div className="card-box">
+          <h2>Patient Demographics</h2>
+          <div className="table-wrap">
+            <table className="report">
+              <thead>
+                <tr>
+                  <th>Ward</th>
+                  {DEMOGRAPHIC_FIELDS.map(f => <th key={f.key}>{f.label}</th>)}
+                </tr>
+              </thead>
+              <tbody>
+                {WARDS.map((w) => {
+                  const data = wardData[w.key] || {};
+                  return (
+                    <tr key={w.key}>
+                      <td className="ward-name">{w.label}</td>
+                      {DEMOGRAPHIC_FIELDS.map((f) => <td key={f.key}>{typeof data[f.key] === 'number' ? data[f.key] : 0}</td>)}
+                    </tr>
+                  );
+                })}
+                <tr className="totals-row">
+                  <td className="ward-name">TOTAL</td>
+                  {DEMOGRAPHIC_FIELDS.map(f => <td key={f.key}>{demoTotals[f.key]}</td>)}
+                </tr>
+              </tbody>
+            </table>
+          </div>
         </div>
 
         <div className="card-box">

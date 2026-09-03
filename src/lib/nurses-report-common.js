@@ -239,6 +239,7 @@ export function occDelta(shiftData) {
 export function blankShift() {
   const s = {};
   SHIFT_STAT_FIELDS.forEach(f => { s[f.key] = 0; });
+  DEMOGRAPHIC_FIELDS.forEach(f => { s[f.key] = 0; });
   s.nurseOnDuty = '';
   return s;
 }
@@ -259,14 +260,30 @@ export function defaultWardDoc(w, startOcc = 0) {
   };
   SHIFTS.forEach(s => { d.shifts[s.key] = blankShift(); });
   SHIFT_STAT_FIELDS.forEach(f => { d[f.key] = 0; });
+  DEMOGRAPHIC_FIELDS.forEach(f => { d[f.key] = 0; });
   return d;
 }
 
-// Separate small "Patient Demographics" breakdown — NOT part of STAT_FIELDS,
-// never fed into Occ or any STAT_FIELDS total. Purely descriptive: who was
-// admitted, broken down by sex/age-group/affiliation. Ported over for the
-// Analytics page; no ward-nurse input UI collects this yet (a separate
-// follow-up), so these totals will read 0 until that's wired up.
+// Net totals across shifts for the demographic breakdown, mirroring
+// computeMovementTotals()'s shape for STAT_FIELDS. Used by the Ward Nurse
+// Total row, and to persist the day's ward-level demographic totals so the
+// Overall Nurse / archive views can compile them without re-summing shifts.
+export function computeDemographicTotals(wardDoc) {
+  const totals = {};
+  DEMOGRAPHIC_FIELDS.forEach(f => {
+    let sum = 0;
+    SHIFTS.forEach(s => { const v = wardDoc.shifts[s.key]?.[f.key]; sum += typeof v === 'number' ? v : 0; });
+    totals[f.key] = sum;
+  });
+  return totals;
+}
+
+// Small "Patient Demographics" breakdown — NOT part of STAT_FIELDS, never
+// fed into Occ or any STAT_FIELDS total. Purely descriptive: who was
+// admitted, broken down by sex/age-group/affiliation. Entered per shift on
+// the Ward Nurse page (own small table below Shift Statistics), compiled
+// read-only on the Overall Nurse page, and shown read-only (with admin edit
+// mode) on archived reports.
 export const DEMOGRAPHIC_FIELDS = [
   { key: 'male',     label: 'Male' },
   { key: 'female',   label: 'Female' },
