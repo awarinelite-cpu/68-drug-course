@@ -226,15 +226,6 @@ export default function OverallNurse() {
     }
   }
 
-  async function saveField(wardKey, field, value) {
-    try {
-      await updateDoc(doc(wardsCol, wardKey), { [field]: value, updatedAt: serverTimestamp(), updatedBy: profile.name || 'Unknown' });
-      setSaveStatus({ text: 'Saved.', error: false });
-    } catch (e) {
-      setSaveStatus({ text: "Couldn't save: " + (e.code || e.message || 'unknown error'), error: true });
-    }
-  }
-
   async function toggleLock(wardKey) {
     const locked = !!(wardData[wardKey] && wardData[wardKey].locked);
     try {
@@ -328,17 +319,6 @@ export default function OverallNurse() {
     }
   }
 
-  function updateCustomColumnField(wardKey, colKey, value) {
-    setWardData((prev) => ({ ...prev, [wardKey]: { ...prev[wardKey], [colKey]: value } }));
-    saveField(wardKey, colKey, value);
-  }
-
-  function updateStatField(wardKey, fieldKey, raw) {
-    const num = parseFloat(raw);
-    const val = isNaN(num) ? 0 : num;
-    setWardData((prev) => ({ ...prev, [wardKey]: { ...prev[wardKey], [fieldKey]: val } }));
-    saveField(wardKey, fieldKey, val);
-  }
   // Opens the contact popup for whichever ward nurse submitted this ward's
   // report. Looks the phone number up by uid first (current data), falling
   // back to a name match for older reports submitted before uid was
@@ -562,18 +542,11 @@ export default function OverallNurse() {
                         onClick={isAdmin ? () => renameWard(w) : undefined}>{w.label}</td>
                       {STAT_FIELDS.map((f) => (
                         <td key={f.key}>
-                          <input type="number" inputMode="numeric"
-                            defaultValue={typeof data[f.key] === 'number' ? data[f.key] : (f.key === 'beds' ? w.beds : 0)}
-                            key={w.key + '-' + f.key + '-' + (typeof data[f.key] === 'number' ? data[f.key] : 'x')}
-                            onChange={(e) => updateStatField(w.key, f.key, e.target.value)} />
+                          {typeof data[f.key] === 'number' ? data[f.key] : (f.key === 'beds' ? w.beds : 0)}
                         </td>
                       ))}
                       {CUSTOM_TEXT_COLUMNS.map((c) => (
-                        <td key={c.key}>
-                          <input type="text" defaultValue={data[c.key] || ''}
-                            key={w.key + '-' + c.key + '-' + (data[c.key] || '')}
-                            onChange={(e) => updateCustomColumnField(w.key, c.key, e.target.value)} />
-                        </td>
+                        <td key={c.key}>{data[c.key] || '\u2014'}</td>
                       ))}
                       <td style={{ textAlign: 'left' }}>
                         {data.submittedBy ? (
