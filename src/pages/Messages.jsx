@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import {
-  collection, getDocs, doc, getDoc, setDoc, addDoc, serverTimestamp, query, where
+  collection, getDocs, doc, getDoc, setDoc, addDoc, updateDoc, serverTimestamp, query, where
 } from "firebase/firestore";
 import { db } from "../firebase.js";
 import { useAuth } from "../contexts/AuthContext.jsx";
@@ -57,6 +57,23 @@ export default function Messages() {
     if (!currentUid) return;
     loadDirectory();
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentUid]);
+
+  // Heartbeat: lets other nurses see this device as "online" (drives the
+  // green dot + "Last seen" text in the chat list and thread header).
+  useEffect(() => {
+    if (!currentUid) return;
+    function pingActive() {
+      updateDoc(doc(db, 'users', currentUid), { lastActive: serverTimestamp() }).catch(() => {});
+    }
+    pingActive();
+    const interval = setInterval(pingActive, 60000);
+    function onVisible() { if (document.visibilityState === 'visible') pingActive(); }
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
   }, [currentUid]);
 
   useEffect(() => {
