@@ -564,9 +564,9 @@ table.entries td.popup-cell { cursor:pointer; text-overflow:ellipsis; overflow:h
 }
 .role-card:hover { border-color: var(--primary-blue); box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
 .role-card .icon { font-size: 40px; display: block; margin-bottom: 10px; }
-.role-card .title { font-size: 18px; font-weight: bold; color: var(--primary-navy); letter-spacing: .5px; }
-.role-card .desc { font-size: 13px; color: var(--text-secondary); margin-top: 6px; }
-.role-card .status { font-size: 12px; margin-top: 10px; font-weight: bold; }
+.role-card .title { display: block; font-size: 18px; font-weight: bold; color: var(--primary-navy); letter-spacing: .5px; }
+.role-card .desc { display: block; font-size: 13px; color: var(--text-secondary); margin-top: 6px; max-width: 480px; margin-left: auto; margin-right: auto; }
+.role-card .status { display: block; font-size: 12px; margin-top: 10px; font-weight: bold; }
 .status-open { color: var(--success); }
 .status-taken { color: #d97706; }
 .status-you { color: var(--primary-blue); }
