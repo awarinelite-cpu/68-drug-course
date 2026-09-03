@@ -1,0 +1,23 @@
+rules_version = '2';
+
+// Storage for the Messages page's image and voice-note attachments. Each
+// upload lives under chatUploads/{convoId}/{fileName}. Access mirrors the
+// Firestore conversations/{convoId} rule exactly — only a nurse listed in
+// that conversation's `participants` array may read or upload files here —
+// by looking the conversation doc up directly from Firestore rather than
+// duplicating membership data into Storage.
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /chatUploads/{convoId}/{fileName} {
+      function isParticipant() {
+        return request.auth != null
+          && request.auth.uid in firestore.get(/databases/(default)/documents/conversations/$(convoId)).data.participants;
+      }
+
+      allow read: if isParticipant();
+      allow write: if isParticipant()
+        && request.resource.size < 10 * 1024 * 1024
+        && (request.resource.contentType.matches('image/.*') || request.resource.contentType.matches('audio/.*'));
+    }
+  }
+}

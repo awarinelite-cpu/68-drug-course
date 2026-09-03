@@ -129,6 +129,77 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    // Nurse-to-nurse messaging (Messages page) — both direct 1:1 chats and
+    // group chats live in the same conversations collection, distinguished
+    // by `type: 'dm' | 'group'`. `participants` is the source of truth for
+    // access on both: only the people in it may read/write the conversation,
+    // its messages, or its typing indicators — nobody else, including
+    // admins, can see private chats. DMs use a deterministic doc id
+    // ("dm_{sortedUidA}_{sortedUidB}") so the same pair always lands on the
+    // same thread; groups use an auto-generated id since membership isn't a
+    // fixed pair. `readBy` (a map of uid -> last-read timestamp) drives read
+    // receipts, updated by each participant for their own uid only.
+    match /conversations/{convoId} {
+      // resource is null when the doc doesn't exist yet (startChat()'s
+      // getDoc() check before the first message between two nurses) — there's
+      // no data to protect in that case, so let the existence check through;
+      // once the doc exists, only its participants may read it.
+      allow read: if isSignedIn() && (resource == null || request.auth.uid in resource.data.participants);
+      allow create: if isSignedIn()
+        && request.auth.uid in request.resource.data.participants
+        && request.resource.data.participants.size() >= 2
+        && (request.resource.data.type == 'dm' ? request.resource.data.participants.size() == 2 : true)
+        && (request.resource.data.type == 'group' ? request.resource.data.createdBy == request.auth.uid : true);
+      allow update: if isSignedIn() && request.auth.uid in resource.data.participants && (
+        // Updating the shared "last message" preview shown in the chat list.
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lastMessageText', 'lastMessageAt', 'lastMessageSenderUid'])
+        ||
+        // Marking messages read — a participant may touch only her own key
+        // in the readBy map, never anyone else's read timestamp.
+        (
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['readBy'])
+          && request.resource.data.readBy.diff(resource.data.readBy).affectedKeys().hasOnly([request.auth.uid])
+        )
+        ||
+        // Group membership/name changes — creator-managed only, and only
+        // for groups; a DM's participants/type can never be altered.
+        (
+          resource.data.type == 'group' && resource.data.createdBy == request.auth.uid
+          && request.resource.data.createdBy == resource.data.createdBy
+          && request.resource.data.type == resource.data.type
+        )
+      );
+      allow delete: if false;
+
+      // Per-user "is typing" flag. Anyone in the conversation can see who's
+      // typing, but each nurse may only write her own typing doc.
+      match /typing/{uid} {
+        allow read: if isSignedIn()
+          && request.auth.uid in get(/databases/$(database)/documents/conversations/$(convoId)).data.participants;
+        allow write: if isSignedIn() && request.auth.uid == uid
+          && request.auth.uid in get(/databases/$(database)/documents/conversations/$(convoId)).data.participants;
+      }
+
+      match /messages/{messageId} {
+        allow read: if isSignedIn()
+          && request.auth.uid in get(/databases/$(database)/documents/conversations/$(convoId)).data.participants;
+        allow create: if isSignedIn()
+          && request.auth.uid in get(/databases/$(database)/documents/conversations/$(convoId)).data.participants
+          && request.resource.data.senderUid == request.auth.uid;
+        // A message's own sender may edit/delete it outright. Any other
+        // participant may still touch the doc, but ONLY to add/remove her
+        // own reaction or toggle her own star — never the text, image, or
+        // anyone else's content.
+        allow update: if isSignedIn()
+          && request.auth.uid in get(/databases/$(database)/documents/conversations/$(convoId)).data.participants
+          && (
+            resource.data.senderUid == request.auth.uid
+            || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['reactions', 'starredBy'])
+          );
+        allow delete: if isSignedIn() && resource.data.senderUid == request.auth.uid;
+      }
+    }
+
     // Patients and every chart subcollection under them
     match /patients/{patientId} {
       allow read, create, update: if isKnownUser();
