@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import {
   doc, getDoc, getDocs, setDoc, updateDoc, collection, onSnapshot, serverTimestamp, writeBatch
 } from "firebase/firestore";
+import ReportContactModal from "../../components/ReportContactModal.jsx";
 import { db } from "../../firebase.js";
 import { useAuth } from "../../contexts/AuthContext.jsx";
 import {
@@ -131,6 +132,8 @@ export default function OverallNurse() {
   const [saveStatus, setSaveStatus] = useState({ text: '', error: false });
   const [archiveBusy, setArchiveBusy] = useState(false);
   const [archiveStatus, setArchiveStatus] = useState({ text: '', error: false });
+  const [usersByUid, setUsersByUid] = useState({});
+  const [contactModal, setContactModal] = useState(null); // { name, phone, wardLabel } | null
   // WARDS/STAT_FIELDS/CUSTOM_TEXT_COLUMNS are mutated in place by the
   // override loaders below (same module-level arrays every importer
   // shares), so this counter is bumped after loading/saving overrides
@@ -171,6 +174,19 @@ export default function OverallNurse() {
 
       await Promise.all([loadWardNameOverrides(db), loadHeaderLabelOverrides(db), loadCustomColumns(db)]);
       setOverridesTick((t) => t + 1);
+
+      // Load every staff phone/name once so the "Nurses on Duty" column can
+      // pop up contact details for whichever nurse submitted each ward's
+      // report, without a per-row Firestore lookup.
+      try {
+        const usersSnap = await getDocs(collection(db, 'users'));
+        const map = {};
+        usersSnap.forEach((d) => { map[d.id] = d.data(); });
+        setUsersByUid(map);
+      } catch (e) {
+        // Non-fatal — the duty column just won't be able to show phone
+        // numbers if this fails (e.g. permissions).
+      }
 
       await ensureSeeded();
       unsub = onSnapshot(wardsCol, (snap) => {
@@ -323,9 +339,20 @@ export default function OverallNurse() {
     setWardData((prev) => ({ ...prev, [wardKey]: { ...prev[wardKey], [fieldKey]: val } }));
     saveField(wardKey, fieldKey, val);
   }
-  function updateDutyField(wardKey, value) {
-    setWardData((prev) => ({ ...prev, [wardKey]: { ...prev[wardKey], nurseOnDuty: value } }));
-    saveField(wardKey, 'nurseOnDuty', value);
+  // Opens the contact popup for whichever ward nurse submitted this ward's
+  // report. Looks the phone number up by uid first (current data), falling
+  // back to a name match for older reports submitted before uid was
+  // recorded.
+  function openNurseContact(w, data) {
+    const name = data.submittedBy;
+    if (!name) return;
+    let userDoc = data.submittedByUid ? usersByUid[data.submittedByUid] : null;
+    if (!userDoc) {
+      userDoc = Object.values(usersByUid).find(
+        (u) => (u.name || '').trim().toLowerCase() === name.trim().toLowerCase()
+      );
+    }
+    setContactModal({ name, phone: userDoc ? userDoc.phone : '', wardLabel: w.label });
   }
 
   const totals = {};
@@ -548,10 +575,14 @@ export default function OverallNurse() {
                             onChange={(e) => updateCustomColumnField(w.key, c.key, e.target.value)} />
                         </td>
                       ))}
-                      <td>
-                        <input type="text" className="duty-input" placeholder="Nurse name"
-                          defaultValue={data.nurseOnDuty || ''} key={w.key + '-duty-' + (data.nurseOnDuty || '')}
-                          onChange={(e) => updateDutyField(w.key, e.target.value)} />
+                      <td style={{ textAlign: 'left' }}>
+                        {data.submittedBy ? (
+                          <button type="button" className="duty-name-btn" onClick={() => openNurseContact(w, data)}>
+                            {data.submittedBy}
+                          </button>
+                        ) : (
+                          <span className="duty-name-btn" style={{ color: '#9ca3af', textDecoration: 'none' }}>{'\u2014'}</span>
+                        )}
                       </td>
                       <td>
                         <button className={"lock-btn " + (locked ? 'locked' : 'open')} onClick={() => toggleLock(w.key)}>
@@ -639,6 +670,8 @@ export default function OverallNurse() {
           <div className="save-status" style={{ color: archiveStatus.error ? '#dc2626' : '#6b7280' }}>{archiveStatus.text}</div>
         </div>
       </div>
+
+      {contactModal && <ReportContactModal nurse={contactModal} onClose={() => setContactModal(null)} />}
     </>
   );
 }

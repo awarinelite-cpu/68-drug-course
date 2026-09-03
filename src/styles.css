@@ -506,6 +506,13 @@ table.chart td input[readonly] { background:#f8f8f8; color:#333; }
 .modal-footer { display:flex; gap:8px; padding:12px 16px; border-top:1px solid var(--border); align-items:flex-end; }
 .modal-footer textarea { flex:1; resize:none; }
 
+/* --- Nurse-on-duty contact modal (Overall Nurse statistics table) --- */
+.duty-name-btn { background:none; border:none; padding:0; font:inherit; color:var(--primary-blue, #2563eb); text-decoration:underline; cursor:pointer; text-align:left; }
+.duty-name-btn:disabled { color:#6b7280; text-decoration:none; cursor:default; }
+.contact-phone-btn { background:none; border:none; padding:0; font:inherit; color:var(--primary-blue, #2563eb); text-decoration:underline; cursor:pointer; }
+.contact-choice { display:flex; flex-direction:column; gap:8px; margin-top:2px; }
+.contact-choice-btn { text-align:center; text-decoration:none; }
+
 /* --- Drug course chart: diagnosis modal, care instructions, audit log --- */
 #f_diagnosis[readonly] { cursor:pointer; text-overflow:ellipsis; overflow:hidden; white-space:nowrap; }
 @media print { #f_diagnosis { overflow:visible; white-space:normal; text-overflow:unset; } }

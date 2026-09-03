@@ -179,7 +179,7 @@ function DemographicsTable({ wardDoc, totals, editable, onField }) {
 }
 
 export default function WardNurse() {
-  const { profile } = useAuth();
+  const { user, profile } = useAuth();
   const navigate = useNavigate();
   const goBack = useGoBack('/nurses-report/role-select');
 
@@ -289,7 +289,7 @@ export default function WardNurse() {
     const ref = doc(db, 'nurseReports', dateId, 'wards', wardKey);
     const payload = {
       ...finalDoc, submitted: true, locked: true,
-      submittedBy: profile.name || 'Unknown', submittedAt: serverTimestamp(),
+      submittedBy: profile.name || 'Unknown', submittedByUid: user?.uid || null, submittedAt: serverTimestamp(),
       updatedAt: serverTimestamp(), updatedBy: profile.name || 'Unknown'
     };
     if (hasNightUpdate) {
