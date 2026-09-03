@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { collection, getDocs, addDoc, updateDoc, doc, getDoc, serverTimestamp } from "firebase/firestore";
+import { collection, getDocs, addDoc, updateDoc, doc, getDoc, setDoc, deleteDoc, serverTimestamp } from "firebase/firestore";
 import { db } from "../firebase.js";
 import { useAuth } from "../contexts/AuthContext.jsx";
 import { avatarMarkup } from "../lib/avatar.js";
@@ -27,6 +27,9 @@ export default function Home() {
   const [showEditForm, setShowEditForm] = useState(false);
   const [editForm, setEditForm] = useState(EMPTY_FORM);
   const [editMsg, setEditMsg] = useState('');
+
+  const [allocatedToMe, setAllocatedToMe] = useState(false);
+  const [allocBusy, setAllocBusy] = useState(false);
 
   useEffect(() => {
     if (window.location.hash === '#search' && searchInputRef.current) {
@@ -74,6 +77,68 @@ export default function Home() {
     setSearchQuery('');
     setShowNewForm(false);
     setShowEditForm(false);
+  }
+
+  // One doc per (nurse, patient) pair, so this ID is stable and idempotent
+  // to create/overwrite/delete regardless of how many other nurses have
+  // their own allocation doc for the same patient. Allocation isn't
+  // exclusive and ends only when a nurse manually removes it (here or
+  // from My Patients) — there's no automatic clearing at shift change.
+  function allocationDocRef(patientId) {
+    return doc(db, 'allocations', 'alloc_' + user.uid + '_' + patientId);
+  }
+
+  // Recorded on the allocation doc purely for handover visibility on My
+  // Patients ("allocated 07:32am · Morning shift") — Africa/Lagos (WAT) is
+  // UTC+1 with no DST, so shifting the UTC clock by 1hr gives WAT
+  // wall-clock hours via the UTC getters. Morning 8:00–16:59, Night
+  // 17:00–7:59.
+  function currentShiftLabel() {
+    const watHour = new Date(Date.now() + 60 * 60 * 1000).getUTCHours();
+    return (watHour >= 8 && watHour < 17) ? 'Morning' : 'Night';
+  }
+
+  useEffect(() => {
+    if (!selectedPatient || !user) { setAllocatedToMe(false); return; }
+    let cancelled = false;
+    getDoc(allocationDocRef(selectedPatient.id)).then(snap => {
+      if (!cancelled) setAllocatedToMe(snap.exists());
+    }).catch(() => {
+      // Can't confirm current state (offline, etc.) — leave the button
+      // usable rather than stuck disabled; toggleAllocation() re-derives
+      // the actual state from its own write attempt either way.
+      if (!cancelled) setAllocatedToMe(false);
+    });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedPatient, user]);
+
+  async function toggleAllocation() {
+    if (!selectedPatient || !user) return;
+    setAllocBusy(true);
+    const ref = allocationDocRef(selectedPatient.id);
+    try {
+      if (allocatedToMe) {
+        await deleteDoc(ref);
+        setAllocatedToMe(false);
+      } else {
+        await setDoc(ref, {
+          uid: user.uid,
+          nurseName: profile?.name || '',
+          patientId: selectedPatient.id,
+          patientName: selectedPatient.name || 'Unnamed',
+          patientEmr: selectedPatient.emr || '',
+          patientWard: selectedPatient.ward || '',
+          patientDiagnosis: selectedPatient.diagnosis || '',
+          shift: currentShiftLabel(),
+          allocatedAt: serverTimestamp()
+        });
+        setAllocatedToMe(true);
+      }
+    } catch (e) {
+      alert("Couldn't update allocation: " + (e.code || e.message || 'unknown error'));
+    }
+    setAllocBusy(false);
   }
 
   function openEditPatient() {
@@ -163,6 +228,7 @@ export default function Home() {
         {profile?.role === 'admin' && (
           <a href="/admin" className="btn btn-purple" style={{ padding: '6px 12px' }} onClick={(e) => { e.preventDefault(); navigate('/admin'); }}>Admin</a>
         )}
+        <a href="/my-patients" className="btn btn-secondary" style={{ padding: '6px 12px' }} onClick={(e) => { e.preventDefault(); navigate('/my-patients'); }}>My Patients</a>
         <button className="btn btn-secondary" style={{ padding: '6px 12px' }} onClick={handleLogout}>Log Out</button>
       </Topbar>
 
@@ -212,6 +278,11 @@ export default function Home() {
               extra={
                 <>
                   <button className="btn btn-secondary edit-patient-btn" title="Edit patient information" onClick={openEditPatient}>✎</button>
+                  <button className={"btn " + (allocatedToMe ? 'btn-success' : 'btn-secondary')}
+                    style={{ padding: '4px 10px', fontSize: 12, marginLeft: 6 }}
+                    disabled={allocBusy} onClick={toggleAllocation}>
+                    {allocBusy ? '…' : (allocatedToMe ? '✓ Allocated — tap to remove' : 'Allocate to Me')}
+                  </button>
                   <button className="btn btn-purple" style={{ padding: '4px 10px', fontSize: 12, marginLeft: 6 }} onClick={openOverview}>Overview</button>
                 </>
               }

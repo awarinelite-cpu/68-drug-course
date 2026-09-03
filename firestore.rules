@@ -58,6 +58,15 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    // Patient allocation ("Allocate to Me" / My Patients) — any known user
+    // may read the list, but a nurse may only create/update/delete her own
+    // allocation docs — never allocate or deallocate on someone else's behalf.
+    match /allocations/{allocationId} {
+      allow read: if isKnownUser();
+      allow create, update: if isSignedIn() && request.resource.data.uid == request.auth.uid;
+      allow delete: if isSignedIn() && resource.data.uid == request.auth.uid;
+    }
+
     // Ward-name overrides, column-label overrides, and admin-added custom
     // columns for the Nurses Report tables — any known user reads it (it
     // drives what's shown on the Overall Statistics table and every ward
