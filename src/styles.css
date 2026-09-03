@@ -47,8 +47,8 @@ a { text-decoration: none; color: inherit; }
 
 .container { max-width: 960px; margin: 0 auto; padding: 20px 16px; }
 
-/* Login page: full-viewport hospital-ward illustration behind a
-   translucent, blurred card so the form stays easy to read. */
+/* Login page: hospital-ward photo behind a mostly-transparent card so
+   it stays visible through the form. */
 .login-page {
   min-height: 100vh; width: 100%;
   background-size: cover; background-position: center; background-repeat: no-repeat;
@@ -56,9 +56,11 @@ a { text-decoration: none; color: inherit; }
   display: flex; align-items: center; justify-content: center;
 }
 .login-card {
-  background: rgba(255,255,255,0.88); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
-  box-shadow: 0 8px 32px rgba(15,35,80,0.18);
+  background: rgba(255,255,255,0.14); backdrop-filter: blur(2px); -webkit-backdrop-filter: blur(2px);
+  box-shadow: 0 8px 32px rgba(15,35,80,0.35);
+  border: 1px solid rgba(255,255,255,0.4);
 }
+.login-card h2, .login-card label, .login-card a { color: #fff; text-shadow: 0 1px 4px rgba(0,0,0,0.55); }
 .card-box { background: var(--surface); border-radius: 10px; padding: 20px; box-shadow: 0 1px 4px rgba(0,0,0,0.08); margin-bottom: 20px; }
 
 input[type=text], input[type=email], input[type=password], input[type=number],
