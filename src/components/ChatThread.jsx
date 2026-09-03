@@ -5,6 +5,7 @@ import {
 import { db } from "../firebase.js";
 import { avatarMarkup } from "../lib/avatar.js";
 import Topbar from "./Topbar.jsx";
+import MessageBubble from "./MessageBubble.jsx";
 
 const ONLINE_WINDOW_MS = 2 * 60 * 1000;
 const TYPING_IDLE_MS = 3000;
@@ -15,10 +16,6 @@ function fmtWhen(ts) {
   const dateStr = d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
   const timeStr = d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
   return dateStr + ', ' + timeStr;
-}
-function fmtTime(ts) {
-  if (!ts || typeof ts.toDate !== 'function') return '';
-  return ts.toDate().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
 }
 function groupAvatarHtml(size = 40) {
   return '<div class="group-avatar" style="width:' + size + 'px;height:' + size + 'px;">&#128101;</div>';
@@ -37,6 +34,7 @@ export default function ChatThread({ convoId, currentUid, currentProfile, nurseB
   const [msgsError, setMsgsError] = useState(null);
   const [typers, setTypers] = useState([]);
   const [input, setInput] = useState('');
+  const [replyingTo, setReplyingTo] = useState(null);
 
   const iAmTypingRef = useRef(false);
   const typingTimeoutRef = useRef(null);
@@ -131,10 +129,12 @@ export default function ChatThread({ convoId, currentUid, currentProfile, nurseB
     setInput('');
     clearTimeout(typingTimeoutRef.current);
     clearTypingFlag();
+    const replySnapshot = replyingTo;
+    setReplyingTo(null);
     try {
       await addDoc(collection(db, 'conversations', convoId, 'messages'), {
         senderUid: currentUid, text,
-        replyTo: null,
+        replyTo: replySnapshot || null,
         reactions: {}, starredBy: [],
         createdAt: serverTimestamp(), editedAt: null
       });
@@ -143,6 +143,35 @@ export default function ChatThread({ convoId, currentUid, currentProfile, nurseB
       });
     } catch (e) {
       alert("Couldn't send: " + (e.code || e.message || 'unknown error'));
+    }
+  }
+
+  function setReplyTarget(message, senderName) {
+    setReplyingTo({
+      messageId: message.id,
+      senderName: senderName || (message.senderUid === currentUid ? 'You' : 'Nurse'),
+      text: message.text || (message.imageUrl ? '📷 Photo' : (message.audioUrl ? '🎤 Voice note' : ''))
+    });
+  }
+
+  async function toggleReaction(message, emoji) {
+    const reactions = JSON.parse(JSON.stringify(message.reactions || {}));
+    let hadThisEmoji = false;
+    Object.keys(reactions).forEach(e => {
+      const idx = (reactions[e] || []).indexOf(currentUid);
+      if (idx !== -1) {
+        if (e === emoji) hadThisEmoji = true;
+        reactions[e].splice(idx, 1);
+      }
+    });
+    if (!hadThisEmoji) {
+      reactions[emoji] = reactions[emoji] || [];
+      reactions[emoji].push(currentUid);
+    }
+    try {
+      await updateDoc(doc(db, 'conversations', convoId, 'messages', message.id), { reactions });
+    } catch (e) {
+      alert("Couldn't react: " + (e.code || e.message || 'unknown error'));
     }
   }
 
@@ -211,25 +240,27 @@ export default function ChatThread({ convoId, currentUid, currentProfile, nurseB
                 (convo.participantNames && convo.participantNames[m.senderUid]) || '';
 
               return (
-                <div key={m.id} className={"msg-row" + (isMine ? ' mine' : '')}>
-                  <div className="msg-bubble-wrap">
-                    {isGroup && !isMine && <div className="msg-sender-name">{senderName}</div>}
-                    <div className="msg-bubble">
-                      {m.text}
-                      <div className="msg-meta">
-                        <span>{fmtTime(m.createdAt)}{m.editedAt ? ' · edited' : ''}</span>
-                        {isMine && (
-                          m._pending
-                            ? <span className="msg-ticks msg-ticks-pending">&#128340;</span>
-                            : <span className={"msg-ticks" + (readByAll ? ' read' : '')}>&#10003;&#10003;</span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </div>
+                <MessageBubble
+                  key={m.id}
+                  message={m}
+                  isMine={isMine}
+                  isGroup={isGroup}
+                  senderName={senderName}
+                  readByAll={readByAll}
+                  currentUid={currentUid}
+                  onToggleReaction={toggleReaction}
+                  onReply={setReplyTarget}
+                />
               );
             })}
           </div>
+
+          {replyingTo && (
+            <div className="reply-preview">
+              <div className="rp-text"><b>{replyingTo.senderName}:</b> {replyingTo.text}</div>
+              <button onClick={() => setReplyingTo(null)}>&times;</button>
+            </div>
+          )}
 
           <div className="thread-compose">
             <input

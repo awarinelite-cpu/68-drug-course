@@ -779,3 +779,31 @@ h1.period-label { margin: 0; display: flex; align-items: center; flex-wrap: wrap
 
 .thread-compose { display: flex; gap: 8px; padding-top: 10px; border-top: 1px solid #e5e7eb; align-items: center; }
 .thread-compose input[type="text"] { flex: 1; }
+
+/* Reactions, reply, swipe gesture */
+.msg-bubble-wrap { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
+.msg-bubble-wrap.dragging { transition: none; }
+.msg-bubble-wrap:not(.dragging) { transition: transform .15s ease; }
+.msg-reply-quote {
+  border-left: 3px solid rgba(0,0,0,.25); padding: 3px 8px; margin-bottom: 5px;
+  font-size: 12px; border-radius: 4px; opacity: .85;
+}
+.msg-row.mine .msg-reply-quote { background: rgba(255,255,255,.15); border-left-color: rgba(255,255,255,.6); }
+.msg-row:not(.mine) .msg-reply-quote { background: rgba(0,0,0,.04); }
+.msg-reply-quote .rq-name { font-weight: bold; display: block; }
+
+.msg-actions-row { display: flex; gap: 10px; margin-top: 2px; }
+.msg-actions-row button { background: none; border: none; font-size: 10px; font-weight: bold; color: #9ca3af; cursor: pointer; padding: 0; }
+.msg-actions-row button:hover { color: #2563eb; }
+
+.reaction-picker { display: none; gap: 4px; background: #fff; border: 1px solid #e5e7eb; border-radius: 20px; padding: 4px 8px; box-shadow: 0 2px 8px rgba(0,0,0,.12); position: absolute; top: -38px; z-index: 5; }
+.msg-row.mine .reaction-picker { right: 0; }
+.reaction-picker.open { display: flex; }
+.reaction-picker span { cursor: pointer; font-size: 17px; }
+.reaction-chips { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 3px; }
+.reaction-chip { background: #fff; border: 1px solid #e5e7eb; border-radius: 10px; padding: 1px 6px; font-size: 11px; cursor: pointer; }
+.reaction-chip.mine { border-color: #2563eb; background: #eff6ff; }
+
+.reply-preview { display: flex; align-items: center; gap: 8px; background: #f3f4f6; border-radius: 8px; padding: 6px 10px; margin-bottom: 8px; font-size: 12px; }
+.reply-preview .rp-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.reply-preview button { background: none; border: none; font-size: 16px; cursor: pointer; color: #6b7280; }
