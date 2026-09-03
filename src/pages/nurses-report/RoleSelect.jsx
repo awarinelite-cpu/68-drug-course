@@ -78,6 +78,11 @@ export default function RoleSelect() {
             <span className="title">WARD NURSE</span>
             <span className="desc">Submit and manage your own ward's 24-hour report.</span>
           </button>
+          <button className="role-card" onClick={() => navigate('/nurses-report/analytics')}>
+            <span className="icon">📈</span>
+            <span className="title">ANALYTICS</span>
+            <span className="desc">Charts and trends across every ward — Today, This Week, This Month, or This Year.</span>
+          </button>
         </div>
       </div>
     </>

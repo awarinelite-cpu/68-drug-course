@@ -108,6 +108,19 @@ export function defaultWardDoc(w, startOcc = 0) {
   return d;
 }
 
+// Separate small "Patient Demographics" breakdown — NOT part of STAT_FIELDS,
+// never fed into Occ or any STAT_FIELDS total. Purely descriptive: who was
+// admitted, broken down by sex/age-group/affiliation. Ported over for the
+// Analytics page; no ward-nurse input UI collects this yet (a separate
+// follow-up), so these totals will read 0 until that's wired up.
+export const DEMOGRAPHIC_FIELDS = [
+  { key: 'male',     label: 'Male' },
+  { key: 'female',   label: 'Female' },
+  { key: 'child',    label: 'Children' },
+  { key: 'soldier',  label: 'Soldiers' },
+  { key: 'civilian', label: 'Civilians' }
+];
+
 // Structured fields for each patient write-up under a ward's report,
 // matching the paper form's per-patient block (name/age/sex/EMR/DOA up
 // top, then one large free-text area for diagnosis, orders, and any

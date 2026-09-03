@@ -21,6 +21,7 @@ import Seizure from "./pages/Seizure.jsx";
 import Calculators from "./pages/Calculators.jsx";
 import LabReference from "./pages/LabReference.jsx";
 import RoleSelect from "./pages/nurses-report/RoleSelect.jsx";
+import Analytics from "./pages/nurses-report/Analytics.jsx";
 import WardNurse from "./pages/nurses-report/WardNurse.jsx";
 import OverallNurse from "./pages/nurses-report/OverallNurse.jsx";
 import ArchiveList from "./pages/nurses-report/ArchiveList.jsx";
@@ -58,6 +59,7 @@ export default function App() {
           <Route path="/charts/calculators" element={<AuthedShell><Calculators /></AuthedShell>} />
           <Route path="/charts/lab-reference" element={<AuthedShell><LabReference /></AuthedShell>} />
           <Route path="/nurses-report/role-select" element={<AuthedShell><RoleSelect /></AuthedShell>} />
+          <Route path="/nurses-report/analytics" element={<AuthedShell><Analytics /></AuthedShell>} />
           <Route path="/nurses-report/ward-nurse" element={<AuthedShell><WardNurse /></AuthedShell>} />
           <Route path="/nurses-report/overall-nurse" element={<AuthedShell><OverallNurse /></AuthedShell>} />
           <Route path="/nurses-report/archive-list" element={<AuthedShell><ArchiveList /></AuthedShell>} />
