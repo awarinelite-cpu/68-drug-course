@@ -11,7 +11,7 @@ function fmtTime(ts) {
 
 export default function MessageBubble({
   message: m, isMine, isGroup, senderName, readByAll, currentUid,
-  onToggleReaction, onReply
+  onToggleReaction, onReply, onToggleStar, onForward, onEdit, onDelete
 }) {
   const [pickerOpen, setPickerOpen] = useState(false);
   const wrapRef = useRef(null);
@@ -155,6 +155,10 @@ export default function MessageBubble({
         <div className="msg-actions-row">
           <button onClick={() => openPicker()}>React</button>
           <button onClick={() => onReply(m, senderName)}>Reply</button>
+          <button className={isStarred ? 'starred' : ''} onClick={() => onToggleStar(m)}>{isStarred ? 'Starred' : 'Star'}</button>
+          <button onClick={() => onForward(m)}>Forward</button>
+          {isMine && m.text && <button onClick={() => onEdit(m)}>Edit</button>}
+          {isMine && <button onClick={() => onDelete(m)}>Delete</button>}
         </div>
       </div>
     </div>

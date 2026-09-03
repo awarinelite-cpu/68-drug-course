@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import {
-  collection, doc, setDoc, addDoc, updateDoc, serverTimestamp, orderBy, query, onSnapshot
+  collection, doc, getDoc, setDoc, addDoc, updateDoc, deleteDoc, serverTimestamp, orderBy, query, onSnapshot
 } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { db, storage } from "../firebase.js";
@@ -28,8 +28,12 @@ function isRecentlyActive(lastActive) {
 function otherUidOf(convo, currentUid) {
   return (convo.participants || []).find(u => u !== currentUid);
 }
+function convoIdFor(uidA, uidB) {
+  const [a, b] = [uidA, uidB].sort();
+  return 'dm_' + a + '_' + b;
+}
 
-export default function ChatThread({ convoId, currentUid, currentProfile, nurseByUid, onBack }) {
+export default function ChatThread({ convoId, currentUid, currentProfile, nurseByUid, allNurses, allConvos, onBack }) {
   const [convo, setConvo] = useState(null);
   const [msgs, setMsgs] = useState(null); // null while loading
   const [msgsError, setMsgsError] = useState(null);
@@ -46,6 +50,8 @@ export default function ChatThread({ convoId, currentUid, currentProfile, nurseB
   const recordingStreamRef = useRef(null);
   const recordingStartRef = useRef(0);
   const recordingTimerRef = useRef(null);
+
+  const [fwdMessage, setFwdMessage] = useState(null); // message currently being forwarded, or null
 
   const iAmTypingRef = useRef(false);
   const typingTimeoutRef = useRef(null);
@@ -280,6 +286,82 @@ export default function ChatThread({ convoId, currentUid, currentProfile, nurseB
     setUploading(null);
   }
 
+  async function toggleStar(message) {
+    const starredBy = (message.starredBy || []).slice();
+    const idx = starredBy.indexOf(currentUid);
+    if (idx !== -1) starredBy.splice(idx, 1); else starredBy.push(currentUid);
+    try {
+      await updateDoc(doc(db, 'conversations', convoId, 'messages', message.id), { starredBy });
+    } catch (e) {
+      alert("Couldn't star: " + (e.code || e.message || 'unknown error'));
+    }
+  }
+
+  async function deleteMessage(message) {
+    if (!confirm('Delete this message?')) return;
+    try {
+      await deleteDoc(doc(db, 'conversations', convoId, 'messages', message.id));
+    } catch (e) {
+      alert("Couldn't delete: " + (e.code || e.message || 'unknown error'));
+    }
+  }
+
+  async function editMessage(message) {
+    const newText = prompt('Edit message:', message.text);
+    if (newText === null) return;
+    const trimmed = newText.trim();
+    if (!trimmed) return;
+    try {
+      await updateDoc(doc(db, 'conversations', convoId, 'messages', message.id), { text: trimmed, editedAt: serverTimestamp() });
+    } catch (e) {
+      alert("Couldn't save: " + (e.code || e.message || 'unknown error'));
+    }
+  }
+
+  async function forwardMessageTo(targetConvoId, message) {
+    try {
+      await addDoc(collection(db, 'conversations', targetConvoId, 'messages'), {
+        senderUid: currentUid,
+        text: message.text || '',
+        imageUrl: message.imageUrl || null,
+        audioUrl: message.audioUrl || null,
+        replyTo: null,
+        forwardedFrom: message.senderUid || null,
+        reactions: {}, starredBy: [],
+        createdAt: serverTimestamp(), editedAt: null
+      });
+      const preview = message.imageUrl ? '📷 Photo' : (message.audioUrl ? '🎤 Voice note' : message.text);
+      await updateDoc(doc(db, 'conversations', targetConvoId), {
+        lastMessageText: preview, lastMessageAt: serverTimestamp(), lastMessageSenderUid: currentUid
+      });
+    } catch (e) {
+      alert("Couldn't forward: " + (e.code || e.message || 'unknown error'));
+    }
+  }
+
+  async function forwardToNurse(nurse, message) {
+    const targetConvoId = convoIdFor(currentUid, nurse.uid);
+    try {
+      const convoRef = doc(db, 'conversations', targetConvoId);
+      const existing = await getDoc(convoRef);
+      if (!existing.exists()) {
+        await setDoc(convoRef, {
+          type: 'dm',
+          participants: [currentUid, nurse.uid],
+          participantNames: { [currentUid]: currentProfile.name || 'Unknown', [nurse.uid]: nurse.name || 'Unknown' },
+          participantGenders: { [currentUid]: currentProfile.gender || null, [nurse.uid]: nurse.gender || null },
+          createdBy: currentUid,
+          createdAt: serverTimestamp(),
+          lastMessageText: '', lastMessageAt: serverTimestamp(), lastMessageSenderUid: null,
+          readBy: {}
+        });
+      }
+      await forwardMessageTo(targetConvoId, message);
+    } catch (e) {
+      alert("Couldn't forward: " + (e.code || e.message || 'unknown error'));
+    }
+  }
+
   async function toggleReaction(message, emoji) {
     const reactions = JSON.parse(JSON.stringify(message.reactions || {}));
     let hadThisEmoji = false;
@@ -376,6 +458,10 @@ export default function ChatThread({ convoId, currentUid, currentProfile, nurseB
                   currentUid={currentUid}
                   onToggleReaction={toggleReaction}
                   onReply={setReplyTarget}
+                  onToggleStar={toggleStar}
+                  onForward={setFwdMessage}
+                  onEdit={editMessage}
+                  onDelete={deleteMessage}
                 />
               );
             })}
@@ -414,6 +500,42 @@ export default function ChatThread({ convoId, currentUid, currentProfile, nurseB
           </div>
         </div>
       </div>
+
+      {fwdMessage && (
+        <div className="fwd-overlay open" onClick={(ev) => { if (ev.target.classList.contains('fwd-overlay')) setFwdMessage(null); }}>
+          <div className="fwd-box">
+            <div className="fwd-head">
+              <h3>Forward message to…</h3>
+              <button className="fwd-close" onClick={() => setFwdMessage(null)}>&times;</button>
+            </div>
+            <div className="fwd-list">
+              {allConvos && allConvos.length > 0 && (
+                <>
+                  <div className="fwd-section-label">Chats</div>
+                  {allConvos.map(c => {
+                    const isGroup = c.type === 'group';
+                    const otherUid = isGroup ? null : (c.participants || []).find(u => u !== currentUid);
+                    const title = isGroup ? (c.groupName || 'Group') : ((c.participantNames && c.participantNames[otherUid]) || 'Unknown');
+                    return (
+                      <div key={c.id} className="fwd-item" onClick={() => { const msg = fwdMessage; setFwdMessage(null); forwardMessageTo(c.id, msg); }}>
+                        <div dangerouslySetInnerHTML={{ __html: isGroup ? groupAvatarHtml(32) : avatarMarkup({ name: title }, 32) }} />
+                        <span className="fwd-name">{title}</span>
+                      </div>
+                    );
+                  })}
+                </>
+              )}
+              <div className="fwd-section-label">New chat</div>
+              {(allNurses || []).slice().sort((a, b) => (a.name || '').localeCompare(b.name || '')).map(n => (
+                <div key={n.uid} className="fwd-item" onClick={() => { const msg = fwdMessage; setFwdMessage(null); forwardToNurse(n, msg); }}>
+                  <div dangerouslySetInnerHTML={{ __html: avatarMarkup(n, 32) }} />
+                  <span className="fwd-name">{n.name || 'Unnamed'}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }
