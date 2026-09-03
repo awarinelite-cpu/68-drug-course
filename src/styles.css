@@ -572,6 +572,8 @@ table.report td.ward-name { font-weight: bold; text-align: left; white-space: no
 table.report input { width: 56px; padding: 4px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 12px; text-align: center; }
 table.report input.duty-input { width: 100px; text-align: left; }
 table.report tr.totals-row td { font-weight: bold; background: #eff6ff; }
+table.report th.renamable-col, table.report td.renamable-col { cursor: pointer; }
+table.report th.renamable-col:hover, table.report td.renamable-col:hover { background: #e5e7eb; }
 .lock-btn { border: none; border-radius: 6px; padding: 5px 8px; font-size: 11px; font-weight: bold; cursor: pointer; white-space: nowrap; }
 .lock-btn.locked { background: #fee2e2; color: #7f1d1d; }
 .lock-btn.open { background: #dcfce7; color: #14532d; }

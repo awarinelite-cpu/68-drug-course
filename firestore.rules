@@ -58,6 +58,15 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    // Ward-name overrides, column-label overrides, and admin-added custom
+    // columns for the Nurses Report tables — any known user reads it (it
+    // drives what's shown on the Overall Statistics table and every ward
+    // report), but only an admin may change the structure.
+    match /nurseReportConfig/{configId} {
+      allow read: if isKnownUser();
+      allow write: if isAdmin();
+    }
+
     // Nurses Report — the weekly Overall Nurse assignment, and each day's
     // 24-hour ward census. Any known user may claim/hand off the Overall
     // Nurse role or edit ward figures — the app itself gates who sees the

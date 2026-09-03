@@ -1,6 +1,8 @@
 // Shared constants and date helpers for the Nurses Report feature
 // (role-select.html, overall-nurse.html, and eventually ward-nurse.html).
 
+import { doc, getDoc, setDoc } from 'firebase/firestore';
+
 // The hospital's fixed ward list, in the same order as the paper "24 Hours
 // Overall Report" — beds is the default bed capacity, editable per ward.
 export const WARDS = [
@@ -25,6 +27,51 @@ export const WARDS = [
   { key: 'esw',      label: 'ESW',       beds: 20 }
 ];
 
+// Ward keys and bed counts are fixed, but an admin can rename a ward's
+// display label (e.g. if a ward is physically renamed or relabelled).
+// Overrides live in a single Firestore doc so every page/device shows the
+// same names. defaultLabel is captured once here so a rename can always be
+// reverted, and WARDS is mutated in place — every module that imports
+// WARDS shares this one array instance, so applying an override here
+// updates the label everywhere it's used without any extra plumbing.
+WARDS.forEach(w => { w.defaultLabel = w.label; });
+
+export const WARD_NAMES_COLLECTION = 'nurseReportConfig';
+export const WARD_NAMES_DOC = 'wardNames';
+
+// Applies a {wardKey: customLabel} map to WARDS. A missing or blank entry
+// falls back to the ward's original hospital name.
+export function applyWardNameOverrides(overrides) {
+  const map = overrides || {};
+  WARDS.forEach(w => {
+    const custom = map[w.key];
+    w.label = (typeof custom === 'string' && custom.trim()) ? custom.trim() : w.defaultLabel;
+  });
+}
+
+// Fetches the current overrides doc and applies it to WARDS. Safe to call
+// even if no one has renamed a ward yet — falls back to the default
+// hospital names.
+export async function loadWardNameOverrides(db) {
+  try {
+    const snap = await getDoc(doc(db, WARD_NAMES_COLLECTION, WARD_NAMES_DOC));
+    applyWardNameOverrides(snap.exists() ? snap.data() : {});
+  } catch (e) {
+    // Non-fatal — page just keeps showing the default hospital ward names.
+  }
+}
+
+// Renames one ward (admin/subadmin action) and keeps WARDS in sync locally
+// so the caller doesn't need to reload. Persists via a merge so other
+// wards' overrides already stored in the same doc aren't clobbered.
+export async function saveWardNameOverride(db, wardKey, newLabel) {
+  const trimmed = (newLabel || '').trim();
+  const w = WARDS.find(x => x.key === wardKey);
+  const valueToStore = trimmed && w && trimmed !== w.defaultLabel ? trimmed : null;
+  await setDoc(doc(db, WARD_NAMES_COLLECTION, WARD_NAMES_DOC), { [wardKey]: valueToStore }, { merge: true });
+  if (w) w.label = trimmed || w.defaultLabel;
+}
+
 // Numeric columns, in display order, matching the ward-level "24Hrs Ward
 // Report" paper form. 'beds' is listed separately in the UI (it's capacity,
 // not a daily movement figure) but included here too since it's still
@@ -46,6 +93,113 @@ export const STAT_FIELDS = [
   { key: 'bid',         label: 'BID' },
   { key: 'death',       label: 'Death' }
 ];
+
+// Column headers can be corrected/renamed by an admin without touching the
+// underlying key or calculations (mirrors the ward-name mechanism above).
+// This covers every real STAT_FIELDS entry (mutated on f.label in place, so
+// every table that reads f.label picks it up automatically) plus the two
+// grouped "Int./Ext. Transfer" headers, which aren't real fields and are
+// looked up by id via headerLabel() instead.
+STAT_FIELDS.forEach(f => { f.defaultLabel = f.label; });
+
+export const HEADER_LABELS_COLLECTION = 'nurseReportConfig';
+export const HEADER_LABELS_DOC = 'headerLabels';
+export const HEADER_LABEL_OVERRIDES = {};
+export const GROUP_LABEL_IDS = { intTransfer: '_group_int_transfer', extTransfer: '_group_ext_transfer' };
+
+export function applyHeaderLabelOverrides(overrides) {
+  Object.keys(HEADER_LABEL_OVERRIDES).forEach(k => delete HEADER_LABEL_OVERRIDES[k]);
+  Object.assign(HEADER_LABEL_OVERRIDES, overrides || {});
+  STAT_FIELDS.forEach(f => {
+    const custom = HEADER_LABEL_OVERRIDES[f.key];
+    f.label = (typeof custom === 'string' && custom.trim()) ? custom.trim() : f.defaultLabel;
+  });
+}
+
+export async function loadHeaderLabelOverrides(db) {
+  try {
+    const snap = await getDoc(doc(db, HEADER_LABELS_COLLECTION, HEADER_LABELS_DOC));
+    applyHeaderLabelOverrides(snap.exists() ? snap.data() : {});
+  } catch (e) {
+    // Non-fatal — page just keeps showing the default column names.
+  }
+}
+
+// id is either a real STAT_FIELDS key (keeps f.label in sync too) or one
+// of the synthetic GROUP_LABEL_IDS above.
+export async function saveHeaderLabelOverride(db, id, newLabel, defaultLabel) {
+  const trimmed = (newLabel || '').trim();
+  const valueToStore = trimmed && trimmed !== defaultLabel ? trimmed : null;
+  await setDoc(doc(db, HEADER_LABELS_COLLECTION, HEADER_LABELS_DOC), { [id]: valueToStore }, { merge: true });
+  if (valueToStore) HEADER_LABEL_OVERRIDES[id] = valueToStore; else delete HEADER_LABEL_OVERRIDES[id];
+  const f = STAT_FIELDS.find(x => x.key === id);
+  if (f) f.label = trimmed || f.defaultLabel;
+}
+
+export function headerLabel(id, defaultLabel) {
+  return HEADER_LABEL_OVERRIDES[id] || defaultLabel;
+}
+
+// Admin-added free-text columns layered on top of the fixed STAT_FIELDS
+// list (e.g. "Consultant", "Diet"). Ward-level, not per-shift, and never
+// summed in a totals row since they're text, not counts. Order is
+// preserved as one array in a single config doc; CUSTOM_TEXT_COLUMNS is
+// mutated in place (never reassigned) so every importer shares updates.
+export const CUSTOM_COLUMNS_COLLECTION = 'nurseReportConfig';
+export const CUSTOM_COLUMNS_DOC = 'customColumns';
+export const CUSTOM_TEXT_COLUMNS = [];
+
+export function applyCustomColumns(list) {
+  CUSTOM_TEXT_COLUMNS.length = 0;
+  (Array.isArray(list) ? list : []).forEach(c => {
+    if (c && c.key && c.label) CUSTOM_TEXT_COLUMNS.push({ key: c.key, label: c.label });
+  });
+}
+
+export async function loadCustomColumns(db) {
+  try {
+    const snap = await getDoc(doc(db, CUSTOM_COLUMNS_COLLECTION, CUSTOM_COLUMNS_DOC));
+    applyCustomColumns(snap.exists() ? snap.data().columns : []);
+  } catch (e) {
+    // Non-fatal — page just shows no custom columns.
+  }
+}
+
+// Generates a short, collision-resistant key from the label so an admin
+// never has to think about keys — just names.
+function slugColumnKey(label) {
+  const slug = label.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 24) || 'col';
+  return 'custom_' + slug + '_' + Math.random().toString(36).slice(2, 6);
+}
+
+export async function addCustomColumn(db, label) {
+  const trimmed = (label || '').trim();
+  if (!trimmed) throw new Error('A column name is required.');
+  const col = { key: slugColumnKey(trimmed), label: trimmed };
+  const next = CUSTOM_TEXT_COLUMNS.concat([col]);
+  await setDoc(doc(db, CUSTOM_COLUMNS_COLLECTION, CUSTOM_COLUMNS_DOC), { columns: next }, { merge: true });
+  applyCustomColumns(next);
+  return col;
+}
+
+// Renames an existing custom column in place — key and column order are
+// unchanged, so already-entered data under that key is unaffected.
+export async function renameCustomColumn(db, key, newLabel) {
+  const trimmed = (newLabel || '').trim();
+  if (!trimmed) throw new Error('A column name is required.');
+  const next = CUSTOM_TEXT_COLUMNS.map(c => (c.key === key ? { key, label: trimmed } : c));
+  await setDoc(doc(db, CUSTOM_COLUMNS_COLLECTION, CUSTOM_COLUMNS_DOC), { columns: next }, { merge: true });
+  applyCustomColumns(next);
+}
+
+// Removes a custom column from the config doc entirely. Already-entered
+// per-ward data under that key is simply orphaned (no longer displayed or
+// summed) rather than actively wiped from Firestore ward docs.
+export async function removeCustomColumn(db, key) {
+  const next = CUSTOM_TEXT_COLUMNS.filter(c => c.key !== key);
+  await setDoc(doc(db, CUSTOM_COLUMNS_COLLECTION, CUSTOM_COLUMNS_DOC), { columns: next }, { merge: true });
+  applyCustomColumns(next);
+}
 
 // A ward report is entered per shift, then totalled. 'beds' isn't collected
 // per shift (it's the ward's fixed capacity) — every other STAT_FIELDS key

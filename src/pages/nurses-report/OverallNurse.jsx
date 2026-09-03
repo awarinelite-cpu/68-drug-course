@@ -1,13 +1,16 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  doc, getDoc, getDocs, updateDoc, collection, onSnapshot, serverTimestamp, writeBatch
+  doc, getDoc, getDocs, setDoc, updateDoc, collection, onSnapshot, serverTimestamp, writeBatch
 } from "firebase/firestore";
 import { db } from "../../firebase.js";
 import { useAuth } from "../../contexts/AuthContext.jsx";
 import {
   WARDS, STAT_FIELDS, SHIFT_STAT_FIELDS, SHIFTS, PATIENT_FIELDS, reportDateId, reportPeriodLabel,
-  wardReportPeriodLabel, weekId, occDelta, defaultWardDoc
+  wardReportPeriodLabel, weekId, occDelta, defaultWardDoc,
+  loadWardNameOverrides, saveWardNameOverride,
+  loadHeaderLabelOverrides, saveHeaderLabelOverride, headerLabel, GROUP_LABEL_IDS,
+  CUSTOM_TEXT_COLUMNS, loadCustomColumns, addCustomColumn, renameCustomColumn, removeCustomColumn
 } from "../../lib/nurses-report-common.js";
 import Topbar from "../../components/Topbar.jsx";
 
@@ -127,6 +130,11 @@ export default function OverallNurse() {
   const [saveStatus, setSaveStatus] = useState({ text: '', error: false });
   const [archiveBusy, setArchiveBusy] = useState(false);
   const [archiveStatus, setArchiveStatus] = useState({ text: '', error: false });
+  // WARDS/STAT_FIELDS/CUSTOM_TEXT_COLUMNS are mutated in place by the
+  // override loaders below (same module-level arrays every importer
+  // shares), so this counter is bumped after loading/saving overrides
+  // purely to force a re-render — it isn't read anywhere itself.
+  const [, setOverridesTick] = useState(0);
 
   const isAdmin = profile?.role === 'admin';
   const isSubadmin = profile?.role === 'subadmin';
@@ -159,6 +167,9 @@ export default function OverallNurse() {
 
       setWhoLabel('Overall Nurse this week: ' + (overall ? overall.name : profile.name) + ((isAdmin || isSubadmin) && !isOverall ? ' (viewing as ' + profile.role + ')' : ''));
       setAccess('granted');
+
+      await Promise.all([loadWardNameOverrides(db), loadHeaderLabelOverrides(db), loadCustomColumns(db)]);
+      setOverridesTick((t) => t + 1);
 
       await ensureSeeded();
       unsub = onSnapshot(wardsCol, (snap) => {
@@ -214,6 +225,95 @@ export default function OverallNurse() {
     } catch (e) {
       setSaveStatus({ text: "Couldn't change access: " + (e.code || e.message || 'unknown error'), error: true });
     }
+  }
+
+  // Renames a ward everywhere it's shown on this page and persists the
+  // change so every other page/device picks it up too. Only shown to
+  // admin/subadmin via the "Click to rename" affordance below.
+  async function renameWard(w) {
+    const newLabel = window.prompt('Rename ward "' + w.label + '" to:', w.label);
+    if (newLabel === null) return;
+    const trimmed = newLabel.trim();
+    if (!trimmed || trimmed === w.label) return;
+    try {
+      await saveWardNameOverride(db, w.key, trimmed);
+      setOverridesTick((t) => t + 1);
+      setSaveStatus({ text: 'Ward renamed to "' + w.label + '".', error: false });
+    } catch (e) {
+      setSaveStatus({ text: "Couldn't rename ward: " + (e.code || e.message || 'unknown error'), error: true });
+    }
+  }
+
+  async function renameBuiltInColumn(f) {
+    const newLabel = window.prompt('Rename column "' + f.label + '" to:', f.label);
+    if (newLabel === null) return;
+    const trimmed = newLabel.trim();
+    if (!trimmed || trimmed === f.label) return;
+    try {
+      await saveHeaderLabelOverride(db, f.key, trimmed, f.defaultLabel);
+      setOverridesTick((t) => t + 1);
+      setSaveStatus({ text: 'Column renamed.', error: false });
+    } catch (e) {
+      setSaveStatus({ text: "Couldn't rename column: " + (e.code || e.message || 'unknown error'), error: true });
+    }
+  }
+
+  async function renameGroupHeader(groupId, currentLabel, defaultLabel) {
+    const newLabel = window.prompt('Rename column "' + currentLabel + '" to:', currentLabel);
+    if (newLabel === null) return;
+    const trimmed = newLabel.trim();
+    if (!trimmed || trimmed === currentLabel) return;
+    try {
+      await saveHeaderLabelOverride(db, groupId, trimmed, defaultLabel);
+      setOverridesTick((t) => t + 1);
+      setSaveStatus({ text: 'Column renamed.', error: false });
+    } catch (e) {
+      setSaveStatus({ text: "Couldn't rename column: " + (e.code || e.message || 'unknown error'), error: true });
+    }
+  }
+
+  async function renameCustomColumnPrompt(c) {
+    const newLabel = window.prompt('Rename column "' + c.label + '" to (clear the text and OK to delete it):', c.label);
+    if (newLabel === null) return;
+    const trimmed = newLabel.trim();
+    if (trimmed === c.label) return;
+    if (!trimmed) {
+      if (!window.confirm('Delete column "' + c.label + '"? This does not erase any data already entered under it, just removes the column from the tables.')) return;
+      try {
+        await removeCustomColumn(db, c.key);
+        setOverridesTick((t) => t + 1);
+        setSaveStatus({ text: 'Column deleted.', error: false });
+      } catch (e) {
+        setSaveStatus({ text: "Couldn't delete column: " + (e.code || e.message || 'unknown error'), error: true });
+      }
+      return;
+    }
+    try {
+      await renameCustomColumn(db, c.key, trimmed);
+      setOverridesTick((t) => t + 1);
+      setSaveStatus({ text: 'Column renamed.', error: false });
+    } catch (e) {
+      setSaveStatus({ text: "Couldn't rename column: " + (e.code || e.message || 'unknown error'), error: true });
+    }
+  }
+
+  async function addColumnPrompt() {
+    const label = window.prompt('New column name:');
+    if (label === null) return;
+    const trimmed = label.trim();
+    if (!trimmed) return;
+    try {
+      await addCustomColumn(db, trimmed);
+      setOverridesTick((t) => t + 1);
+      setSaveStatus({ text: 'Column added.', error: false });
+    } catch (e) {
+      setSaveStatus({ text: "Couldn't add column: " + (e.code || e.message || 'unknown error'), error: true });
+    }
+  }
+
+  function updateCustomColumnField(wardKey, colKey, value) {
+    setWardData((prev) => ({ ...prev, [wardKey]: { ...prev[wardKey], [colKey]: value } }));
+    saveField(wardKey, colKey, value);
   }
 
   function updateStatField(wardKey, fieldKey, raw) {
@@ -369,14 +469,50 @@ export default function OverallNurse() {
                 <tr>
                   <th rowSpan={2}>Ward</th>
                   {STAT_FIELDS.map((f) => {
-                    if (f.key === 'transferIn') return <th key={f.key} colSpan={2}>Int. Transfer</th>;
+                    if (f.key === 'transferIn') {
+                      const label = headerLabel(GROUP_LABEL_IDS.intTransfer, 'Int. Transfer');
+                      return <th key={f.key} colSpan={2}
+                        className={isAdmin ? 'renamable-col' : undefined}
+                        title={isAdmin ? 'Click to rename this column' : undefined}
+                        onClick={isAdmin ? () => renameGroupHeader(GROUP_LABEL_IDS.intTransfer, label, 'Int. Transfer') : undefined}>
+                        {label}
+                      </th>;
+                    }
                     if (f.key === 'transferOut') return null;
-                    if (f.key === 'ext') return <th key={f.key} colSpan={2}>Ext. Transfer</th>;
+                    if (f.key === 'ext') {
+                      const label = headerLabel(GROUP_LABEL_IDS.extTransfer, 'Ext. Transfer');
+                      return <th key={f.key} colSpan={2}
+                        className={isAdmin ? 'renamable-col' : undefined}
+                        title={isAdmin ? 'Click to rename this column' : undefined}
+                        onClick={isAdmin ? () => renameGroupHeader(GROUP_LABEL_IDS.extTransfer, label, 'Ext. Transfer') : undefined}>
+                        {label}
+                      </th>;
+                    }
                     if (f.key === 'extOut') return null;
-                    return <th key={f.key} rowSpan={2}>{f.label}</th>;
+                    return <th key={f.key} rowSpan={2}
+                      className={isAdmin ? 'renamable-col' : undefined}
+                      title={isAdmin ? 'Click to rename this column' : undefined}
+                      onClick={isAdmin ? () => renameBuiltInColumn(f) : undefined}>
+                      {f.label}
+                    </th>;
                   })}
+                  {CUSTOM_TEXT_COLUMNS.map((c) => (
+                    <th key={c.key} rowSpan={2}
+                      className={isAdmin ? 'renamable-col' : undefined}
+                      title={isAdmin ? 'Click to rename this column' : undefined}
+                      onClick={isAdmin ? () => renameCustomColumnPrompt(c) : undefined}>
+                      {c.label}
+                    </th>
+                  ))}
                   <th rowSpan={2}>Nurses on Duty</th>
                   <th rowSpan={2}>Access</th>
+                  {isAdmin && (
+                    <th rowSpan={2}>
+                      <button type="button" className="btn btn-secondary"
+                        style={{ padding: '3px 8px', fontSize: 11, whiteSpace: 'nowrap' }}
+                        onClick={addColumnPrompt}>+ Column</button>
+                    </th>
+                  )}
                 </tr>
                 <tr>{['In', 'Out', 'In', 'Out'].map((l, i) => <th key={i}>{l}</th>)}</tr>
               </thead>
@@ -386,13 +522,22 @@ export default function OverallNurse() {
                   const locked = !!data.locked;
                   return (
                     <tr key={w.key}>
-                      <td className="ward-name">{w.label}</td>
+                      <td className={"ward-name" + (isAdmin ? ' renamable-col' : '')}
+                        title={isAdmin ? 'Click to rename this ward' : undefined}
+                        onClick={isAdmin ? () => renameWard(w) : undefined}>{w.label}</td>
                       {STAT_FIELDS.map((f) => (
                         <td key={f.key}>
                           <input type="number" inputMode="numeric"
                             defaultValue={typeof data[f.key] === 'number' ? data[f.key] : (f.key === 'beds' ? w.beds : 0)}
                             key={w.key + '-' + f.key + '-' + (typeof data[f.key] === 'number' ? data[f.key] : 'x')}
                             onChange={(e) => updateStatField(w.key, f.key, e.target.value)} />
+                        </td>
+                      ))}
+                      {CUSTOM_TEXT_COLUMNS.map((c) => (
+                        <td key={c.key}>
+                          <input type="text" defaultValue={data[c.key] || ''}
+                            key={w.key + '-' + c.key + '-' + (data[c.key] || '')}
+                            onChange={(e) => updateCustomColumnField(w.key, c.key, e.target.value)} />
                         </td>
                       ))}
                       <td>
@@ -405,13 +550,16 @@ export default function OverallNurse() {
                           {locked ? '\uD83D\uDD12 Locked' : '\uD83D\uDD13 Open'}
                         </button>
                       </td>
+                      {isAdmin && <td></td>}
                     </tr>
                   );
                 })}
                 <tr className="totals-row">
                   <td className="ward-name">TOTAL</td>
                   {STAT_FIELDS.map((f) => <td key={f.key}>{totals[f.key]}</td>)}
+                  {CUSTOM_TEXT_COLUMNS.map((c) => <td key={c.key}></td>)}
                   <td></td><td></td>
+                  {isAdmin && <td></td>}
                 </tr>
               </tbody>
             </table>
