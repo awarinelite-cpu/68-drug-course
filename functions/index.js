@@ -541,11 +541,11 @@ function wardLocalParts(d) {
   return { y: wat.getUTCFullYear(), m: wat.getUTCMonth(), day: wat.getUTCDate(), hour: wat.getUTCHours() };
 }
 
-// Same 6 AM–to–6 AM period convention as reportDateId() in
+// Same 9 AM–to–9 AM period convention as reportDateId() in
 // js/nurses-report-common.js.
 function reportDateId(d) {
   const p = wardLocalParts(d);
-  const base = new Date(Date.UTC(p.y, p.m, p.day - (p.hour < 6 ? 1 : 0)));
+  const base = new Date(Date.UTC(p.y, p.m, p.day - (p.hour < 9 ? 1 : 0)));
   return base.getUTCFullYear() + '-' + pad2(base.getUTCMonth() + 1) + '-' + pad2(base.getUTCDate());
 }
 
@@ -569,7 +569,7 @@ function reportPeriodLabel(dateId, kind) {
   const start = new Date(Date.UTC(y, m - 1, d));
   const end = new Date(Date.UTC(y, m - 1, d + 1));
   const fmt = dt => pad2(dt.getUTCDate()) + '/' + pad2(dt.getUTCMonth() + 1) + '/' + String(dt.getUTCFullYear()).slice(2);
-  return '24 HOURS ' + kind + ' REPORT WEF 0600HRS OF ' + fmt(start) + ' TO 0600HRS OF ' + fmt(end);
+  return '24 HOURS ' + kind + ' REPORT WEF 0900HRS OF ' + fmt(start) + ' TO 0900HRS OF ' + fmt(end);
 }
 
 // A fresh, unsubmitted ward doc — same shape as defaultWardDoc() in
@@ -584,12 +584,12 @@ function defaultWardDoc(w, startOcc) {
   };
 }
 
-// Runs once a day, shortly after the 0600 ward-day rollover, so it's
+// Runs once a day, shortly after the 0900 ward-day rollover, so it's
 // always looking back at the period that JUST closed (never the one still
-// in progress). 06:05 rather than exactly 06:00 to give any nurse's own
+// in progress). 09:05 rather than exactly 09:00 to give any nurse's own
 // last-second manual archive click a moment to land first.
 exports.autoArchiveWardReports = onSchedule(
-  { schedule: '5 6 * * *', timeZone: 'Africa/Lagos', region: 'us-central1' },
+  { schedule: '5 9 * * *', timeZone: 'Africa/Lagos', region: 'us-central1' },
   async () => {
     const now = new Date();
     const closedDateId = dateIdMinusOneDay(reportDateId(now));
@@ -630,11 +630,11 @@ exports.autoArchiveWardReports = onSchedule(
   }
 );
 
-// Runs 5 minutes after autoArchiveWardReports (06:05), so by the time this
+// Runs 5 minutes after autoArchiveWardReports (09:05), so by the time this
 // reads anything, every ward that was submitted+locked for the closed
 // period already has its archives/ward_{key}_{dateId} doc filed — either
 // because the Overall Nurse (or a ward nurse) archived it manually earlier,
-// or because the 06:05 job just swept it up automatically. This job covers
+// or because the 09:05 job just swept it up automatically. This job covers
 // the remaining gap: it only fires if the Overall Nurse never clicked
 // "Save to Archive" themselves, so a compiled archives/overall_{dateId} doc
 // still gets written even on a day nobody pressed the button.
@@ -647,7 +647,7 @@ exports.autoArchiveWardReports = onSchedule(
 // skips it, leaving the live doc untouched), so falls back to reading that
 // live doc directly.
 exports.autoArchiveOverallReport = onSchedule(
-  { schedule: '10 6 * * *', timeZone: 'Africa/Lagos', region: 'us-central1' },
+  { schedule: '10 9 * * *', timeZone: 'Africa/Lagos', region: 'us-central1' },
   async () => {
     const now = new Date();
     const closedDateId = dateIdMinusOneDay(reportDateId(now));

@@ -326,25 +326,29 @@ function wardLocalParts(d) {
   return { y: wat.getUTCFullYear(), m: wat.getUTCMonth(), day: wat.getUTCDate(), hour: wat.getUTCHours() };
 }
 
-// 24-hour report periods run 6:00 AM to 6:00 AM the next day (same
-// convention as the Intake & Output chart's PERIOD_START_HOUR) — a time
-// before 6 AM still belongs to the period that started the previous day.
+// 24-hour report periods run 9:00 AM to 9:00 AM the next day — the ward's
+// morning shift runs 8AM-5PM and the night shift 5PM-8AM, so 9AM (shortly
+// after morning handover) is when the new report day actually begins and
+// the previous day's report is swept to archive. A time before 9 AM still
+// belongs to the period that started the previous day. (The Intake &
+// Output chart's PERIOD_START_HOUR is a separate, unrelated convention —
+// left at 6 AM.)
 export function reportDateId(d = new Date()) {
   const p = wardLocalParts(d);
-  const base = new Date(Date.UTC(p.y, p.m, p.day - (p.hour < 6 ? 1 : 0)));
+  const base = new Date(Date.UTC(p.y, p.m, p.day - (p.hour < 9 ? 1 : 0)));
   return base.getUTCFullYear() + '-' + pad(base.getUTCMonth() + 1) + '-' + pad(base.getUTCDate());
 }
 
 // Matches the paper report's header line, e.g.
-// "24 HOURS OVERALL REPORT WEF 0600HRS OF 15/08/26 TO 0600HRS OF 16/08/26"
+// "24 HOURS OVERALL REPORT WEF 0900HRS OF 15/08/26 TO 0900HRS OF 16/08/26"
 // `kind` swaps in for a per-ward archive file's heading, e.g.
-// "24 HOURS WARD REPORT WEF 0600HRS OF 15/08/26 TO 0600HRS OF 16/08/26"
+// "24 HOURS WARD REPORT WEF 0900HRS OF 15/08/26 TO 0900HRS OF 16/08/26"
 export function reportPeriodLabel(dateId, kind = 'OVERALL') {
   const [y, m, d] = dateId.split('-').map(Number);
   const start = new Date(Date.UTC(y, m - 1, d));
   const end = new Date(Date.UTC(y, m - 1, d + 1));
   const fmt = dt => pad(dt.getUTCDate()) + '/' + pad(dt.getUTCMonth() + 1) + '/' + String(dt.getUTCFullYear()).slice(2);
-  return '24 HOURS ' + kind + ' REPORT WEF 0600HRS OF ' + fmt(start) + ' TO 0600HRS OF ' + fmt(end);
+  return '24 HOURS ' + kind + ' REPORT WEF 0900HRS OF ' + fmt(start) + ' TO 0900HRS OF ' + fmt(end);
 }
 
 // The Archive file name for one ward's daily report — see reportPeriodLabel.
