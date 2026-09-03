@@ -66,6 +66,17 @@ function isAbnormalGlucose(v, glucoseType) {
 
 function emptyRows() { return Array.from({ length: 10 }, () => []); }
 
+// On mobile, tapping a date/time input always opens the OS's full picker
+// sheet regardless of where on the field you tap. On desktop, clicking the
+// field just places a text cursor — the native dropdown picker only opens
+// if you click the small calendar/clock icon specifically, which is easy
+// to miss in a narrow table cell. Forcing showPicker() on click makes
+// desktop match the "tap anywhere to pick" behavior mobile already has.
+function openPicker(el) {
+  if (!el || typeof el.showPicker !== 'function') return;
+  try { el.showPicker(); } catch (e) { /* not focused/supported here — typing still works */ }
+}
+
 export default function BloodGlucose() {
   const [searchParams] = useSearchParams();
   const patientId = searchParams.get('patient');
@@ -250,6 +261,7 @@ export default function BloodGlucose() {
                           value={val}
                           readOnly={isArchived}
                           onChange={(e) => updateCell(rIdx, cIdx, e.target.value)}
+                          onClick={(col.type === 'date' || col.type === 'time') ? (e) => openPicker(e.currentTarget) : undefined}
                         />
                       </td>
                     );

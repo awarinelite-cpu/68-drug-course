@@ -57,6 +57,16 @@ function cellValue(row, col) {
   return (row[col.key] !== undefined && row[col.key] !== null && row[col.key] !== '') ? row[col.key] : '';
 }
 
+// See BloodGlucose.jsx for why: mobile's date/time inputs always open the
+// full OS picker on tap, but desktop only opens the native dropdown if you
+// click the small calendar/clock icon exactly — clicking elsewhere on the
+// field just starts text editing. Forcing showPicker() on click makes
+// desktop behave the same "click anywhere to pick" way mobile already does.
+function openPicker(el) {
+  if (!el || typeof el.showPicker !== 'function') return;
+  try { el.showPicker(); } catch (e) { /* not focused/supported here — typing still works */ }
+}
+
 function cellClass(col, row) {
   if (typeof col.abnormal === 'function') {
     const raw = row[col.key];
@@ -108,7 +118,8 @@ function FormField({ col, value, otherValue, onChange, onOtherChange }) {
   return (
     <div className="field" style={{ flex: '1 1 140px' }}>
       <label>{col.label}</label>
-      <input type={col.type || 'text'} value={value || ''} onChange={(e) => onChange(e.target.value)} />
+      <input type={col.type || 'text'} value={value || ''} onChange={(e) => onChange(e.target.value)}
+        onClick={(col.type === 'date' || col.type === 'time' || col.type === 'datetime-local') ? (e) => openPicker(e.currentTarget) : undefined} />
     </div>
   );
 }
