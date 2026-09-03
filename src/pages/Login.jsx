@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { signInWithEmailAndPassword, sendPasswordResetEmail } from "firebase/auth";
 import { auth } from "../firebase.js";
-import wardBg from "../assets/login-ward-bg.svg";
+import wardBg from "../assets/login-ward-bg.jpg";
 
 function friendlyError(e) {
   const code = e.code || '';
