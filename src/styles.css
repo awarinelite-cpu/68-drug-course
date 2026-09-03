@@ -60,7 +60,6 @@ a { text-decoration: none; color: inherit; }
   box-shadow: 0 8px 32px rgba(15,35,80,0.35);
   border: 1px solid rgba(255,255,255,0.4);
 }
-.login-card h2, .login-card label, .login-card a { color: #fff; text-shadow: 0 1px 4px rgba(0,0,0,0.55); }
 .card-box { background: var(--surface); border-radius: 10px; padding: 20px; box-shadow: 0 1px 4px rgba(0,0,0,0.08); margin-bottom: 20px; }
 
 input[type=text], input[type=email], input[type=password], input[type=number],
