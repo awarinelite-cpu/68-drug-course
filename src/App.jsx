@@ -1,6 +1,7 @@
 import { Routes, Route } from "react-router-dom";
 import { AuthProvider } from "./contexts/AuthContext.jsx";
 import { NavProvider } from "./contexts/NavContext.jsx";
+import { ThemeProvider } from "./contexts/ThemeContext.jsx";
 import RequireAuth from "./components/RequireAuth.jsx";
 import NavDrawer from "./components/NavDrawer.jsx";
 import OfflineBanner from "./components/OfflineBanner.jsx";
@@ -44,6 +45,7 @@ export default function App() {
   useForegroundAlerts();
 
   return (
+    <ThemeProvider>
     <AuthProvider>
       <NavProvider>
         <OfflineBanner />
@@ -73,5 +75,6 @@ export default function App() {
         </Routes>
       </NavProvider>
     </AuthProvider>
+    </ThemeProvider>
   );
 }
