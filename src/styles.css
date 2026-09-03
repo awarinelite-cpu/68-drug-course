@@ -704,7 +704,8 @@ h1.period-label { margin: 0; display: flex; align-items: center; flex-wrap: wrap
    showPicker()/click() so tapping "Today" etc. brings up the OS/browser's
    own picker UI instead of a custom calendar widget. Kept in the DOM and
    focusable (not display:none) so those calls still work. */
-.hidden-picker { position: absolute; left: -9999px; top: 0; width: 1px; height: 1px; opacity: 0; }
+.picker-anchor { position: relative; display: inline-block; }
+.hidden-picker { position: absolute; top: 100%; left: 0; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
 /* Taller than the default .chart-wrap — needs room for a label per ward
    (19 wards) on a horizontal bar chart, not just a handful of columns. */
 #wardBreakdownWrap { height: 480px; }

@@ -404,62 +404,80 @@ export default function Analytics() {
         <div className="card-box">
           <h1 style={{ margin: 0, fontSize: 18 }}>Hospital Statistics</h1>
           <div className="period-row">
-            {[
-              { key: 'today', label: 'Today', ref: dayPickerRef },
-              { key: 'week', label: 'This Week', ref: weekPickerRef },
-              { key: 'month', label: 'This Month', ref: monthPickerRef },
-              { key: 'year', label: 'This Year', ref: yearPickerRef }
-            ].map(p => (
+            <span className="picker-anchor">
               <button
-                key={p.key}
-                className={'period-btn' + (activePeriod === p.key ? ' active' : '')}
-                onClick={() => openPicker(p.ref.current)}
+                className={'period-btn' + (activePeriod === 'today' ? ' active' : '')}
+                onClick={() => openPicker(dayPickerRef.current)}
               >
-                {p.label}
+                Today
               </button>
-            ))}
+              <input
+                type="date" ref={dayPickerRef} className="hidden-picker" aria-hidden="true" tabIndex={-1}
+                onChange={e => {
+                  if (!e.target.value) return;
+                  periodSelectionRef.current.today = e.target.value;
+                  loadAndRender('today');
+                }}
+              />
+            </span>
+            <span className="picker-anchor">
+              <button
+                className={'period-btn' + (activePeriod === 'week' ? ' active' : '')}
+                onClick={() => openPicker(weekPickerRef.current)}
+              >
+                This Week
+              </button>
+              <input
+                type="week" ref={weekPickerRef} className="hidden-picker" aria-hidden="true" tabIndex={-1}
+                onChange={e => {
+                  if (!e.target.value) return;
+                  const [yStr, wStr] = e.target.value.split('-W');
+                  periodSelectionRef.current.week = { isoYear: Number(yStr), isoWeek: Number(wStr) };
+                  loadAndRender('week');
+                }}
+              />
+            </span>
+            <span className="picker-anchor">
+              <button
+                className={'period-btn' + (activePeriod === 'month' ? ' active' : '')}
+                onClick={() => openPicker(monthPickerRef.current)}
+              >
+                This Month
+              </button>
+              <input
+                type="month" ref={monthPickerRef} className="hidden-picker" aria-hidden="true" tabIndex={-1}
+                onChange={e => {
+                  if (!e.target.value) return;
+                  const [yStr, mStr] = e.target.value.split('-');
+                  periodSelectionRef.current.month = { year: Number(yStr), month: Number(mStr) };
+                  loadAndRender('month');
+                }}
+              />
+            </span>
+            <span className="picker-anchor">
+              <button
+                className={'period-btn' + (activePeriod === 'year' ? ' active' : '')}
+                onClick={() => openPicker(yearPickerRef.current)}
+              >
+                This Year
+              </button>
+              <select
+                ref={yearPickerRef} className="hidden-picker" aria-hidden="true" tabIndex={-1}
+                defaultValue={yearOptions[0]}
+                onChange={e => {
+                  periodSelectionRef.current.year = Number(e.target.value);
+                  loadAndRender('year');
+                }}
+              >
+                {yearOptions.map(y => <option key={y} value={y}>{y}</option>)}
+              </select>
+            </span>
           </div>
           <div className="range-label">{rangeLabel}</div>
           {phase === 'loading' && <div className="loading-note">Loading…</div>}
           {phase === 'error' && <div className="loading-note">{errorText}</div>}
-
-          <input
-            type="date" ref={dayPickerRef} className="hidden-picker" aria-hidden="true" tabIndex={-1}
-            onChange={e => {
-              if (!e.target.value) return;
-              periodSelectionRef.current.today = e.target.value;
-              loadAndRender('today');
-            }}
-          />
-          <input
-            type="week" ref={weekPickerRef} className="hidden-picker" aria-hidden="true" tabIndex={-1}
-            onChange={e => {
-              if (!e.target.value) return;
-              const [yStr, wStr] = e.target.value.split('-W');
-              periodSelectionRef.current.week = { isoYear: Number(yStr), isoWeek: Number(wStr) };
-              loadAndRender('week');
-            }}
-          />
-          <input
-            type="month" ref={monthPickerRef} className="hidden-picker" aria-hidden="true" tabIndex={-1}
-            onChange={e => {
-              if (!e.target.value) return;
-              const [yStr, mStr] = e.target.value.split('-');
-              periodSelectionRef.current.month = { year: Number(yStr), month: Number(mStr) };
-              loadAndRender('month');
-            }}
-          />
-          <select
-            ref={yearPickerRef} className="hidden-picker" aria-hidden="true" tabIndex={-1}
-            defaultValue={yearOptions[0]}
-            onChange={e => {
-              periodSelectionRef.current.year = Number(e.target.value);
-              loadAndRender('year');
-            }}
-          >
-            {yearOptions.map(y => <option key={y} value={y}>{y}</option>)}
-          </select>
         </div>
+
 
         {phase === 'summary' && totals && (
           <>
