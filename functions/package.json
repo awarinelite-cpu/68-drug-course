@@ -1,0 +1,11 @@
+{
+  "name": "narhy-ward-charts-functions",
+  "description": "Scheduled drug-due push alert checker for 68 NARHY Ward Charts",
+  "engines": { "node": "22" },
+  "main": "index.js",
+  "dependencies": {
+    "firebase-admin": "^12.1.0",
+    "firebase-functions": "^5.0.0"
+  },
+  "private": true
+}
