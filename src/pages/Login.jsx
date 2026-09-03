@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { signInWithEmailAndPassword, sendPasswordResetEmail } from "firebase/auth";
 import { auth } from "../firebase.js";
+import wardBg from "../assets/login-ward-bg.svg";
 
 function friendlyError(e) {
   const code = e.code || '';
@@ -41,8 +42,9 @@ export default function Login() {
   }
 
   return (
-    <div className="container" style={{ maxWidth: 420, marginTop: 60 }}>
-      <div className="card-box">
+    <div className="login-page" style={{ backgroundImage: `url(${wardBg})` }}>
+      <div className="container" style={{ maxWidth: 420, marginTop: 60 }}>
+      <div className="card-box login-card">
         <h2 style={{ textAlign: 'center', marginTop: 0 }}>68 NARHY Ward Charts</h2>
 
         <div className="field">
@@ -62,6 +64,7 @@ export default function Login() {
           <a href="#" onClick={(e) => { e.preventDefault(); doReset(); }} style={{ fontSize: 13, color: '#2563eb' }}>Forgot password?</a>
         </div>
         {msg && <div className={msg.type === 'error' ? 'error-msg' : 'info-msg'}>{msg.text}</div>}
+      </div>
       </div>
     </div>
   );
