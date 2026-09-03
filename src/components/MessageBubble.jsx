@@ -123,6 +123,9 @@ export default function MessageBubble({
           {m.imageUrl && (
             <img className="msg-img" src={m.imageUrl} onClick={() => window.open(m.imageUrl, '_blank')} alt="" />
           )}
+          {m.audioUrl && (
+            <audio className="msg-audio" controls src={m.audioUrl} />
+          )}
           {m.text}
           <div className="msg-meta">
             {isStarred && <span className="msg-star-mark">&#11088;</span>}

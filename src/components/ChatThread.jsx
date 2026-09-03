@@ -39,6 +39,14 @@ export default function ChatThread({ convoId, currentUid, currentProfile, nurseB
   const [uploading, setUploading] = useState(null); // status text while an attachment uploads
   const imageInputRef = useRef(null);
 
+  const [recording, setRecording] = useState(false);
+  const [recordSecs, setRecordSecs] = useState(0);
+  const mediaRecorderRef = useRef(null);
+  const recordedChunksRef = useRef([]);
+  const recordingStreamRef = useRef(null);
+  const recordingStartRef = useRef(0);
+  const recordingTimerRef = useRef(null);
+
   const iAmTypingRef = useRef(false);
   const typingTimeoutRef = useRef(null);
   const msgsWrapRef = useRef(null);
@@ -87,6 +95,7 @@ export default function ChatThread({ convoId, currentUid, currentProfile, nurseB
       unsubMessages();
       unsubTyping();
       clearTypingFlag();
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') stopRecording(false);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [convoId]);
@@ -183,6 +192,90 @@ export default function ChatThread({ convoId, currentUid, currentProfile, nurseB
       });
     } catch (e) {
       alert("Couldn't upload image: " + (e.code || e.message || 'unknown error'));
+    }
+    setUploading(null);
+  }
+
+  function micClick() {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+      stopRecording(true);
+    } else {
+      startRecording();
+    }
+  }
+
+  async function startRecording() {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      alert("Voice recording isn't supported on this device/browser.");
+      return;
+    }
+    let stream;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    } catch (e) {
+      alert("Couldn't access the microphone: " + (e.message || 'permission denied'));
+      return;
+    }
+    recordingStreamRef.current = stream;
+    recordedChunksRef.current = [];
+    const mimeType = MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : '';
+    const mr = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
+    mr.addEventListener('dataavailable', (ev) => { if (ev.data && ev.data.size > 0) recordedChunksRef.current.push(ev.data); });
+    mr.addEventListener('stop', onRecordingStopped);
+    mr.start();
+    mediaRecorderRef.current = mr;
+    recordingStartRef.current = Date.now();
+    setRecording(true);
+    setRecordSecs(0);
+    recordingTimerRef.current = setInterval(() => {
+      setRecordSecs(Math.floor((Date.now() - recordingStartRef.current) / 1000));
+    }, 500);
+  }
+
+  function stopRecording(shouldSend) {
+    const mr = mediaRecorderRef.current;
+    if (!mr) return;
+    mr._shouldSend = shouldSend;
+    if (mr.state === 'recording') mr.stop();
+    clearInterval(recordingTimerRef.current);
+    recordingTimerRef.current = null;
+    setRecording(false);
+  }
+
+  async function onRecordingStopped() {
+    const mr = mediaRecorderRef.current;
+    const shouldSend = mr && mr._shouldSend;
+    if (recordingStreamRef.current) {
+      recordingStreamRef.current.getTracks().forEach(t => t.stop());
+      recordingStreamRef.current = null;
+    }
+    const chunks = recordedChunksRef.current;
+    recordedChunksRef.current = [];
+    const mrType = mr ? mr.mimeType : '';
+    mediaRecorderRef.current = null;
+    if (!shouldSend || chunks.length === 0) return;
+
+    const blob = new Blob(chunks, { type: mrType || 'audio/webm' });
+    if (blob.size < 500) return; // too short / silent tap
+
+    setUploading('Uploading voice note…');
+    try {
+      const ext = (mrType && mrType.includes('mp4')) ? 'm4a' : 'webm';
+      const path = 'chatUploads/' + convoId + '/' + Date.now() + '_voice.' + ext;
+      const fileRef = ref(storage, path);
+      await uploadBytes(fileRef, blob, { contentType: mrType || 'audio/webm' });
+      const url = await getDownloadURL(fileRef);
+      await addDoc(collection(db, 'conversations', convoId, 'messages'), {
+        senderUid: currentUid, text: '', audioUrl: url,
+        replyTo: null,
+        reactions: {}, starredBy: [],
+        createdAt: serverTimestamp(), editedAt: null
+      });
+      await updateDoc(doc(db, 'conversations', convoId), {
+        lastMessageText: '🎤 Voice note', lastMessageAt: serverTimestamp(), lastMessageSenderUid: currentUid
+      });
+    } catch (e) {
+      alert("Couldn't upload voice note: " + (e.code || e.message || 'unknown error'));
     }
     setUploading(null);
   }
@@ -296,17 +389,28 @@ export default function ChatThread({ convoId, currentUid, currentProfile, nurseB
             </div>
           )}
 
+          {recording && (
+            <div className="recording-bar">
+              <span className="rec-dot" />
+              <span className="rec-time">Recording {String(Math.floor(recordSecs / 60)).padStart(2, '0')}:{String(recordSecs % 60).padStart(2, '0')}</span>
+              <button className="rec-cancel" onClick={() => stopRecording(false)}>Cancel</button>
+              <button className="rec-send" onClick={() => stopRecording(true)}>Send</button>
+            </div>
+          )}
+
           <input type="file" ref={imageInputRef} accept="image/*" style={{ display: 'none' }} onChange={handleImagePicked} />
           <div className="thread-compose">
-            <button className="attach-btn" title="Attach image" onClick={() => imageInputRef.current?.click()} disabled={!!uploading}>&#128206;</button>
+            <button className="attach-btn" title="Attach image" onClick={() => imageInputRef.current?.click()} disabled={!!uploading || recording}>&#128206;</button>
             <input
               type="text"
               placeholder="Type a message…"
               value={input}
               onChange={e => handleInputChange(e.target.value)}
               onKeyDown={e => { if (e.key === 'Enter') sendMessage(); }}
+              disabled={recording}
             />
-            <button className="btn btn-primary" style={{ padding: '10px 16px' }} onClick={sendMessage}>Send</button>
+            <button className={"mic-btn" + (recording ? ' recording' : '')} title="Record voice note" onClick={micClick}>&#127908;</button>
+            <button className="btn btn-primary" style={{ padding: '10px 16px' }} onClick={sendMessage} disabled={recording}>Send</button>
           </div>
         </div>
       </div>

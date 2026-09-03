@@ -811,3 +811,15 @@ h1.period-label { margin: 0; display: flex; align-items: center; flex-wrap: wrap
 /* Image attachments */
 .msg-img { max-width: 100%; border-radius: 10px; display: block; margin-bottom: 4px; cursor: pointer; }
 .attach-btn { background: none; border: none; font-size: 20px; cursor: pointer; flex-shrink: 0; padding: 4px; }
+
+/* Voice notes */
+.mic-btn { background: none; border: none; font-size: 20px; cursor: pointer; flex-shrink: 0; padding: 4px; color: #2563eb; }
+.mic-btn.recording { color: #dc2626; animation: mic-pulse 1s infinite; }
+@keyframes mic-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
+.recording-bar { display: flex; align-items: center; gap: 8px; background: #fef2f2; border-radius: 8px; padding: 6px 10px; margin-bottom: 8px; font-size: 12px; color: #dc2626; font-weight: bold; }
+.recording-bar .rec-dot { width: 9px; height: 9px; border-radius: 50%; background: #dc2626; animation: mic-pulse 1s infinite; flex-shrink: 0; }
+.recording-bar .rec-time { flex: 1; }
+.recording-bar button { background: none; border: none; font-size: 13px; font-weight: bold; cursor: pointer; }
+.recording-bar .rec-cancel { color: #6b7280; }
+.recording-bar .rec-send { color: #2563eb; }
+.msg-audio { display: block; max-width: 220px; margin-bottom: 4px; }
