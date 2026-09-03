@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import {
   collection, doc, setDoc, addDoc, updateDoc, serverTimestamp, orderBy, query, onSnapshot
 } from "firebase/firestore";
-import { db } from "../firebase.js";
+import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import { db, storage } from "../firebase.js";
 import { avatarMarkup } from "../lib/avatar.js";
 import Topbar from "./Topbar.jsx";
 import MessageBubble from "./MessageBubble.jsx";
@@ -35,6 +36,8 @@ export default function ChatThread({ convoId, currentUid, currentProfile, nurseB
   const [typers, setTypers] = useState([]);
   const [input, setInput] = useState('');
   const [replyingTo, setReplyingTo] = useState(null);
+  const [uploading, setUploading] = useState(null); // status text while an attachment uploads
+  const imageInputRef = useRef(null);
 
   const iAmTypingRef = useRef(false);
   const typingTimeoutRef = useRef(null);
@@ -154,6 +157,36 @@ export default function ChatThread({ convoId, currentUid, currentProfile, nurseB
     });
   }
 
+  async function handleImagePicked(ev) {
+    const file = ev.target.files[0];
+    ev.target.value = '';
+    if (!file) return;
+    if (!file.type.startsWith('image/')) { alert('Only images can be attached.'); return; }
+    if (file.size > 10 * 1024 * 1024) { alert('Image is too large (max 10MB).'); return; }
+
+    const replySnapshot = replyingTo;
+    setReplyingTo(null);
+    setUploading('Uploading image…');
+    try {
+      const path = 'chatUploads/' + convoId + '/' + Date.now() + '_' + file.name.replace(/[^a-zA-Z0-9_.-]/g, '_');
+      const fileRef = ref(storage, path);
+      await uploadBytes(fileRef, file);
+      const url = await getDownloadURL(fileRef);
+      await addDoc(collection(db, 'conversations', convoId, 'messages'), {
+        senderUid: currentUid, text: '', imageUrl: url,
+        replyTo: replySnapshot || null,
+        reactions: {}, starredBy: [],
+        createdAt: serverTimestamp(), editedAt: null
+      });
+      await updateDoc(doc(db, 'conversations', convoId), {
+        lastMessageText: '📷 Photo', lastMessageAt: serverTimestamp(), lastMessageSenderUid: currentUid
+      });
+    } catch (e) {
+      alert("Couldn't upload image: " + (e.code || e.message || 'unknown error'));
+    }
+    setUploading(null);
+  }
+
   async function toggleReaction(message, emoji) {
     const reactions = JSON.parse(JSON.stringify(message.reactions || {}));
     let hadThisEmoji = false;
@@ -253,6 +286,7 @@ export default function ChatThread({ convoId, currentUid, currentProfile, nurseB
                 />
               );
             })}
+            {uploading && <div className="loading-note">{uploading}</div>}
           </div>
 
           {replyingTo && (
@@ -262,7 +296,9 @@ export default function ChatThread({ convoId, currentUid, currentProfile, nurseB
             </div>
           )}
 
+          <input type="file" ref={imageInputRef} accept="image/*" style={{ display: 'none' }} onChange={handleImagePicked} />
           <div className="thread-compose">
+            <button className="attach-btn" title="Attach image" onClick={() => imageInputRef.current?.click()} disabled={!!uploading}>&#128206;</button>
             <input
               type="text"
               placeholder="Type a message…"

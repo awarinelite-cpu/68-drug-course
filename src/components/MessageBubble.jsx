@@ -11,7 +11,7 @@ function fmtTime(ts) {
 
 export default function MessageBubble({
   message: m, isMine, isGroup, senderName, readByAll, currentUid,
-  onToggleReaction, onReply, children
+  onToggleReaction, onReply
 }) {
   const [pickerOpen, setPickerOpen] = useState(false);
   const wrapRef = useRef(null);
@@ -120,7 +120,9 @@ export default function MessageBubble({
               {m.replyTo.text || ''}
             </div>
           )}
-          {children}
+          {m.imageUrl && (
+            <img className="msg-img" src={m.imageUrl} onClick={() => window.open(m.imageUrl, '_blank')} alt="" />
+          )}
           {m.text}
           <div className="msg-meta">
             {isStarred && <span className="msg-star-mark">&#11088;</span>}
