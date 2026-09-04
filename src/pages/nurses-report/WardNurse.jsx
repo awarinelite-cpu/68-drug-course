@@ -117,13 +117,13 @@ function ShiftTable({ wardDoc, census, movementTotals, editable, onBeds, onField
         {SHIFTS.map((s) => (
           <tr key={s.key}>
             <td className="shift-name">{s.label}</td>
-            <td className={s.key === 'am' ? '' : 'mirrored'}>
+            <td className={"stat-beds" + (s.key === 'am' ? '' : ' mirrored')}>
               {s.key === 'am'
                 ? <input type="number" inputMode="numeric" disabled={!editable} value={wardDoc.beds} onChange={(e) => onBeds(e.target.value)} />
                 : census.beds}
             </td>
-            <td className="computed">{census.perShiftOcc[s.key]}</td>
-            <td className="computed">{census.beds - census.perShiftOcc[s.key]}</td>
+            <td className="computed stat-occ">{census.perShiftOcc[s.key]}</td>
+            <td className="computed stat-vac">{census.beds - census.perShiftOcc[s.key]}</td>
             {ORDERED_MOVEMENT.map((f) => (
               <td key={f.key} className={movementColorClass(f.key)}>
                 <input type="number" inputMode="numeric" disabled={!editable}
@@ -138,9 +138,9 @@ function ShiftTable({ wardDoc, census, movementTotals, editable, onBeds, onField
         ))}
         <tr className="total-row">
           <td className="shift-name">Total</td>
-          <td>{census.beds}</td>
-          <td>{census.occ}</td>
-          <td>{census.vac}</td>
+          <td className="stat-beds">{census.beds}</td>
+          <td className="stat-occ">{census.occ}</td>
+          <td className="stat-vac">{census.vac}</td>
           {ORDERED_MOVEMENT.map((f) => <td key={f.key} className={movementColorClass(f.key)}>{movementTotals[f.key]}</td>)}
           <td style={{ textAlign: 'left' }}>{wardDoc.shifts.pm.nurseOnDuty || '\u2014'}</td>
         </tr>

@@ -639,13 +639,17 @@ table.shift input.duty-input { width: 130px; text-align: left; }
 table.shift td.computed { background: #f9fafb; font-weight: bold; color: var(--primary-active); }
 table.shift td.mirrored { background: #f9fafb; color: var(--text-secondary); }
 
-/* Movement-figure coloring, shared across the Ward Nurse shift table, the
-   Overall Nurse's per-ward shift table, and the All Wards statistics table:
-   outgoing patient counts (Disch/Dama/Transfer Out/Ext Out/Absc/Death) in
-   red, incoming counts (Adm/Transfer In/Ext In) in a strong blue. Applies
-   to both the plain total-row figure and the editable input's own text. */
+/* Stat-table coloring, shared across the Ward Nurse shift table, the
+   Overall Nurse's per-ward shift table and All Wards statistics table, and
+   their archived versions: outgoing patient counts (Disch/Dama/Transfer
+   Out/Ext Out/Absc/Death) in red, incoming counts (Adm/Transfer In/Ext In)
+   in blue, plus Beds/Occ/Vac each in their own visible color. Applies to
+   both the plain total-row figure and the editable input's own text. */
 td.stat-out, td.stat-out input { color: #b91c1c; font-weight: 800; }
 td.stat-in, td.stat-in input { color: #1d4ed8; font-weight: 800; }
+td.stat-beds, td.stat-beds input { color: #15803d; font-weight: 800; }
+td.stat-occ, td.stat-occ input { color: #0284c7; font-weight: 800; }
+td.stat-vac, td.stat-vac input { color: #dc2626; font-weight: 800; }
 .patient-card { border: 1px solid var(--border); border-radius: 10px; padding: 14px; margin-top: 12px; position: relative; }
 .patient-card .remove-btn { position: absolute; top: 10px; right: 10px; background: var(--danger-bg); color: var(--danger-text); border: none; border-radius: 6px; padding: 4px 9px; font-size: 16px; font-weight: bold; cursor: pointer; }
 .patient-field { margin-top: 8px; }

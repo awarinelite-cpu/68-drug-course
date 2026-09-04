@@ -82,9 +82,9 @@ function WardShiftTable({ w, data }) {
           return (
             <tr key={s.key}>
               <td className="shift-name">{s.label}</td>
-              <td>{beds}</td>
-              <td>{perShiftOcc[s.key]}</td>
-              <td>{beds - perShiftOcc[s.key]}</td>
+              <td className="stat-beds">{beds}</td>
+              <td className="stat-occ">{perShiftOcc[s.key]}</td>
+              <td className="stat-vac">{beds - perShiftOcc[s.key]}</td>
               {ORDERED_MOVEMENT.map(f => <td key={f.key} className={movementColorClass(f.key)}>{typeof sData[f.key] === 'number' ? sData[f.key] : 0}</td>)}
               <td style={{ textAlign: 'left' }}>{sData.nurseOnDuty || '\u2014'}</td>
             </tr>
@@ -92,9 +92,9 @@ function WardShiftTable({ w, data }) {
         })}
         <tr className="total-row">
           <td className="shift-name">Total</td>
-          <td>{beds}</td>
-          <td>{finalOcc}</td>
-          <td>{beds - finalOcc}</td>
+          <td className="stat-beds">{beds}</td>
+          <td className="stat-occ">{finalOcc}</td>
+          <td className="stat-vac">{beds - finalOcc}</td>
           {ORDERED_MOVEMENT.map(f => <td key={f.key} className={movementColorClass(f.key)}>{typeof data[f.key] === 'number' ? data[f.key] : 0}</td>)}
           <td style={{ textAlign: 'left' }}>{pmDuty || '\u2014'}</td>
         </tr>
