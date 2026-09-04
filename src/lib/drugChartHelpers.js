@@ -1,5 +1,5 @@
 export const ROUTE_OPTIONS = ['', 'Oral', 'IV', 'IM', 'SC', 'Sublingual', 'Topical', 'Rectal', 'Suppository', 'Inhalation', 'NG Tube', 'Other'];
-export const FREQ_OPTIONS = ['', 'OD', 'BD', 'TDS', 'QDS', 'STAT', 'STAT then Q6H', 'STAT then Q8H', 'PRN', 'Q4H', 'Q6H', 'Q8H', 'Q12H', 'Weekly', '0,12,24hr', 'Other'];
+export const FREQ_OPTIONS = ['', 'OD', 'BD', 'TDS', 'QDS', 'STAT', 'STAT then Q4H', 'STAT then Q6H', 'STAT then Q8H', 'STAT then Q12H', 'PRN', 'Q4H', 'Q6H', 'Q8H', 'Q12H', 'Weekly', '0,12,24hr', 'Other'];
 export const ACTION_OPTIONS = ['', 'Ongoing', 'Completed', 'Discontinued', 'Withheld', 'Other'];
 export const STATUS_LABELS = { referred: 'Referred to another hospital', transferred: 'Transferred to another ward', discharged: 'Discharged' };
 export const WARD_OPTIONS = [
@@ -20,7 +20,7 @@ export function defaultRow() {
 // push alert): next due = this drug's own last-administered time + its
 // frequency's interval, or its start/created time if never given yet. Kept
 // here too so a nurse can see it at a glance without waiting on a push.
-export const INTERVAL_HOURS = { OD: 24, BD: 12, TDS: 8, QDS: 6, Q4H: 4, Q6H: 6, Q8H: 8, Q12H: 12, Weekly: 168, 'STAT then Q6H': 6, 'STAT then Q8H': 8 };
+export const INTERVAL_HOURS = { OD: 24, BD: 12, TDS: 8, QDS: 6, Q4H: 4, Q6H: 6, Q8H: 8, Q12H: 12, Weekly: 168, 'STAT then Q4H': 4, 'STAT then Q6H': 6, 'STAT then Q8H': 8, 'STAT then Q12H': 12 };
 
 function toLocalDate(dateStr, timeStr) {
   if (!dateStr || !timeStr) return null;
