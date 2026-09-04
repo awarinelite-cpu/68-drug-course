@@ -240,7 +240,7 @@ const FREQ_ALIASES = {
   q12h: 'Q12H', '12hrly': 'Q12H', '12hourly': 'Q12H',
   weekly: 'Weekly'
 };
-const DOSAGE_RE = /^\d+(\.\d+)?(mg|g|mcg|ug|ml|iu|units?|%|mmol)$/i;
+const DOSAGE_RE = /^\d+(\.\d+)?(mg|g|mcg|ug|ml|l|cc|iu|units?|%|mmol)$/i;
 const DURATION_RE = /^x?(\d+)\s*\/\s*(7|52|12)$/i;
 
 export function parseDrugLine(line) {
@@ -267,6 +267,17 @@ export function parseDrugLine(line) {
     rest = tokens.slice(dosageIdx + 1);
   }
 
+  // An order can carry an additive after the main dose/frequency, e.g.
+  // "IV 0.9 N/saline 1L 8hrly + 3cc Vit Bco". Split it off before duration/
+  // frequency parsing so it doesn't get swallowed into the Frequency cell,
+  // then fold it back into the drug name.
+  let additive = '';
+  const plusIdx = rest.findIndex(t => t === '+');
+  if (plusIdx !== -1) {
+    additive = rest.slice(plusIdx).join(' ');
+    rest = rest.slice(0, plusIdx);
+  }
+
   let duration = '';
   const durIdx = rest.findIndex(t => DURATION_RE.test(t));
   if (durIdx !== -1) {
@@ -284,7 +295,7 @@ export function parseDrugLine(line) {
     frequency = freqRaw;
   }
 
-  const fullName = (name + (dosage ? ' ' + dosage : '')).trim();
+  const fullName = (name + (dosage ? ' ' + dosage : '') + (additive ? ' ' + additive : '')).trim();
   return { name: fullName, route, frequency, action: '', duration, createdAt: new Date().toISOString() };
 }
 
