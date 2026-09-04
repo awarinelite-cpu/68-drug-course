@@ -1,6 +1,7 @@
 import { useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
+import { doc, setDoc, serverTimestamp } from "firebase/firestore";
+import { getDocSafe } from "../../lib/firestoreOffline.js";
 import { db } from "../../firebase.js";
 import { useAuth } from "../../contexts/AuthContext.jsx";
 import { useGoBack } from "../../hooks/useGoBack.js";
@@ -194,12 +195,13 @@ export default function WardNurse() {
   async function loadWard(key) {
     setWardKey(key);
     setAdminEditOverride(false); // default to read-only even for admin; they tap ✏️ per ward
-    setTopStatus({ text: '', error: false });
+    setWardDoc(null);
+    setTopStatus({ text: 'Loading…', error: false });
     const w = WARDS.find(x => x.key === key);
     const ref = doc(db, 'nurseReports', dateId, 'wards', key);
     let snap;
     try {
-      snap = await getDoc(ref);
+      snap = await getDocSafe(ref);
     } catch (e) {
       setTopStatus({ text: "Couldn't load this ward's report: " + (e.code || e.message || 'unknown error'), error: true });
       return;
@@ -215,11 +217,12 @@ export default function WardNurse() {
     if (!snap.exists()) {
       try {
         const prevRef = doc(db, 'nurseReports', prevDateId(dateId), 'wards', key);
-        const prevSnap = await getDoc(prevRef);
+        const prevSnap = await getDocSafe(prevRef);
         if (prevSnap.exists() && typeof prevSnap.data().occ === 'number') next = { ...next, startOcc: prevSnap.data().occ };
       } catch (e) { /* non-fatal — leave startOcc at 0, nurse can correct it */ }
     }
 
+    setTopStatus({ text: '', error: false });
     setNightUpdateOpen(!!next.nightUpdate);
     setWardDoc(next);
   }

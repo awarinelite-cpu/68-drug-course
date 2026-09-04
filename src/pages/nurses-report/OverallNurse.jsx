@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  doc, getDoc, getDocs, setDoc, updateDoc, collection, onSnapshot, serverTimestamp, writeBatch
+  doc, getDocs, setDoc, updateDoc, collection, onSnapshot, serverTimestamp, writeBatch
 } from "firebase/firestore";
+import { getDocSafe, getDocsSafe } from "../../lib/firestoreOffline.js";
 import ReportContactModal from "../../components/ReportContactModal.jsx";
 import { db } from "../../firebase.js";
 import { useAuth } from "../../contexts/AuthContext.jsx";
@@ -152,10 +153,10 @@ export default function OverallNurse() {
     (async () => {
       let roleSnap;
       try {
-        roleSnap = await getDoc(roleRef);
+        roleSnap = await getDocSafe(roleRef);
       } catch (e) {
         setDeniedMsg("Couldn't check the current Overall Nurse: " + (e.code || e.message || 'unknown error'));
-        setAccess('denied');
+        setAccess('error');
         return;
       }
       const overall = roleSnap.exists() ? roleSnap.data().overallNurse : null;
@@ -179,7 +180,7 @@ export default function OverallNurse() {
       // pop up contact details for whichever nurse submitted each ward's
       // report, without a per-row Firestore lookup.
       try {
-        const usersSnap = await getDocs(collection(db, 'users'));
+        const usersSnap = await getDocsSafe(collection(db, 'users'));
         const map = {};
         usersSnap.forEach((d) => { map[d.id] = d.data(); });
         setUsersByUid(map);
@@ -205,7 +206,7 @@ export default function OverallNurse() {
   async function ensureSeeded() {
     let snap;
     try {
-      snap = await getDocs(wardsCol);
+      snap = await getDocsSafe(wardsCol);
     } catch (e) {
       setSaveStatus({ text: "Couldn't load ward data: " + (e.code || e.message || 'unknown error'), error: true });
       return;
@@ -445,6 +446,23 @@ export default function OverallNurse() {
   }
 
   if (access === 'checking') return null;
+
+  if (access === 'error') {
+    return (
+      <>
+        <Topbar brand="Overall Nurse">
+          <button className="btn btn-secondary" style={{ padding: '6px 12px' }} onClick={() => navigate('/nurses-report/role-select')}>Back</button>
+        </Topbar>
+        <div className="container">
+          <div className="card-box" style={{ textAlign: 'center' }}>
+            <h3 style={{ marginTop: 0 }}>Couldn't open this report</h3>
+            <p style={{ fontSize: 13, color: '#555' }}>{deniedMsg}</p>
+            <button className="btn btn-primary" style={{ padding: '8px 14px' }} onClick={() => window.location.reload()}>Try Again</button>
+          </div>
+        </div>
+      </>
+    );
+  }
 
   if (access === 'denied') {
     return (

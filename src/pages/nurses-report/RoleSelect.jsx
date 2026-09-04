@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
+import { doc, setDoc, serverTimestamp } from "firebase/firestore";
+import { getDocSafe } from "../../lib/firestoreOffline.js";
 import { db } from "../../firebase.js";
 import { useAuth } from "../../contexts/AuthContext.jsx";
 import { useGoBack } from "../../hooks/useGoBack.js";
@@ -20,7 +21,7 @@ export default function RoleSelect() {
   async function refreshStatus() {
     let snap;
     try {
-      snap = await getDoc(roleRef);
+      snap = await getDocSafe(roleRef);
     } catch (e) {
       setStatus({ text: "Couldn't check current status.", className: 'status' });
       return null;
