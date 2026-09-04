@@ -254,8 +254,11 @@ export function parseDrugLine(line) {
   if (ROUTE_ALIASES[firstKey]) {
     route = ROUTE_ALIASES[firstKey];
     tokens = tokens.slice(1);
+  } else {
+    // No route prefix in the order (e.g. "Indapamide 1.5mg dly") — nursing
+    // drug orders default to oral/tablet when a route isn't stated.
+    route = 'Oral';
   }
-
   let dosageIdx = tokens.findIndex(t => DOSAGE_RE.test(t.replace(/,$/, '')));
   let name, dosage, rest;
   if (dosageIdx === -1) {
