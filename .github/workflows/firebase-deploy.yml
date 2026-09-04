@@ -1,8 +1,8 @@
-name: Deploy Firebase Functions & Firestore Rules
+name: Deploy Firebase Functions & Firestore/Storage Rules
 
 # Frontend hosting is handled by Vercel (connected directly to this repo) —
 # this workflow only covers the backend pieces Vercel doesn't touch:
-# Cloud Functions and Firestore security rules.
+# Cloud Functions, Firestore security rules, and Storage security rules.
 on:
   push:
     branches:
@@ -10,6 +10,7 @@ on:
     paths:
       - 'functions/**'
       - 'firestore.rules'
+      - 'storage.rules'
       - '.github/workflows/firebase-deploy.yml'
   workflow_dispatch: {}
 
@@ -33,6 +34,11 @@ jobs:
 
       - name: Deploy Firestore rules
         run: npx firebase-tools deploy --only firestore:rules --project gen-lang-client-0406053716 --non-interactive
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: /tmp/firebase-sa.json
+
+      - name: Deploy Storage rules
+        run: npx firebase-tools deploy --only storage --project gen-lang-client-0406053716 --non-interactive
         env:
           GOOGLE_APPLICATION_CREDENTIALS: /tmp/firebase-sa.json
 
