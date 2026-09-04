@@ -228,7 +228,7 @@ const ROUTE_ALIASES = {
   neb: 'Inhalation', inhaler: 'Inhalation', inhalation: 'Inhalation'
 };
 const FREQ_ALIASES = {
-  od: 'OD', once: 'OD', bd: 'BD', tds: 'TDS', tid: 'TDS', qds: 'QDS', qid: 'QDS',
+  od: 'OD', once: 'OD', daily: 'OD', dly: 'OD', bd: 'BD', tds: 'TDS', tid: 'TDS', qds: 'QDS', qid: 'QDS',
   stat: 'STAT', prn: 'PRN',
   mane: 'Mane', morning: 'Mane',
   nocte: 'Nocte', night: 'Nocte',
