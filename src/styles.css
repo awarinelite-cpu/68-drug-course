@@ -400,6 +400,7 @@ table.entries th { background: var(--background); text-transform: uppercase; fon
   padding: 7px 12px; transform: translateY(-100%); transition: transform .2s ease;
 }
 .gnav-offline-banner.gnav-show { transform: translateY(0); }
+body.has-offline-banner { padding-top: var(--offline-banner-h, 0px); transition: padding-top .2s ease; }
 @media print {
   .gnav-toggle, .gnav-overlay, .gnav-drawer, .gnav-offline-banner { display: none !important; }
 }
