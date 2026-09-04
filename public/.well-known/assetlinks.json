@@ -1,0 +1,10 @@
+[{
+  "relation": ["delegate_permission/common.handle_all_urls"],
+  "target": {
+    "namespace": "android_app",
+    "package_name": "com.narhy.wardcharts",
+    "sha256_cert_fingerprints": [
+      "29:9B:E2:94:9C:48:6E:64:0D:AA:63:01:51:D1:CB:1C:9F:63:6E:BA:E2:40:7D:F5:E4:09:91:73:1A:6A:E9:11"
+    ]
+  }
+}]
