@@ -4,7 +4,7 @@ import { doc, getDoc, updateDoc, serverTimestamp } from "firebase/firestore";
 import { db } from "../../firebase.js";
 import { useAuth } from "../../contexts/AuthContext.jsx";
 import { useGoBack } from "../../hooks/useGoBack.js";
-import { WARDS, STAT_FIELDS, SHIFT_STAT_FIELDS, SHIFTS, PATIENT_FIELDS, PATIENT_STATUS_OPTIONS, DEMOGRAPHIC_FIELDS, occDelta } from "../../lib/nurses-report-common.js";
+import { WARDS, STAT_FIELDS, SHIFT_STAT_FIELDS, SHIFTS, PATIENT_FIELDS, PATIENT_STATUS_OPTIONS, DEMOGRAPHIC_FIELDS, occDelta, movementColorClass } from "../../lib/nurses-report-common.js";
 import Topbar from "../../components/Topbar.jsx";
 
 const movementFields = SHIFT_STAT_FIELDS;
@@ -99,7 +99,7 @@ function WardShiftTableView({ w, data }) {
             <tr key={s.key}>
               <td className="shift-name">{s.label}</td>
               <td>{beds}</td><td>{perShiftOcc[s.key]}</td><td>{beds - perShiftOcc[s.key]}</td>
-              {ORDERED_MOVEMENT.map(f => <td key={f.key}>{typeof sData[f.key] === 'number' ? sData[f.key] : 0}</td>)}
+              {ORDERED_MOVEMENT.map(f => <td key={f.key} className={movementColorClass(f.key)}>{typeof sData[f.key] === 'number' ? sData[f.key] : 0}</td>)}
               <td style={{ textAlign: 'left' }}>{sData.nurseOnDuty || '\u2014'}</td>
             </tr>
           );
@@ -107,7 +107,7 @@ function WardShiftTableView({ w, data }) {
         <tr className="total-row">
           <td className="shift-name">Total</td>
           <td>{beds}</td><td>{finalOcc}</td><td>{beds - finalOcc}</td>
-          {ORDERED_MOVEMENT.map(f => <td key={f.key}>{typeof data[f.key] === 'number' ? data[f.key] : 0}</td>)}
+          {ORDERED_MOVEMENT.map(f => <td key={f.key} className={movementColorClass(f.key)}>{typeof data[f.key] === 'number' ? data[f.key] : 0}</td>)}
           <td style={{ textAlign: 'left' }}>{pmDuty || '\u2014'}</td>
         </tr>
       </tbody>
@@ -146,7 +146,7 @@ function WardShiftTableEdit({ w, data, onChange }) {
             <td>{perShiftOcc[s.key]}</td>
             <td>{beds - perShiftOcc[s.key]}</td>
             {ORDERED_MOVEMENT.map((f) => (
-              <td key={f.key}>
+              <td key={f.key} className={movementColorClass(f.key)}>
                 <input type="number" inputMode="numeric" value={(shifts[s.key] || {})[f.key] || 0} onChange={(e) => setField(s.key, f.key, e.target.value)} />
               </td>
             ))}
@@ -330,7 +330,7 @@ function StatsTableView({ wardsMeta, wardsMap }) {
               {STAT_FIELDS.map((f) => {
                 const v = f.key === 'beds' ? (typeof data.beds === 'number' ? data.beds : w.beds) : (typeof data[f.key] === 'number' ? data[f.key] : 0);
                 totals[f.key] += v;
-                return <td key={f.key}>{v}</td>;
+                return <td key={f.key} className={movementColorClass(f.key)}>{v}</td>;
               })}
               <td style={{ textAlign: 'left' }}>{data.nurseOnDuty || '\u2014'}</td>
             </tr>
@@ -338,7 +338,7 @@ function StatsTableView({ wardsMeta, wardsMap }) {
         })}
         <tr className="totals-row">
           <td className="ward-name">TOTAL</td>
-          {STAT_FIELDS.map((f) => <td key={f.key}>{totals[f.key]}</td>)}
+          {STAT_FIELDS.map((f) => <td key={f.key} className={movementColorClass(f.key)}>{totals[f.key]}</td>)}
           <td></td>
         </tr>
       </tbody>
@@ -379,7 +379,7 @@ function StatsTableEdit({ wardsMeta, wardsMap, onChange }) {
               {STAT_FIELDS.map((f) => {
                 const v = f.key === 'beds' ? (typeof data.beds === 'number' ? data.beds : w.beds) : (typeof data[f.key] === 'number' ? data[f.key] : 0);
                 return (
-                  <td key={f.key}>
+                  <td key={f.key} className={movementColorClass(f.key)}>
                     <input type="number" inputMode="numeric" value={v}
                       onChange={(e) => { const n = parseFloat(e.target.value); onChange(w.key, { ...data, [f.key]: isNaN(n) ? 0 : n }); }} />
                   </td>
@@ -394,7 +394,7 @@ function StatsTableEdit({ wardsMeta, wardsMap, onChange }) {
         })}
         <tr className="totals-row">
           <td className="ward-name">TOTAL</td>
-          {STAT_FIELDS.map((f) => <td key={f.key}>{totals[f.key]}</td>)}
+          {STAT_FIELDS.map((f) => <td key={f.key} className={movementColorClass(f.key)}>{totals[f.key]}</td>)}
           <td></td>
         </tr>
       </tbody>
