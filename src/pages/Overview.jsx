@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { doc, getDoc, collection, getDocs, query, orderBy } from "firebase/firestore";
+import { doc, collection, query, orderBy } from "firebase/firestore";
 import { db } from "../firebase.js";
 import { useAuth } from "../contexts/AuthContext.jsx";
 import { useGoBack } from "../hooks/useGoBack.js";
 import { usePatientHeader } from "../hooks/usePatientHeader.js";
+import { getDocSafe, getDocsSafe } from "../lib/firestoreOffline.js";
 import { buildExportRecord, downloadRecordAsPdf, downloadRecordAsJson } from "../lib/export.js";
 import Topbar from "../components/Topbar.jsx";
 import PatientBanner from "../components/PatientBanner.jsx";
@@ -23,69 +24,77 @@ export default function Overview() {
   const [searchParams] = useSearchParams();
   const patientId = searchParams.get('patient');
   const goBack = useGoBack('/');
-  const { patient } = usePatientHeader(patientId);
+  const { patient, error: patientError } = usePatientHeader(patientId);
 
   const [items, setItems] = useState(null); // null = loading
+  const [itemsError, setItemsError] = useState(null);
   const [exportStatus, setExportStatus] = useState('');
   const [exporting, setExporting] = useState(false);
 
   useEffect(() => {
     if (!patientId) return;
+    let cancelled = false;
+    setItems(null);
+    setItemsError(null);
     (async () => {
       const list = [];
-
-      const [drugSnap, bgSnap, vitalsSnap, ioSnap, seizureSnap] = await Promise.all([
-        getDoc(doc(db, 'patients', patientId, 'drugCourseChart', 'main')),
-        getDoc(doc(db, 'patients', patientId, 'bloodGlucose', 'main')),
-        getDocs(collection(db, 'patients', patientId, 'vitals')),
-        getDocs(collection(db, 'patients', patientId, 'intakeOutput')),
-        getDocs(collection(db, 'patients', patientId, 'seizure'))
-      ]);
-
-      const drugData = drugSnap.exists() ? drugSnap.data() : null;
-      const bgData = bgSnap.exists() ? bgSnap.data() : null;
-      const hasDrugData = !!(drugData && ((drugData.f_diagnosis || '') || (drugData.drugs || []).some(d => d && d.name) || (drugData.rows || []).some(r => r && (r.date || r.sno))));
-      const hasBgData = !!(bgData && (bgData.rows || []).some(r => Array.isArray(r) && r.some(cell => cell)));
-      const hasActiveData = hasDrugData || hasBgData || !vitalsSnap.empty || !ioSnap.empty || !seizureSnap.empty;
-
-      if (hasActiveData) {
-        list.push({
-          kind: 'active',
-          diagnosis: (drugData && drugData.f_diagnosis) || 'No diagnosis entered yet',
-          dateLabel: 'Currently active',
-          href: '/charts/admission?patient=' + patientId
-        });
-      }
-
       try {
-        const q = query(collection(db, 'patients', patientId, 'admissions'), orderBy('archivedAt', 'desc'));
-        const snap = await getDocs(q);
-        snap.forEach(d => {
-          const data = d.data();
-          list.push({
-            kind: data.archiveReason || 'closed',
-            diagnosis: data.diagnosis || 'No diagnosis recorded',
-            dateLabel: (data.archiveReasonLabel || STATUS_LABELS[data.archiveReason] || 'Closed') + ' — ' + (formatTimestamp(data.archivedAt) || data.archivedAtDisplay || ''),
-            href: '/charts/admission?patient=' + patientId + '&admission=' + d.id
-          });
-        });
-      } catch (e) {
-        const snap = await getDocs(collection(db, 'patients', patientId, 'admissions'));
-        const archived = [];
-        snap.forEach(d => archived.push({ id: d.id, ...d.data() }));
-        archived.sort((a, b) => (b.archivedAtDisplay || '').localeCompare(a.archivedAtDisplay || ''));
-        archived.forEach(data => {
-          list.push({
-            kind: data.archiveReason || 'closed',
-            diagnosis: data.diagnosis || 'No diagnosis recorded',
-            dateLabel: (data.archiveReasonLabel || STATUS_LABELS[data.archiveReason] || 'Closed') + ' — ' + (data.archivedAtDisplay || ''),
-            href: '/charts/admission?patient=' + patientId + '&admission=' + data.id
-          });
-        });
-      }
+        const [drugSnap, bgSnap, vitalsSnap, ioSnap, seizureSnap] = await Promise.all([
+          getDocSafe(doc(db, 'patients', patientId, 'drugCourseChart', 'main')),
+          getDocSafe(doc(db, 'patients', patientId, 'bloodGlucose', 'main')),
+          getDocsSafe(collection(db, 'patients', patientId, 'vitals')),
+          getDocsSafe(collection(db, 'patients', patientId, 'intakeOutput')),
+          getDocsSafe(collection(db, 'patients', patientId, 'seizure'))
+        ]);
 
-      setItems(list);
+        const drugData = drugSnap.exists() ? drugSnap.data() : null;
+        const bgData = bgSnap.exists() ? bgSnap.data() : null;
+        const hasDrugData = !!(drugData && ((drugData.f_diagnosis || '') || (drugData.drugs || []).some(d => d && d.name) || (drugData.rows || []).some(r => r && (r.date || r.sno))));
+        const hasBgData = !!(bgData && (bgData.rows || []).some(r => Array.isArray(r) && r.some(cell => cell)));
+        const hasActiveData = hasDrugData || hasBgData || !vitalsSnap.empty || !ioSnap.empty || !seizureSnap.empty;
+
+        if (hasActiveData) {
+          list.push({
+            kind: 'active',
+            diagnosis: (drugData && drugData.f_diagnosis) || 'No diagnosis entered yet',
+            dateLabel: 'Currently active',
+            href: '/charts/admission?patient=' + patientId
+          });
+        }
+
+        try {
+          const q = query(collection(db, 'patients', patientId, 'admissions'), orderBy('archivedAt', 'desc'));
+          const snap = await getDocsSafe(q);
+          snap.forEach(d => {
+            const data = d.data();
+            list.push({
+              kind: data.archiveReason || 'closed',
+              diagnosis: data.diagnosis || 'No diagnosis recorded',
+              dateLabel: (data.archiveReasonLabel || STATUS_LABELS[data.archiveReason] || 'Closed') + ' — ' + (formatTimestamp(data.archivedAt) || data.archivedAtDisplay || ''),
+              href: '/charts/admission?patient=' + patientId + '&admission=' + d.id
+            });
+          });
+        } catch (e) {
+          const snap = await getDocsSafe(collection(db, 'patients', patientId, 'admissions'));
+          const archived = [];
+          snap.forEach(d => archived.push({ id: d.id, ...d.data() }));
+          archived.sort((a, b) => (b.archivedAtDisplay || '').localeCompare(a.archivedAtDisplay || ''));
+          archived.forEach(data => {
+            list.push({
+              kind: data.archiveReason || 'closed',
+              diagnosis: data.diagnosis || 'No diagnosis recorded',
+              dateLabel: (data.archiveReasonLabel || STATUS_LABELS[data.archiveReason] || 'Closed') + ' — ' + (data.archivedAtDisplay || ''),
+              href: '/charts/admission?patient=' + patientId + '&admission=' + data.id
+            });
+          });
+        }
+
+        if (!cancelled) setItems(list);
+      } catch (e) {
+        if (!cancelled) setItemsError("Couldn't load admissions: " + (e.code || e.message || 'unknown error'));
+      }
     })();
+    return () => { cancelled = true; };
   }, [patientId]);
 
   async function runFullExport(kind) {
@@ -115,11 +124,13 @@ export default function Overview() {
 
       <div className="container">
         <PatientBanner patient={patient} />
+        {patientError && <div className="empty-msg" style={{ marginTop: 8 }}>{patientError}</div>}
 
         <div className="card-box" style={{ marginTop: 16 }}>
           <h3 style={{ marginTop: 0 }}>Admissions</h3>
           <div>
-            {items === null && 'Loading…'}
+            {items === null && !itemsError && 'Loading…'}
+            {itemsError && <div className="empty-msg">{itemsError}</div>}
             {items && items.length === 0 && <div className="empty-msg">No admissions recorded yet for this patient.</div>}
             {items && items.map((item, i) => {
               const badgeClass = item.kind === 'active' ? 'badge-active' : (BADGE_CLASS[item.kind] || 'badge-discharged');
