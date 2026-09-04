@@ -72,6 +72,7 @@ export default function App() {
           <Route path="/nurses-report/overall-nurse" element={<AuthedShell><OverallNurse /></AuthedShell>} />
           <Route path="/nurses-report/archive-list" element={<AuthedShell><ArchiveList /></AuthedShell>} />
           <Route path="/nurses-report/archive-view" element={<AuthedShell><ArchiveView /></AuthedShell>} />
+          <Route path="*" element={<AuthedShell><Home /></AuthedShell>} />
         </Routes>
       </NavProvider>
     </AuthProvider>
