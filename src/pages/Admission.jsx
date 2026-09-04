@@ -97,6 +97,16 @@ export default function Admission() {
     const patientName = (patient?.name || '').trim() || 'this patient';
     if (!confirm('Readmit ' + patientName + '?\n\nThis cancels the discharge and restores the drug chart, vitals, glycemic chart, intake & output, and seizure chart from this admission back to active. Care continues from exactly where it left off.')) return;
 
+    // Same reasoning as applyStatusAction's guard on the drug chart page:
+    // this restores multiple collections from the archived record and then
+    // deletes the archive doc, all in a specific order that depends on each
+    // step actually completing — not something to risk running against a
+    // stale offline cache.
+    if (!navigator.onLine) {
+      setReadmitStatus({ color: '#b91c1c', text: "This needs an internet connection — readmitting restores several charts from the archived record and then removes it, and doing that safely requires reading the real data. Please try again once online." });
+      return;
+    }
+
     setReadmitBusy(true);
     setReadmitStatus({ color: '#555', text: 'Checking for a newer admission already in progress\u2026' });
 

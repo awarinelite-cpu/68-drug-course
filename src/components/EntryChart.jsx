@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import {
-  collection, addDoc, deleteDoc, doc, getDoc, setDoc, onSnapshot, query, orderBy, serverTimestamp
+  collection, deleteDoc, doc, getDoc, setDoc, onSnapshot, query, orderBy, serverTimestamp
 } from "firebase/firestore";
 import { db } from "../firebase.js";
 import { useAuth } from "../contexts/AuthContext.jsx";
@@ -239,7 +239,7 @@ export default function EntryChart({ title, collectionName, columns, deriveRows,
     return val;
   }
 
-  async function addEntry() {
+  function addEntry() {
     const data = {};
     enterableColumns.forEach(col => { data[col.key] = readInputValue(col); });
 
@@ -256,7 +256,15 @@ export default function EntryChart({ title, collectionName, columns, deriveRows,
     if (!data.time) { alert('Please set the time.'); return; }
     data.createdAt = serverTimestamp();
     data.enteredBy = profile.name;
-    await addDoc(collection(db, 'patients', patientId, collectionName), data);
+    // Client-generated ID via setDoc instead of addDoc, fired without
+    // awaiting — same offline-hang fix as elsewhere in this app: with
+    // offline persistence, this queues in the local cache immediately and
+    // syncs on reconnect, but addDoc()'s Promise wouldn't resolve until
+    // then. That left "Add Entry"/"Add Reading" silently doing nothing
+    // while offline — no error, form never cleared, entry never appeared.
+    setDoc(doc(collection(db, 'patients', patientId, collectionName)), data).catch((e) => {
+      console.warn('Entry queued locally; will retry once back online:', e);
+    });
 
     setEntryValues((v) => {
       const next = { ...v };

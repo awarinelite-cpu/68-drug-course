@@ -272,16 +272,20 @@ export default function DrugCourseChart() {
   }, [isArchived, chartEditMode, drugsEditMode]);
 
   // --- Save -----------------------------------------------------------------
-  async function saveChart() {
+  function saveChart() {
     if (isArchived || !chartRefPath.current) return;
     const { fields: f, drugs: d, chartRows: c, verbalOrders: v, careInstructions: ci, auditLog: al } = latestRef.current;
     const data = { ...f, rows: c, drugs: d, verbalOrders: v, careInstructions: ci, auditLog: al, updatedAt: serverTimestamp() };
-    try {
-      await setDoc(chartRefPath.current, data, { merge: true });
-      setSaveStatus('Saved ' + new Date().toLocaleTimeString());
-    } catch (e) {
+    // Not awaited — with offline persistence, this writes to the local cache
+    // immediately and syncs on reconnect, but the Promise itself only
+    // resolves once the backend acknowledges it. Awaiting it left
+    // "Saving…" stuck forever offline. Callers that `await saveChart()` to
+    // flush edits before continuing still get what they need — the write
+    // is already handed to the local cache by the time this returns.
+    setDoc(chartRefPath.current, data, { merge: true }).catch((e) => {
       setSaveStatus('Save failed: ' + (e.code || e.message));
-    }
+    });
+    setSaveStatus('Saved ' + new Date().toLocaleTimeString());
   }
 
   function scheduleSave() {
@@ -552,6 +556,18 @@ export default function DrugCourseChart() {
     if (isArchived) return;
     const reason = statusAction;
     if (!reason) { setStatusMsg({ color: '#dc2626', text: 'Please select an action first.' }); return; }
+
+    // Unlike the plain autosave above, this reads across five collections
+    // (vitals, glycemic, intake & output, seizure, plus this chart) and then
+    // DELETES the live entries once archived. Getting that sequence right
+    // needs the real data, not whatever happens to be sitting in the local
+    // offline cache — so this action is blocked until back online instead
+    // of being made offline-tolerant like saveChart() above.
+    if (!navigator.onLine) {
+      setStatusMsg({ color: '#dc2626', text: "This needs an internet connection — referring, transferring, or discharging archives records from several charts at once and then clears them, and doing that safely requires reading the real data rather than whatever's cached locally. Please try again once online." });
+      return;
+    }
+
     let label = STATUS_LABELS[reason];
     let wardChosen = '';
     if (reason === 'transferred') {
