@@ -238,7 +238,8 @@ const FREQ_ALIASES = {
   q6h: 'Q6H', '6hrly': 'Q6H', '6hourly': 'Q6H',
   q8h: 'Q8H', '8hrly': 'Q8H', '8hourly': 'Q8H',
   q12h: 'Q12H', '12hrly': 'Q12H', '12hourly': 'Q12H',
-  weekly: 'Weekly'
+  weekly: 'Weekly',
+  '01224hr': '0,12,24hr', '01224hrs': '0,12,24hr'
 };
 const DOSAGE_RE = /^\d+(\.\d+)?(mg|g|mcg|ug|ml|l|cc|iu|units?|%|mmol)$/i;
 const DURATION_RE = /^x?(\d+)\s*\/\s*(7|52|12)$/i;
@@ -285,6 +286,10 @@ export function parseDrugLine(line) {
     duration = m[1] + '/' + m[2];
     rest.splice(durIdx, 1);
   }
+
+  // "@" just introduces the clock times (e.g. "@ 0,12,24hrs") and carries no
+  // information of its own once the times are parsed as the frequency.
+  rest = rest.filter(t => t !== '@');
 
   const freqRaw = rest.join(' ').replace(/,+/g, ',').trim();
   const freqKey = freqRaw.toLowerCase().replace(/[\s,]/g, '');
