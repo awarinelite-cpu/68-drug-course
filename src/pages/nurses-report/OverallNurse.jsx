@@ -10,7 +10,7 @@ import { useAuth } from "../../contexts/AuthContext.jsx";
 import {
   WARDS, STAT_FIELDS, SHIFT_STAT_FIELDS, SHIFTS, PATIENT_FIELDS, DEMOGRAPHIC_FIELDS,
   reportDateId, reportPeriodLabel,
-  wardReportPeriodLabel, weekId, occDelta, defaultWardDoc,
+  wardReportPeriodLabel, weekId, occDelta, defaultWardDoc, movementColorClass,
   loadWardNameOverrides, saveWardNameOverride,
   loadHeaderLabelOverrides, saveHeaderLabelOverride, headerLabel, GROUP_LABEL_IDS,
   CUSTOM_TEXT_COLUMNS, loadCustomColumns, addCustomColumn, renameCustomColumn, removeCustomColumn
@@ -85,7 +85,7 @@ function WardShiftTable({ w, data }) {
               <td>{beds}</td>
               <td>{perShiftOcc[s.key]}</td>
               <td>{beds - perShiftOcc[s.key]}</td>
-              {ORDERED_MOVEMENT.map(f => <td key={f.key}>{typeof sData[f.key] === 'number' ? sData[f.key] : 0}</td>)}
+              {ORDERED_MOVEMENT.map(f => <td key={f.key} className={movementColorClass(f.key)}>{typeof sData[f.key] === 'number' ? sData[f.key] : 0}</td>)}
               <td style={{ textAlign: 'left' }}>{sData.nurseOnDuty || '\u2014'}</td>
             </tr>
           );
@@ -95,7 +95,7 @@ function WardShiftTable({ w, data }) {
           <td>{beds}</td>
           <td>{finalOcc}</td>
           <td>{beds - finalOcc}</td>
-          {ORDERED_MOVEMENT.map(f => <td key={f.key}>{typeof data[f.key] === 'number' ? data[f.key] : 0}</td>)}
+          {ORDERED_MOVEMENT.map(f => <td key={f.key} className={movementColorClass(f.key)}>{typeof data[f.key] === 'number' ? data[f.key] : 0}</td>)}
           <td style={{ textAlign: 'left' }}>{pmDuty || '\u2014'}</td>
         </tr>
       </tbody>
@@ -559,7 +559,7 @@ export default function OverallNurse() {
                         title={isAdmin ? 'Click to rename this ward' : undefined}
                         onClick={isAdmin ? () => renameWard(w) : undefined}>{w.label}</td>
                       {STAT_FIELDS.map((f) => (
-                        <td key={f.key}>
+                        <td key={f.key} className={movementColorClass(f.key)}>
                           {typeof data[f.key] === 'number' ? data[f.key] : (f.key === 'beds' ? w.beds : 0)}
                         </td>
                       ))}
@@ -586,7 +586,7 @@ export default function OverallNurse() {
                 })}
                 <tr className="totals-row">
                   <td className="ward-name">TOTAL</td>
-                  {STAT_FIELDS.map((f) => <td key={f.key}>{totals[f.key]}</td>)}
+                  {STAT_FIELDS.map((f) => <td key={f.key} className={movementColorClass(f.key)}>{totals[f.key]}</td>)}
                   {CUSTOM_TEXT_COLUMNS.map((c) => <td key={c.key}></td>)}
                   <td></td><td></td>
                   {isAdmin && <td></td>}

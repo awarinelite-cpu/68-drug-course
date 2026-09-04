@@ -225,6 +225,18 @@ export const SHIFT_STAT_FIELDS = STAT_FIELDS.filter(
 export const OCC_INCREASE_KEYS = ['adm', 'transferIn', 'ext'];
 export const OCC_DECREASE_KEYS = ['disch', 'dama', 'transferOut', 'extOut', 'absc', 'death'];
 
+// CSS class for a movement-figure cell, so every table (Ward Nurse's own
+// shift table, the Overall Nurse's per-ward shift table, and the All Wards
+// statistics table) colors incoming vs outgoing patient counts the same
+// way: outgoing (Disch/Dama/Transfer Out/Ext Out/Absc/Death) in red,
+// incoming (Adm/Transfer In/Ext In) in blue. Anything else (S/C, VS/C, BID)
+// gets no color.
+export function movementColorClass(key) {
+  if (OCC_DECREASE_KEYS.includes(key)) return 'stat-out';
+  if (OCC_INCREASE_KEYS.includes(key)) return 'stat-in';
+  return '';
+}
+
 // Net change to Occ contributed by one shift's movement figures.
 export function occDelta(shiftData) {
   const get = k => (typeof shiftData[k] === 'number' ? shiftData[k] : 0);

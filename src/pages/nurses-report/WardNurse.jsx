@@ -7,7 +7,7 @@ import { useAuth } from "../../contexts/AuthContext.jsx";
 import { useGoBack } from "../../hooks/useGoBack.js";
 import {
   WARDS, SHIFT_STAT_FIELDS, SHIFTS, PATIENT_FIELDS, PATIENT_STATUS_OPTIONS,
-  DEMOGRAPHIC_FIELDS, computeDemographicTotals,
+  DEMOGRAPHIC_FIELDS, computeDemographicTotals, movementColorClass,
   reportDateId, occDelta, blankShift, defaultWardDoc
 } from "../../lib/nurses-report-common.js";
 import Topbar from "../../components/Topbar.jsx";
@@ -125,7 +125,7 @@ function ShiftTable({ wardDoc, census, movementTotals, editable, onBeds, onField
             <td className="computed">{census.perShiftOcc[s.key]}</td>
             <td className="computed">{census.beds - census.perShiftOcc[s.key]}</td>
             {ORDERED_MOVEMENT.map((f) => (
-              <td key={f.key}>
+              <td key={f.key} className={movementColorClass(f.key)}>
                 <input type="number" inputMode="numeric" disabled={!editable}
                   value={wardDoc.shifts[s.key][f.key]} onChange={(e) => onField(s.key, f.key, e.target.value)} />
               </td>
@@ -141,7 +141,7 @@ function ShiftTable({ wardDoc, census, movementTotals, editable, onBeds, onField
           <td>{census.beds}</td>
           <td>{census.occ}</td>
           <td>{census.vac}</td>
-          {ORDERED_MOVEMENT.map((f) => <td key={f.key}>{movementTotals[f.key]}</td>)}
+          {ORDERED_MOVEMENT.map((f) => <td key={f.key} className={movementColorClass(f.key)}>{movementTotals[f.key]}</td>)}
           <td style={{ textAlign: 'left' }}>{wardDoc.shifts.pm.nurseOnDuty || '\u2014'}</td>
         </tr>
       </tbody>
