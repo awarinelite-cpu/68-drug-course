@@ -64,7 +64,8 @@ const WARDS = [
 // PRN (as-needed), and any custom free-text frequency are intentionally
 // skipped — there's no reliable interval to compute a "next due" from.
 const INTERVAL_HOURS = {
-  OD: 24, BD: 12, TDS: 8, QDS: 6,
+  OD: 24, Mane: 24, Nocte: 24, HS: 24,
+  BD: 12, TDS: 8, QDS: 6, QOD: 48,
   Q4H: 4, Q6H: 6, Q8H: 8, Q12H: 12,
   Weekly: 168,
   'STAT then Q4H': 4, 'STAT then Q6H': 6, 'STAT then Q8H': 8, 'STAT then Q12H': 12

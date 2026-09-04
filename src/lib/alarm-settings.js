@@ -14,7 +14,7 @@ export const SETTINGS_DOC_PATH = ["settings", "alarm"];
 // Every frequency the server's due-dose scheduler knows how to compute a
 // next-dose time for (functions/index.js INTERVAL_HOURS) — kept in sync
 // with that list by hand since Cloud Functions can't import this file.
-export const ALL_FREQUENCIES = ["OD", "BD", "TDS", "QDS", "Q4H", "Q6H", "Q8H", "Q12H", "Weekly", "STAT then Q4H", "STAT then Q6H", "STAT then Q8H", "STAT then Q12H"];
+export const ALL_FREQUENCIES = ["OD", "Mane", "Nocte", "HS", "BD", "TDS", "QDS", "QOD", "Q4H", "Q6H", "Q8H", "Q12H", "Weekly", "STAT then Q4H", "STAT then Q6H", "STAT then Q8H", "STAT then Q12H"];
 
 export const SOUND_OPTIONS = [
   { value: "beep", label: "Classic Beep" },
