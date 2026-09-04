@@ -446,7 +446,11 @@ exports.checkDueGlucoseChecks = onSchedule(
 // ever enabled "Alerts On" (js/push.js) gets message pushes automatically
 // too — there's no separate opt-in toggle for chat.
 exports.onNewMessage = onDocumentCreated(
-  { document: 'conversations/{convoId}/messages/{messageId}', region: 'us-central1' },
+  // minInstances: 1 keeps one instance warm so a message push never waits on
+  // a cold start (2nd-gen functions scale to zero by default, and a cold
+  // start here was adding several seconds before the recipient's phone saw
+  // anything — the whole point of a chat push is that it's near-instant).
+  { document: 'conversations/{convoId}/messages/{messageId}', region: 'us-central1', minInstances: 1 },
   async (event) => {
     const snap = event.data;
     if (!snap) return;

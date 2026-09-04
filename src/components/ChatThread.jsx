@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import {
-  collection, doc, getDoc, setDoc, addDoc, updateDoc, deleteDoc, serverTimestamp, orderBy, query, onSnapshot
+  collection, doc, getDoc, setDoc, addDoc, updateDoc, deleteDoc, serverTimestamp, orderBy, query, onSnapshot, writeBatch
 } from "firebase/firestore";
 import { ref, uploadBytes, uploadBytesResumable, getDownloadURL } from "firebase/storage";
 import { db, storage } from "../firebase.js";
@@ -150,15 +150,24 @@ export default function ChatThread({ convoId, currentUid, currentProfile, nurseB
     const replySnapshot = replyingTo;
     setReplyingTo(null);
     try {
-      await addDoc(collection(db, 'conversations', convoId, 'messages'), {
+      // Both writes go in one batch so they're a single network round trip
+      // (and land atomically) instead of two sequential awaited calls. The
+      // batch's own promise still only resolves on server ack, but the
+      // local-cache echo — and therefore the bubble showing up via the
+      // onSnapshot listener below — happens as soon as the batch is
+      // committed to the client cache, which is immediate either way.
+      const batch = writeBatch(db);
+      const msgRef = doc(collection(db, 'conversations', convoId, 'messages'));
+      batch.set(msgRef, {
         senderUid: currentUid, text,
         replyTo: replySnapshot || null,
         reactions: {}, starredBy: [],
         createdAt: serverTimestamp(), editedAt: null
       });
-      await updateDoc(doc(db, 'conversations', convoId), {
+      batch.update(doc(db, 'conversations', convoId), {
         lastMessageText: text, lastMessageAt: serverTimestamp(), lastMessageSenderUid: currentUid
       });
+      await batch.commit();
     } catch (e) {
       alert("Couldn't send: " + (e.code || e.message || 'unknown error'));
     }
