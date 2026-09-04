@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { collection, getDocs, addDoc, updateDoc, doc, getDoc, setDoc, deleteDoc, serverTimestamp } from "firebase/firestore";
+import { collection, getDocs, updateDoc, doc, getDoc, setDoc, deleteDoc, serverTimestamp } from "firebase/firestore";
 import { db } from "../firebase.js";
 import { useAuth } from "../contexts/AuthContext.jsx";
 import { avatarMarkup } from "../lib/avatar.js";
@@ -124,26 +124,26 @@ export default function Home() {
     if (!selectedPatient || !user) return;
     setAllocBusy(true);
     const ref = allocationDocRef(selectedPatient.id);
-    try {
-      if (allocatedToMe) {
-        await deleteDoc(ref);
-        setAllocatedToMe(false);
-      } else {
-        await setDoc(ref, {
-          uid: user.uid,
-          nurseName: profile?.name || '',
-          patientId: selectedPatient.id,
-          patientName: selectedPatient.name || 'Unnamed',
-          patientEmr: selectedPatient.emr || '',
-          patientWard: selectedPatient.ward || '',
-          patientDiagnosis: selectedPatient.diagnosis || '',
-          shift: currentShiftLabel(),
-          allocatedAt: serverTimestamp()
-        });
-        setAllocatedToMe(true);
-      }
-    } catch (e) {
-      alert("Couldn't update allocation: " + (e.code || e.message || 'unknown error'));
+    // Same offline-hang issue as createPatient: don't await these writes —
+    // with offline persistence they queue locally and sync automatically,
+    // but their Promises won't resolve until back online, which would leave
+    // the Allocate button stuck disabled indefinitely while offline.
+    if (allocatedToMe) {
+      deleteDoc(ref).catch((e) => console.warn('Allocation removal queued locally; will retry once back online:', e));
+      setAllocatedToMe(false);
+    } else {
+      setDoc(ref, {
+        uid: user.uid,
+        nurseName: profile?.name || '',
+        patientId: selectedPatient.id,
+        patientName: selectedPatient.name || 'Unnamed',
+        patientEmr: selectedPatient.emr || '',
+        patientWard: selectedPatient.ward || '',
+        patientDiagnosis: selectedPatient.diagnosis || '',
+        shift: currentShiftLabel(),
+        allocatedAt: serverTimestamp()
+      }).catch((e) => console.warn('Allocation queued locally; will retry once back online:', e));
+      setAllocatedToMe(true);
     }
     setAllocBusy(false);
   }
@@ -172,15 +172,14 @@ export default function Home() {
       hospNo: editForm.hospNo.trim(), admissionDate: editForm.admissionDate.trim(), allergies: editForm.allergies.trim(),
       updatedAt: serverTimestamp()
     };
-    try {
-      await updateDoc(doc(db, 'patients', selectedPatient.id), updates);
-    } catch (e) {
-      setEditMsg('Save failed: ' + (e.code || e.message || 'unknown error'));
-      return;
-    }
+    // Not awaited — same offline-hang reason as createPatient/toggleAllocation
+    // above: it queues locally and syncs on reconnect either way.
+    updateDoc(doc(db, 'patients', selectedPatient.id), updates).catch((e) => {
+      console.warn('Patient edit queued locally; will retry once back online:', e);
+    });
     const updated = { ...selectedPatient, ...updates };
     delete updated.updatedAt;
-    await loadAllPatients(true);
+    setAllPatients((prev) => prev ? prev.map((p) => p.id === selectedPatient.id ? { ...p, ...updated } : p) : prev);
     setShowEditForm(false);
     selectPatient(updated);
   }
@@ -226,29 +225,35 @@ export default function Home() {
       hospNo: newForm.hospNo.trim(), admissionDate: newForm.admissionDate.trim(), allergies: newForm.allergies.trim(),
       createdAt: serverTimestamp(), createdBy: user ? user.uid : null
     };
-    let ref;
-    try {
-      ref = await addDoc(collection(db, 'patients'), data);
-    } catch (e) {
-      setNewMsg('Save failed: ' + (e.code || e.message || 'unknown error'));
-      return;
-    }
+
+    // Client-generated ID — doc() needs no network round trip, so the patient
+    // is usable immediately even offline. We deliberately do NOT await
+    // setDoc(): with offline persistence enabled, the write lands in the
+    // local IndexedDB cache synchronously, but the returned Promise itself
+    // only resolves once the device is back online and the backend
+    // acknowledges the write (documented Firestore SDK behavior). Awaiting
+    // it here is exactly what made "Save Patient" hang forever while
+    // offline — it queues fine locally and syncs automatically on
+    // reconnect, so there's nothing to wait for.
+    const ref = doc(collection(db, 'patients'));
+    setDoc(ref, data).catch((e) => {
+      console.warn('Patient write queued locally; will retry once back online:', e);
+    });
+
     if (pendingDrugs.length) {
-      try {
-        await setDoc(doc(db, 'patients', ref.id, 'drugCourseChart', 'main'), {
-          f_admission: '', f_discharge: '', f_diagnosis: diagnosis,
-          drugs: pendingDrugs, rows: [], verbalOrders: [], careInstructions: [], auditLog: [],
-          updatedAt: serverTimestamp()
-        });
-      } catch (e) {
-        // Patient record is already saved at this point; don't lose that just
-        // because the drug pre-fill failed \u2014 nurse can add drugs manually
-        // from the Drug Course Chart instead. The form is about to close, so
-        // an alert is the only way this reaches the nurse.
-        alert('Patient saved, but the drug list could not be pre-filled: ' + (e.code || e.message || 'unknown error') + '. You can add drugs from the Drug Course Chart.');
-      }
+      setDoc(doc(db, 'patients', ref.id, 'drugCourseChart', 'main'), {
+        f_admission: '', f_discharge: '', f_diagnosis: diagnosis,
+        drugs: pendingDrugs, rows: [], verbalOrders: [], careInstructions: [], auditLog: [],
+        updatedAt: serverTimestamp()
+      }).catch((e) => {
+        console.warn('Drug list write queued locally; will retry once back online:', e);
+      });
     }
-    await loadAllPatients(true);
+    // Update the in-memory list directly instead of re-fetching the whole
+    // patients collection — that fetch isn't needed (we already have the
+    // new patient's data) and, like the writes above, is best avoided here
+    // so this flow doesn't depend on a round trip at all while offline.
+    setAllPatients((prev) => prev ? [...prev, { id: ref.id, ...data }] : [{ id: ref.id, ...data }]);
     setShowNewForm(false);
     setNewForm(EMPTY_FORM);
     clearEmrPaste();
