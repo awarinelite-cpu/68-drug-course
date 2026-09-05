@@ -741,10 +741,11 @@ table.shift th, table.shift td { border: 1px solid var(--border); padding: 5px 4
 table.shift th { background: var(--background); text-transform: uppercase; font-size: 16px; }
 table.shift td.shift-name { font-weight: bold; text-align: left; }
 table.shift tr.total-row td { font-weight: bold; background: var(--primary-light); }
-table.shift input { width: 60px; padding: 4px; border: 1px solid var(--border); border-radius: 4px; font-size: 16px; text-align: center; }
+table.shift input { width: 60px; padding: 4px; border: 1px solid var(--border); border-radius: 4px; font-size: 16px; text-align: center; background: transparent; color: inherit; }
+table.shift input:disabled { color: inherit; -webkit-text-fill-color: currentColor; opacity: 1; }
 table.shift input.duty-input { width: 130px; text-align: left; }
-table.shift td.computed { background: #f9fafb; font-weight: bold; color: var(--primary-active); }
-table.shift td.mirrored { background: #f9fafb; color: var(--text-secondary); }
+table.shift td.computed { background: transparent; font-weight: bold; color: var(--primary-active); }
+table.shift td.mirrored { background: transparent; color: var(--text-secondary); }
 
 /* Stat-table coloring, shared across the Ward Nurse shift table, the
    Overall Nurse's per-ward shift table and All Wards statistics table, and
@@ -775,7 +776,8 @@ td.stat-vac, td.stat-vac input { color: #dc2626; font-weight: 800; }
 table.report th, table.report td { border: 1px solid var(--border); padding: 5px 4px; font-size: 16px; text-align: center; }
 table.report th { background: var(--background); text-transform: uppercase; font-size: 16px; white-space: normal !important; }
 table.report td.ward-name { font-weight: bold; text-align: left; white-space: nowrap; }
-table.report input { width: 62px; padding: 4px; border: 1px solid var(--border); border-radius: 4px; font-size: 16px; text-align: center; }
+table.report input { width: 62px; padding: 4px; border: 1px solid var(--border); border-radius: 4px; font-size: 16px; text-align: center; background: transparent; color: inherit; }
+table.report input:disabled { color: inherit; -webkit-text-fill-color: currentColor; opacity: 1; }
 table.report input.duty-input { width: 100px; text-align: left; }
 table.report tr.totals-row td { font-weight: bold; background: var(--primary-light); }
 table.report th.renamable-col, table.report td.renamable-col { cursor: pointer; }
