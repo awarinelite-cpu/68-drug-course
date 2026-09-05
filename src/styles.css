@@ -34,9 +34,13 @@
   --text-primary: #F1F5F9;
   --text-secondary: #94A3B8;
   --text-muted: #64748B;
-  --border: rgba(255,255,255,.08);
+  --border: rgba(255,255,255,.22);
   --primary-light: rgba(255,255,255,.06);
 }
+/* A black box-shadow (the light-mode default) adds no visible contrast on
+   an already-dark page, which is exactly why cards looked flat/washed out
+   at night — pairing a real border with the shadow is what actually makes
+   a card read as a solid, separate surface here. */
 :root[data-theme="dark"] .card-box,
 :root[data-theme="dark"] .chart-card,
 :root[data-theme="dark"] .calc-panel,
@@ -45,8 +49,62 @@
 :root[data-theme="dark"] .modal-box,
 :root[data-theme="dark"] .field-popup-box {
   box-shadow: 0 1px 4px rgba(0,0,0,0.35);
+  border: 1px solid var(--border);
 }
 :root[data-theme="dark"] .login-page { background-color: #0B1F3A; }
+
+/* --primary-navy (#1B3266, a fixed dark navy) is used all over the app as
+   a TEXT color — diagnosis text, chat/community names and messages, the
+   nav-drawer menu links, period labels, archive file names, stat numbers —
+   on the assumption the page behind it is always light. It never got a
+   dark-mode swap, so in dark mode it's dark-navy text on a dark-navy
+   background: essentially invisible. Point all of these at --text-primary
+   instead, which already flips to a light color in dark mode. */
+:root[data-theme="dark"] .gnav-link,
+:root[data-theme="dark"] .diag-full-text,
+:root[data-theme="dark"] .field-popup-text,
+:root[data-theme="dark"] .role-card .title,
+:root[data-theme="dark"] .period-label,
+:root[data-theme="dark"] .archive-card .file-name,
+:root[data-theme="dark"] .stat-box .n,
+:root[data-theme="dark"] .alloc-name,
+:root[data-theme="dark"] .post-name,
+:root[data-theme="dark"] .post-body,
+:root[data-theme="dark"] .comment-name,
+:root[data-theme="dark"] .comment-text,
+:root[data-theme="dark"] .chat-name,
+:root[data-theme="dark"] .msg-row:not(.mine) .msg-bubble {
+  color: var(--text-primary);
+}
+
+/* Same problem, different color: a handful of secondary-text labels and
+   one heading were hardcoded to mid/dark grays (#555/#666/#777/#6b7280) or
+   pure black, again assuming a light page behind them. Swapped to the
+   theme's own muted text color so they stay readable at night. */
+:root[data-theme="dark"] .unit-note,
+:root[data-theme="dark"] .oi-meta,
+:root[data-theme="dark"] .empty-msg,
+:root[data-theme="dark"] .modal-close,
+:root[data-theme="dark"] .verbal-meta,
+:root[data-theme="dark"] .duty-name-btn:disabled,
+:root[data-theme="dark"] .audit-entry .audit-meta,
+:root[data-theme="dark"] .patient-field label,
+:root[data-theme="dark"] .who-label,
+:root[data-theme="dark"] .file-meta-row {
+  color: var(--text-secondary);
+}
+:root[data-theme="dark"] .ward-report-heading { color: var(--text-primary); }
+:root[data-theme="dark"] .dose-seq-pill.pending {
+  background: rgba(255,255,255,.14);
+  color: var(--text-secondary);
+}
+/* A readonly chart cell's light-gray fill (meant to look faded on paper)
+   would otherwise show up as a jarring bright-white flash in an otherwise
+   dark table — easy on the eyes matters more than usual for a night shift. */
+:root[data-theme="dark"] table.chart td input[readonly] {
+  background: rgba(255,255,255,.06);
+  color: var(--text-secondary);
+}
 
 /* The drug/chart tables and the NAME/EMR/WARD field underlines below were
    ported straight from the old printed-chart HTML, so their lines are
@@ -54,9 +112,9 @@
    Against the dark theme's navy background that's nearly invisible, so
    give dark mode its own lighter, higher-contrast line color instead.
    Every other table in the app (entries/shift/report/ward-shift) uses the
-   shared --border variable rather than a hardcoded color, but that variable
-   itself is only 8%-opacity white in dark mode — just as hard to see — so
-   they get the same stronger line color here too. */
+   shared --border variable rather than a hardcoded color; now that the
+   variable itself is more visible (see above), they're given an even
+   stronger line color here for the extra clarity a dense data grid needs. */
 :root[data-theme="dark"] table.chart th,
 :root[data-theme="dark"] table.chart td,
 :root[data-theme="dark"] table.drugs-table th,
