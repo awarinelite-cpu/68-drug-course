@@ -279,8 +279,8 @@ table.entries th { background: var(--background); text-transform: uppercase; fon
 }
 
 /* Abnormal-value flagging shared across vitals, glycemic and intake/output charts */
-.flag-abnormal { background: var(--danger-bg) !important; color: var(--danger-text); font-weight: bold; }
-.flag-deficit { background: #fef3c7 !important; color: #78350f; font-weight: bold; }
+.flag-abnormal { background: transparent !important; color: var(--danger); font-weight: bold; }
+.flag-deficit { background: transparent !important; color: #b45309; font-weight: bold; }
 
 @media print {
   .topbar, .no-print { display: none !important; }
