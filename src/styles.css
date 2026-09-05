@@ -52,11 +52,23 @@
    ported straight from the old printed-chart HTML, so their lines are
    hardcoded #000 (black-on-white looks fine on paper and in light mode).
    Against the dark theme's navy background that's nearly invisible, so
-   give dark mode its own lighter, higher-contrast line color instead. */
+   give dark mode its own lighter, higher-contrast line color instead.
+   Every other table in the app (entries/shift/report/ward-shift) uses the
+   shared --border variable rather than a hardcoded color, but that variable
+   itself is only 8%-opacity white in dark mode — just as hard to see — so
+   they get the same stronger line color here too. */
 :root[data-theme="dark"] table.chart th,
 :root[data-theme="dark"] table.chart td,
 :root[data-theme="dark"] table.drugs-table th,
-:root[data-theme="dark"] table.drugs-table td {
+:root[data-theme="dark"] table.drugs-table td,
+:root[data-theme="dark"] table.entries th,
+:root[data-theme="dark"] table.entries td,
+:root[data-theme="dark"] table.shift th,
+:root[data-theme="dark"] table.shift td,
+:root[data-theme="dark"] table.report th,
+:root[data-theme="dark"] table.report td,
+:root[data-theme="dark"] table.ward-shift th,
+:root[data-theme="dark"] table.ward-shift td {
   border-color: rgba(255,255,255,.45);
 }
 :root[data-theme="dark"] table.chart th,
