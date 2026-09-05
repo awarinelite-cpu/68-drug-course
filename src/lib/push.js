@@ -225,9 +225,10 @@ function registerForegroundHandler(messaging) {
   foregroundHandlerAttached = true;
   ensureAlarmSettingsWatch();
   onMessage(messaging, (payload) => {
-    const n = payload.notification || {};
+    // Sends are data-only now (see functions/index.js) so title/body live
+    // under `data`, not `payload.notification`.
     const d = payload.data || {};
-    showForegroundBanner(n.title, n.body, d.link);
+    showForegroundBanner(d.title, d.body, d.link);
   });
 }
 
@@ -237,8 +238,11 @@ function registerForegroundHandlerNative(PushNotifications) {
   nativeForegroundHandlerAttached = true;
   ensureAlarmSettingsWatch();
   PushNotifications.addListener("pushNotificationReceived", (notification) => {
+    // Sends are data-only now (see functions/index.js), so on some Android
+    // builds notification.title/body won't be populated by the OS —
+    // fall back to the data fields in that case.
     const d = notification.data || {};
-    showForegroundBanner(notification.title, notification.body, d.link);
+    showForegroundBanner(notification.title || d.title, notification.body || d.body, d.link);
   });
 }
 

@@ -280,8 +280,21 @@ exports.checkDueDrugs = onSchedule(
 
       const resp = await messaging.sendEachForMulticast({
         tokens,
-        notification: { title, body },
+        // Data-only on purpose — NOT a top-level `notification` field. When a
+        // push carries a `notification` payload, the browser's FCM SDK
+        // auto-displays it itself while the app is backgrounded/closed and
+        // skips sw.js's onBackgroundMessage entirely, so our own
+        // showNotification() call (with the flat `data: {link}` the
+        // notificationclick handler below expects) never runs. Firebase's
+        // own auto-display instead wraps the whole payload under an internal
+        // key, so event.notification.data.link comes back undefined and
+        // sw.js's notificationclick falls back to '/' — tapping the alert
+        // opens the home page instead of the chart. Keeping this data-only
+        // guarantees onBackgroundMessage (and our own link-carrying
+        // showNotification call) always runs.
         data: {
+          title,
+          body,
           // React Router route (this app is an SPA, not the old static
           // .html pages) — sw.js opens this straight via clients.openWindow.
           link: `/charts/drug-course-chart?patient=${patientId}`,
@@ -406,8 +419,10 @@ exports.checkDueGlucoseChecks = onSchedule(
 
       const resp = await messaging.sendEachForMulticast({
         tokens,
-        notification: { title: `Glucose check due — ${name}`, body: 'A blood glucose reading is due.' },
+        // Data-only — see the drug-due send above for why.
         data: {
+          title: `Glucose check due — ${name}`,
+          body: 'A blood glucose reading is due.',
           link: `/charts/blood-glucose?patient=${patientId}`,
           tag: `glucose-${patientId}`
         },
@@ -491,8 +506,10 @@ exports.onNewMessage = onDocumentCreated(
     const tokens = tokenEntries.map((t) => t.token);
     const resp = await messaging.sendEachForMulticast({
       tokens,
-      notification: { title, body },
+      // Data-only — see the drug-due send above for why.
       data: {
+        title,
+        body,
         // NOTE: this app hasn't got a /messages route yet — the
         // nurse-to-nurse messaging system (old repo's messages.html) hasn't
         // been ported to React. This trigger is otherwise harmless (it just

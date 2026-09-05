@@ -31,10 +31,14 @@ firebase.initializeApp({
 // protect against that since it's a parse-time failure, not a runtime one.
 try {
   firebase.messaging().onBackgroundMessage(function (payload) {
-    var n = payload.notification || {};
+    // Sends from functions/index.js are data-only on purpose (no top-level
+    // `notification` field) precisely so this handler always runs instead
+    // of the browser auto-displaying the notification itself — see the
+    // comment on the drug-due send in functions/index.js. title/body live
+    // under `data` here, not `payload.notification`.
     var d = payload.data || {};
-    var title = n.title || 'Drug due';
-    var body = n.body || '';
+    var title = d.title || 'Drug due';
+    var body = d.body || '';
     var link = d.link || '/';
     self.registration.showNotification(title, {
       body: body,
