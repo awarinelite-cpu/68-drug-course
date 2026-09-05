@@ -281,6 +281,12 @@ table.entries th { background: var(--background); text-transform: uppercase; fon
 /* Abnormal-value flagging shared across vitals, glycemic and intake/output charts */
 .flag-abnormal { background: transparent !important; color: var(--danger); font-weight: bold; }
 .flag-deficit { background: transparent !important; color: #b45309; font-weight: bold; }
+/* The td color above doesn't reach text inside an <input> — every
+   input[type=...] has its own explicit color rule (see above) that
+   wins over inherited color, so the flagged value showed unflagged.
+   Target the input directly with a more specific selector. */
+td.flag-abnormal input, td.flag-abnormal select { color: var(--danger) !important; font-weight: bold; }
+td.flag-deficit input, td.flag-deficit select { color: #b45309 !important; font-weight: bold; }
 
 @media print {
   .topbar, .no-print { display: none !important; }
