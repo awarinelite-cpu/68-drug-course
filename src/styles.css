@@ -48,6 +48,27 @@
 }
 :root[data-theme="dark"] .login-page { background-color: #0B1F3A; }
 
+/* The drug/chart tables and the NAME/EMR/WARD field underlines below were
+   ported straight from the old printed-chart HTML, so their lines are
+   hardcoded #000 (black-on-white looks fine on paper and in light mode).
+   Against the dark theme's navy background that's nearly invisible, so
+   give dark mode its own lighter, higher-contrast line color instead. */
+:root[data-theme="dark"] table.chart th,
+:root[data-theme="dark"] table.chart td,
+:root[data-theme="dark"] table.drugs-table th,
+:root[data-theme="dark"] table.drugs-table td {
+  border-color: rgba(255,255,255,.45);
+}
+:root[data-theme="dark"] table.chart th,
+:root[data-theme="dark"] table.drugs-table th {
+  background: transparent;
+  color: var(--text-primary);
+}
+:root[data-theme="dark"] .info-row input,
+:root[data-theme="dark"] .info-row span.val {
+  border-bottom-color: rgba(255,255,255,.45);
+}
+
 * { box-sizing: border-box; }
 html, body { overflow-x: hidden; max-width: 100%; }
 body { font-family: Arial, Helvetica, sans-serif; margin: 0; background: var(--background); color: var(--text-primary); font-size: 16px; }
