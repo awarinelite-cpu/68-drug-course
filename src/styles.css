@@ -515,12 +515,12 @@ td.flag-deficit input, td.flag-deficit select { color: #b45309 !important; font-
 .gnav-offline-banner.gnav-show { transform: translateY(0); }
 body.has-offline-banner { padding-top: var(--offline-banner-h, 0px); transition: padding-top .2s ease; }
 .gnav-cache-status {
-  position: fixed; left: 14px; bottom: 14px; z-index: 4000;
+  position: fixed; right: 12px; top: calc(10px + var(--offline-banner-h, 0px)); z-index: 4000;
   display: flex; align-items: center; gap: 8px;
   background: var(--primary-navy); color: var(--surface);
   border: none; border-radius: 999px; cursor: pointer; font-family: inherit;
   box-shadow: 0 2px 10px rgba(0,0,0,.2);
-  padding: 9px; transition: padding .2s ease, background-color .2s ease;
+  padding: 9px; transition: padding .2s ease, background-color .2s ease, top .2s ease;
 }
 .gnav-cache-status.gnav-cache-expanded { padding: 9px 16px 9px 12px; }
 .gnav-cache-dot { width: 10px; height: 10px; border-radius: 50%; flex: 0 0 auto; }
