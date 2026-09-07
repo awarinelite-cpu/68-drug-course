@@ -140,10 +140,14 @@ export default function Home() {
   // Patients mid-transfer (pendingTransfer set) are held out of every
   // normal ward list — they only show up in the receiving ward's "New
   // Patient" queue below until a nurse there accepts or rejects them.
+  // The search box is a general patient lookup, not a ward-scoped one: once
+  // the nurse types something, we search across every ward. With no query,
+  // we fall back to the normal "my ward" list.
   const visiblePatients = (allPatients || []).filter(p =>
     !p.pendingTransfer &&
-    (!myWard || p.ward === myWard) &&
-    (!q || (p.emr || '').toLowerCase().includes(q) || (p.name || '').toLowerCase().includes(q))
+    (q
+      ? ((p.emr || '').toLowerCase().includes(q) || (p.name || '').toLowerCase().includes(q))
+      : (!myWard || p.ward === myWard))
   );
   // Independent of any active search filter above — this is the ward's
   // real headcount, shown next to the heading and what a matching ward
@@ -270,7 +274,7 @@ export default function Home() {
             )}
             {allPatients && visiblePatients.map(p => (
               <div key={p.id} className="search-result-item" onClick={() => openPatient(p)}>
-                <span><b>{p.name || 'Unnamed'}</b> — EMR: {p.emr || 'N/A'}</span>
+                <span><b>{p.name || 'Unnamed'}</b>{'. '}EMR: {p.emr || 'N/A'}{q && p.ward ? '. Ward: ' + p.ward : ''}</span>
                 <span>{p.diagnosis || ''}</span>
               </div>
             ))}
