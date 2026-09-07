@@ -5,6 +5,8 @@ import { db } from "../firebase.js";
 import { useAuth } from "../contexts/AuthContext.jsx";
 import { useGoBack } from "../hooks/useGoBack.js";
 import { usePatientHeader } from "../hooks/usePatientHeader.js";
+import { applyPatientStatus } from "../lib/patientAdmissionStatus.js";
+import { STATUS_LABELS, WARD_OPTIONS } from "../lib/drugChartHelpers.js";
 import Topbar from "../components/Topbar.jsx";
 import PatientBanner from "../components/PatientBanner.jsx";
 import PatientForm from "../components/PatientForm.jsx";
@@ -27,6 +29,12 @@ export default function Patient() {
 
   const [allocatedToMe, setAllocatedToMe] = useState(false);
   const [allocBusy, setAllocBusy] = useState(false);
+
+  const [showStatusForm, setShowStatusForm] = useState(false);
+  const [statusAction, setStatusAction] = useState('');
+  const [transferWard, setTransferWard] = useState('');
+  const [statusApplying, setStatusApplying] = useState(false);
+  const [statusMsg, setStatusMsg] = useState({ color: '', text: '' });
 
   useEffect(() => {
     if (loadedPatient) setPatient(loadedPatient);
@@ -126,6 +134,41 @@ export default function Patient() {
     setShowEditForm(false);
   }
 
+  async function applyStatus() {
+    if (!patient) return;
+    const reason = statusAction;
+    if (!reason) { setStatusMsg({ color: '#dc2626', text: 'Please select an action first.' }); return; }
+    if (reason === 'transferred' && !transferWard) {
+      setStatusMsg({ color: '#dc2626', text: 'Please select which ward the patient is being transferred to.' });
+      return;
+    }
+
+    // Same as the Drug Course Chart's own Patient Status control: this
+    // reads across five collections and then deletes the live entries once
+    // archived, so it's blocked until back online rather than made
+    // offline-tolerant like the rest of this page's edits.
+    if (!navigator.onLine) {
+      setStatusMsg({ color: '#dc2626', text: "This needs an internet connection — referring, transferring, or discharging archives records from several charts at once and then clears them, and doing that safely requires reading the real data rather than whatever's cached locally. Please try again once online." });
+      return;
+    }
+
+    const label = reason === 'transferred' ? ('Transferred to ' + transferWard) : STATUS_LABELS[reason];
+    if (!confirm('Confirm: ' + label + '?\n\nAll care records for this admission (drug chart, vitals, glycemic chart, intake & output, seizure chart) will be saved together to Overview, and fresh charts will open for this patient.')) return;
+
+    setStatusApplying(true);
+    setStatusMsg({ color: '#555', text: 'Saving all charts for this admission…' });
+
+    const result = await applyPatientStatus({ patientId: patient.id, reason, transferWard });
+    if (!result.ok) {
+      setStatusMsg({ color: '#dc2626', text: result.message });
+      setStatusApplying(false);
+      return;
+    }
+
+    setStatusMsg({ color: '#16a34a', text: 'Saved to Overview. Redirecting…' });
+    setTimeout(() => navigate('/'), 900);
+  }
+
   function openChart(chartName) {
     if (!patient) return;
     navigate('/charts/' + chartName + '?patient=' + patient.id);
@@ -159,9 +202,32 @@ export default function Patient() {
                     {allocBusy ? '…' : (allocatedToMe ? '✓ Allocated — tap to remove' : 'Allocate to Me')}
                   </button>
                   <button className="btn btn-purple" style={{ padding: '4px 10px', fontSize: 12, marginLeft: 6 }} onClick={openOverview}>Overview</button>
+                  <button className="btn btn-secondary" style={{ padding: '4px 10px', fontSize: 12, marginLeft: 6 }} onClick={() => setShowStatusForm((v) => !v)}>Status</button>
                 </>
               }
             />
+
+            {showStatusForm && (
+              <div className="card-box" style={{ marginTop: 12, boxShadow: 'none', border: '1px solid #e5e7eb' }}>
+                <label style={{ fontWeight: 'bold', fontSize: 13, display: 'block', marginBottom: 6 }}>Patient Status</label>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
+                  <select style={{ width: 'auto', minWidth: 220 }} value={statusAction} onChange={(e) => setStatusAction(e.target.value)}>
+                    <option value="">Select action…</option>
+                    <option value="discharged">{STATUS_LABELS.discharged}</option>
+                    <option value="transferred">{STATUS_LABELS.transferred}</option>
+                    <option value="referred">{STATUS_LABELS.referred}</option>
+                  </select>
+                  {statusAction === 'transferred' && (
+                    <select style={{ width: 'auto', minWidth: 220 }} value={transferWard} onChange={(e) => setTransferWard(e.target.value)}>
+                      <option value="">Select ward…</option>
+                      {WARD_OPTIONS.map(w => <option key={w} value={w}>{w}</option>)}
+                    </select>
+                  )}
+                  <button className="btn btn-primary" style={{ padding: '8px 14px', fontSize: 13 }} disabled={statusApplying} onClick={applyStatus}>Apply</button>
+                </div>
+                {statusMsg.text && <div style={{ fontSize: 12, marginTop: 8, color: statusMsg.color }}>{statusMsg.text}</div>}
+              </div>
+            )}
 
             {showEditForm && editForm && (
               <div className="card-box" style={{ marginTop: 12, boxShadow: 'none', border: '1px solid #e5e7eb' }}>
