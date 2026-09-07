@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { doc, setDoc, serverTimestamp } from "firebase/firestore";
+import { doc, getDocs, collection, setDoc, serverTimestamp } from "firebase/firestore";
 import { getDocSafe } from "../../lib/firestoreOffline.js";
 import { db } from "../../firebase.js";
 import { useAuth } from "../../contexts/AuthContext.jsx";
@@ -10,6 +10,8 @@ import {
   DEMOGRAPHIC_FIELDS, computeDemographicTotals, movementColorClass,
   reportDateId, occDelta, blankShift, defaultWardDoc
 } from "../../lib/nurses-report-common.js";
+import { patientWardForReportKey } from "../../lib/wardNameMatch.js";
+import { wardHeadcount } from "../../lib/wardCensus.js";
 import Topbar from "../../components/Topbar.jsx";
 
 const movementFields = SHIFT_STAT_FIELDS;
@@ -215,11 +217,31 @@ export default function WardNurse() {
     next.nightUpdateBy = next.nightUpdateBy || '';
 
     if (!snap.exists()) {
-      try {
-        const prevRef = doc(db, 'nurseReports', prevDateId(dateId), 'wards', key);
-        const prevSnap = await getDocSafe(prevRef);
-        if (prevSnap.exists() && typeof prevSnap.data().occ === 'number') next = { ...next, startOcc: prevSnap.data().occ };
-      } catch (e) { /* non-fatal — leave startOcc at 0, nurse can correct it */ }
+      // On taking over — i.e. the first time this ward's report for
+      // today is opened — Previous Occ should equal what the nurse
+      // actually meets on the patient list, not a number carried
+      // forward from yesterday's manually-typed closing Occ (which can
+      // drift from reality). Only possible for wards whose name matches
+      // a patient-chart ward (see wardNameMatch.js); everything else
+      // keeps the old carry-forward behavior.
+      const patientWardLabel = patientWardForReportKey(key);
+      let filledFromPatients = false;
+      if (patientWardLabel) {
+        try {
+          const patientsSnap = await getDocs(collection(db, 'patients'));
+          const patients = [];
+          patientsSnap.forEach(d => patients.push(d.data()));
+          next = { ...next, startOcc: wardHeadcount(patients, patientWardLabel) };
+          filledFromPatients = true;
+        } catch (e) { /* fall through to the old carry-forward below */ }
+      }
+      if (!filledFromPatients) {
+        try {
+          const prevRef = doc(db, 'nurseReports', prevDateId(dateId), 'wards', key);
+          const prevSnap = await getDocSafe(prevRef);
+          if (prevSnap.exists() && typeof prevSnap.data().occ === 'number') next = { ...next, startOcc: prevSnap.data().occ };
+        } catch (e) { /* non-fatal — leave startOcc at 0, nurse can correct it */ }
+      }
     }
 
     setTopStatus({ text: '', error: false });
