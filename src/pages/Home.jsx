@@ -13,7 +13,7 @@ const SELECTED_PATIENT_KEY = 'selectedPatientId';
 const EMPTY_FORM = { name: '', emr: '', diagnosis: '', ward: '', age: '', hospNo: '', admissionDate: '', allergies: '' };
 
 export default function Home() {
-  const { profile, user, logout } = useAuth();
+  const { profile, user } = useAuth();
   const navigate = useNavigate();
   const searchInputRef = useRef(null);
 
@@ -270,11 +270,6 @@ export default function Home() {
     navigate('/charts/overview?patient=' + selectedPatient.id);
   }
 
-  async function handleLogout() {
-    await logout();
-    navigate('/login');
-  }
-
   return (
     <>
       <Topbar brand="68 NARHY Ward Charts">
@@ -286,7 +281,6 @@ export default function Home() {
           <a href="/admin" className="btn btn-purple" style={{ padding: '6px 12px' }} onClick={(e) => { e.preventDefault(); navigate('/admin'); }}>Admin</a>
         )}
         <a href="/my-patients" className="btn btn-secondary" style={{ padding: '6px 12px' }} onClick={(e) => { e.preventDefault(); navigate('/my-patients'); }}>My Patients</a>
-        <button className="btn btn-secondary" style={{ padding: '6px 12px' }} onClick={handleLogout}>Log Out</button>
       </Topbar>
 
       <div className="container">
