@@ -77,10 +77,41 @@ self.addEventListener('notificationclick', function (event) {
 const CACHE_NAME = 'narhy-app-shell-v5';
 const PRECACHE_URLS = ['/', '/index.html', '/manifest.json'];
 
+// Broadcasts caching progress to every open tab so the UI (see
+// src/components/OfflineCacheStatus.jsx) can show a small "Caching for
+// offline use… / Ready for offline use" indicator instead of leaving nurses
+// to guess whether it's safe to go offline yet.
+function broadcast(msg) {
+  self.clients.matchAll({ includeUncontrolled: true, type: 'window' }).then((list) => {
+    list.forEach((client) => client.postMessage(msg));
+  });
+}
+
 self.addEventListener('install', (event) => {
   self.skipWaiting();
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(PRECACHE_URLS)).catch(() => {})
+    (async () => {
+      broadcast({ type: 'PRECACHE_PROGRESS', cached: 0, total: PRECACHE_URLS.length, cacheName: CACHE_NAME });
+      const cache = await caches.open(CACHE_NAME);
+      let done = 0;
+      let failed = 0;
+      // cache.addAll() aborts the whole batch on a single failed file (e.g.
+      // one asset briefly unreachable) — caching each file individually
+      // means one bad file doesn't take the rest of the offline shell down
+      // with it, and lets progress be reported as files complete.
+      await Promise.all(PRECACHE_URLS.map(async (url) => {
+        try {
+          const res = await fetch(url, { cache: 'no-cache' });
+          if (res && res.ok) await cache.put(url, res);
+          else failed++;
+        } catch (e) {
+          failed++;
+        }
+        done++;
+        broadcast({ type: 'PRECACHE_PROGRESS', cached: done, total: PRECACHE_URLS.length, cacheName: CACHE_NAME });
+      }));
+      broadcast({ type: 'PRECACHE_DONE', cached: done - failed, total: PRECACHE_URLS.length, failed, cacheName: CACHE_NAME });
+    })()
   );
 });
 
@@ -89,6 +120,20 @@ self.addEventListener('activate', (event) => {
     caches.keys()
       .then((names) => Promise.all(names.filter((n) => n !== CACHE_NAME).map((n) => caches.delete(n))))
       .then(() => self.clients.claim())
+      .then(() => broadcast({ type: 'PRECACHE_ACTIVE', cacheName: CACHE_NAME }))
+  );
+});
+
+// Lets a freshly opened tab (whose page load happened before it heard the
+// install-time broadcast above, or which reconnected to an already-cached
+// worker from a previous session) ask "is the offline shell ready?" instead
+// of showing "checking…" forever.
+self.addEventListener('message', (event) => {
+  if (!event.data || event.data.type !== 'CHECK_CACHE_STATUS') return;
+  event.waitUntil(
+    caches.has(CACHE_NAME).then((has) => {
+      if (event.source) event.source.postMessage({ type: 'PRECACHE_STATUS', ready: has, cacheName: CACHE_NAME });
+    })
   );
 });
 

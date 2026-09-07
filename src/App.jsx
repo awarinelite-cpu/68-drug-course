@@ -5,6 +5,7 @@ import { ThemeProvider } from "./contexts/ThemeContext.jsx";
 import RequireAuth from "./components/RequireAuth.jsx";
 import NavDrawer from "./components/NavDrawer.jsx";
 import OfflineBanner from "./components/OfflineBanner.jsx";
+import OfflineCacheStatus from "./components/OfflineCacheStatus.jsx";
 import { useServiceWorker } from "./hooks/useServiceWorker.js";
 import { useForegroundAlerts } from "./hooks/useForegroundAlerts.js";
 
@@ -49,6 +50,7 @@ export default function App() {
     <AuthProvider>
       <NavProvider>
         <OfflineBanner />
+        <OfflineCacheStatus />
         <Routes>
           <Route path="/login" element={<Login />} />
           <Route path="/" element={<AuthedShell><Home /></AuthedShell>} />
