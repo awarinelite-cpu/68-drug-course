@@ -6,8 +6,10 @@ import { useAuth } from "../contexts/AuthContext.jsx";
 import { avatarMarkup } from "../lib/avatar.js";
 import Topbar from "../components/Topbar.jsx";
 import PatientForm from "../components/PatientForm.jsx";
+import NewPatientTransfersModal from "../components/NewPatientTransfersModal.jsx";
 import { parseBulkText } from "../lib/drugChartHelpers.js";
 import { parsePatientFields, extractDrugSection } from "../lib/patientParse.js";
+import { pendingTransfersFor } from "../lib/wardTransfer.js";
 
 const EMPTY_FORM = { name: '', emr: '', diagnosis: '', ward: '', age: '', hospNo: '', admissionDate: '', allergies: '' };
 
@@ -27,6 +29,8 @@ export default function Home() {
   const [emrPasteText, setEmrPasteText] = useState('');
   const [emrParseMsg, setEmrParseMsg] = useState('');
   const [pendingDrugs, setPendingDrugs] = useState([]);
+
+  const [showTransfers, setShowTransfers] = useState(false);
 
   useEffect(() => {
     if (window.location.hash === '#search' && searchInputRef.current) {
@@ -129,10 +133,15 @@ export default function Home() {
 
   const q = searchQuery.trim().toLowerCase();
   const myWard = profile?.ward || '';
+  // Patients mid-transfer (pendingTransfer set) are held out of every
+  // normal ward list — they only show up in the receiving ward's "New
+  // Patient" queue below until a nurse there accepts or rejects them.
   const visiblePatients = (allPatients || []).filter(p =>
+    !p.pendingTransfer &&
     (!myWard || p.ward === myWard) &&
     (!q || (p.emr || '').toLowerCase().includes(q) || (p.name || '').toLowerCase().includes(q))
   );
+  const incomingTransfers = pendingTransfersFor(allPatients, myWard);
 
   return (
     <>
@@ -145,6 +154,12 @@ export default function Home() {
           <a href="/admin" className="btn btn-purple" style={{ padding: '6px 12px' }} onClick={(e) => { e.preventDefault(); navigate('/admin'); }}>Admin</a>
         )}
         <a href="/my-patients" className="btn btn-secondary" style={{ padding: '6px 12px' }} onClick={(e) => { e.preventDefault(); navigate('/my-patients'); }}>My Patients</a>
+        {myWard && (
+          <a href="#" className="btn btn-secondary notif-bell-btn" style={{ padding: '6px 12px' }} onClick={(e) => { e.preventDefault(); setShowTransfers(true); }}>
+            🔔 New Patient
+            {incomingTransfers.length > 0 && <span className="notif-count-badge">{incomingTransfers.length}</span>}
+          </a>
+        )}
       </Topbar>
 
       <div className="container">
@@ -232,7 +247,7 @@ export default function Home() {
 
         <div className="card-box">
           <h3 style={{ marginTop: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
-            <span>Patients on {myWard || 'All Wards'}</span>
+            <span>Patients on {myWard || 'All Wards'} <span className="ward-count-badge">{visiblePatients.length}</span></span>
             <a href="/profile" onClick={(e) => { e.preventDefault(); navigate('/profile'); }} style={{ fontSize: 12, fontWeight: 'normal' }}>
               {myWard ? 'Switch ward' : 'Set your ward'}
             </a>
@@ -254,6 +269,15 @@ export default function Home() {
           </div>
         </div>
       </div>
+
+      {showTransfers && (
+        <NewPatientTransfersModal
+          ward={myWard}
+          transfers={incomingTransfers}
+          onClose={() => setShowTransfers(false)}
+          onResolved={() => loadAllPatients(true)}
+        />
+      )}
     </>
   );
 }

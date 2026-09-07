@@ -16,7 +16,7 @@ function blankChartRows() { return Array(18).fill(null).map(() => defaultRow());
 // saveChart() flushes pending edits, since Firestore's offline cache
 // makes that read-after-write consistent even before the server
 // round trip finishes.
-export async function applyPatientStatus({ patientId, reason, transferWard }) {
+export async function applyPatientStatus({ patientId, reason, transferWard, fromWard, transferredByName }) {
   let label = STATUS_LABELS[reason];
   let wardChosen = '';
   if (reason === 'transferred') {
@@ -104,8 +104,24 @@ export async function applyPatientStatus({ patientId, reason, transferWard }) {
   }
 
   if (reason === 'transferred' && wardChosen) {
+    // Don't move the patient onto the new ward yet — leave `ward` as-is
+    // (the sending ward) and park them in a pendingTransfer instead. The
+    // receiving ward's nurse sees them in their "New Patient" queue and
+    // has to Accept (which finally sets ward: wardChosen) or Reject
+    // (which just clears pendingTransfer, so the patient — having never
+    // left `ward` — lands straight back on the sending ward's list with
+    // nothing else to undo). See src/lib/wardTransfer.js.
     try {
-      await updateDoc(doc(db, 'patients', patientId), { ward: wardChosen, updatedAt: serverTimestamp() });
+      await updateDoc(doc(db, 'patients', patientId), {
+        pendingTransfer: {
+          toWard: wardChosen,
+          fromWard: fromWard || '',
+          transferredByName: transferredByName || '',
+          transferredAt: serverTimestamp(),
+          transferredAtDisplay: new Date().toLocaleString()
+        },
+        updatedAt: serverTimestamp()
+      });
     } catch (e) { /* not fatal — the admission itself is already saved */ }
   }
 

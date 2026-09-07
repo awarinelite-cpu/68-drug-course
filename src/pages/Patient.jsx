@@ -153,19 +153,27 @@ export default function Patient() {
     }
 
     const label = reason === 'transferred' ? ('Transferred to ' + transferWard) : STATUS_LABELS[reason];
-    if (!confirm('Confirm: ' + label + '?\n\nAll care records for this admission (drug chart, vitals, glycemic chart, intake & output, seizure chart) will be saved together to Overview, and fresh charts will open for this patient.')) return;
+    const confirmExtra = reason === 'transferred'
+      ? ' The patient will move to ' + transferWard + '\u2019s New Patient queue \u2014 a nurse there still has to accept them before they show up on that ward\u2019s patient list.'
+      : '';
+    if (!confirm('Confirm: ' + label + '?\n\nAll care records for this admission (drug chart, vitals, glycemic chart, intake & output, seizure chart) will be saved together to Overview, and fresh charts will open for this patient.' + confirmExtra)) return;
 
     setStatusApplying(true);
     setStatusMsg({ color: '#555', text: 'Saving all charts for this admission…' });
 
-    const result = await applyPatientStatus({ patientId: patient.id, reason, transferWard });
+    const result = await applyPatientStatus({ patientId: patient.id, reason, transferWard, fromWard: patient.ward, transferredByName: profile?.name });
     if (!result.ok) {
       setStatusMsg({ color: '#dc2626', text: result.message });
       setStatusApplying(false);
       return;
     }
 
-    setStatusMsg({ color: '#16a34a', text: 'Saved to Overview. Redirecting…' });
+    setStatusMsg({
+      color: '#16a34a',
+      text: reason === 'transferred'
+        ? 'Sent to ' + transferWard + ' \u2014 awaiting acceptance there. Redirecting…'
+        : 'Saved to Overview. Redirecting…'
+    });
     setTimeout(() => navigate('/'), 900);
   }
 
