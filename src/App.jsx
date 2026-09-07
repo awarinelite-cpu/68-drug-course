@@ -8,6 +8,7 @@ import OfflineBanner from "./components/OfflineBanner.jsx";
 import OfflineCacheStatus from "./components/OfflineCacheStatus.jsx";
 import { useServiceWorker } from "./hooks/useServiceWorker.js";
 import { useForegroundAlerts } from "./hooks/useForegroundAlerts.js";
+import { useHardwareBackButton } from "./hooks/useHardwareBackButton.js";
 
 import Login from "./pages/Login.jsx";
 import Home from "./pages/Home.jsx";
@@ -45,6 +46,7 @@ function AuthedShell({ children }) {
 export default function App() {
   useServiceWorker();
   useForegroundAlerts();
+  useHardwareBackButton();
 
   return (
     <ThemeProvider>
