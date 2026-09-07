@@ -7,6 +7,7 @@ import { db, storage } from "../firebase.js";
 import { avatarMarkup } from "../lib/avatar.js";
 import Topbar from "./Topbar.jsx";
 import MessageBubble from "./MessageBubble.jsx";
+import { enqueueUpload, bindOfflineUploadFlush, flushQueuedUploads } from "../lib/offlineUploadQueue.js";
 
 const ONLINE_WINDOW_MS = 2 * 60 * 1000;
 const TYPING_IDLE_MS = 3000;
@@ -181,6 +182,37 @@ export default function ChatThread({ convoId, currentUid, currentProfile, nurseB
     });
   }
 
+  // Shared by the live send path and the offline-queue flush path (called
+  // later, possibly for a different ChatThread mount, once back online) so
+  // the upload + Firestore write logic only lives in one place.
+  async function sendAttachment(record) {
+    const { convoId: cid, kind, blob, fileName, mimeType, replyTo, senderUid } = record;
+    const path = 'chatUploads/' + cid + '/' + Date.now() + '_' + (fileName || (kind === 'voice' ? 'voice' : 'file'));
+    const fileRef = ref(storage, path);
+    await uploadBytes(fileRef, blob, mimeType ? { contentType: mimeType } : undefined);
+    const url = await getDownloadURL(fileRef);
+    const field = kind === 'voice' ? 'audioUrl' : 'imageUrl';
+    await addDoc(collection(db, 'conversations', cid, 'messages'), {
+      senderUid, text: '', [field]: url,
+      replyTo: replyTo || null,
+      reactions: {}, starredBy: [],
+      createdAt: serverTimestamp(), editedAt: null
+    });
+    await updateDoc(doc(db, 'conversations', cid), {
+      lastMessageText: kind === 'voice' ? '🎤 Voice note' : '📷 Photo',
+      lastMessageAt: serverTimestamp(), lastMessageSenderUid: senderUid
+    });
+  }
+
+  useEffect(() => {
+    // Registers this thread's uploader as a handler the queue can call for
+    // any attachment (from this convo or another) once connectivity returns.
+    const unbind = bindOfflineUploadFlush(sendAttachment);
+    if (navigator.onLine) flushQueuedUploads();
+    return unbind;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   async function handleImagePicked(ev) {
     const file = ev.target.files[0];
     ev.target.value = '';
@@ -190,23 +222,24 @@ export default function ChatThread({ convoId, currentUid, currentProfile, nurseB
 
     const replySnapshot = replyingTo;
     setReplyingTo(null);
+    const record = {
+      convoId, kind: 'image', blob: file, fileName: file.name.replace(/[^a-zA-Z0-9_.-]/g, '_'),
+      mimeType: file.type, replyTo: replySnapshot || null, senderUid: currentUid
+    };
+
+    if (!navigator.onLine) {
+      await enqueueUpload(record);
+      setUploading(null);
+      return; // OfflineBanner already tells the nurse entries sync automatically
+    }
+
     setUploading('Uploading image…');
     try {
-      const path = 'chatUploads/' + convoId + '/' + Date.now() + '_' + file.name.replace(/[^a-zA-Z0-9_.-]/g, '_');
-      const fileRef = ref(storage, path);
-      await uploadBytes(fileRef, file);
-      const url = await getDownloadURL(fileRef);
-      await addDoc(collection(db, 'conversations', convoId, 'messages'), {
-        senderUid: currentUid, text: '', imageUrl: url,
-        replyTo: replySnapshot || null,
-        reactions: {}, starredBy: [],
-        createdAt: serverTimestamp(), editedAt: null
-      });
-      await updateDoc(doc(db, 'conversations', convoId), {
-        lastMessageText: '📷 Photo', lastMessageAt: serverTimestamp(), lastMessageSenderUid: currentUid
-      });
+      await sendAttachment(record);
     } catch (e) {
-      alert("Couldn't upload image: " + (e.code || e.message || 'unknown error'));
+      // Network drop mid-upload (not just "already offline") — queue it
+      // instead of losing the photo.
+      await enqueueUpload(record);
     }
     setUploading(null);
   }
@@ -283,13 +316,24 @@ export default function ChatThread({ convoId, currentUid, currentProfile, nurseB
     const blob = new Blob(chunks, { type: mrType || 'audio/webm' });
     if (blob.size < 500) return; // too short / silent tap
 
+    const ext = (mrType && mrType.includes('mp4')) ? 'm4a' : 'webm';
+    const record = {
+      convoId, kind: 'voice', blob, fileName: 'voice.' + ext,
+      mimeType: mrType || 'audio/webm', replyTo: null, senderUid: currentUid
+    };
+
+    if (!navigator.onLine) {
+      await enqueueUpload(record);
+      setUploading(null);
+      return;
+    }
+
     setUploading('Uploading voice note… 0%');
     try {
-      const ext = (mrType && mrType.includes('mp4')) ? 'm4a' : 'webm';
-      const path = 'chatUploads/' + convoId + '/' + Date.now() + '_voice.' + ext;
+      const path = 'chatUploads/' + convoId + '/' + Date.now() + '_' + record.fileName;
       const fileRef = ref(storage, path);
       const url = await new Promise((resolve, reject) => {
-        const task = uploadBytesResumable(fileRef, blob, { contentType: mrType || 'audio/webm' });
+        const task = uploadBytesResumable(fileRef, blob, { contentType: record.mimeType });
         task.on('state_changed',
           (snap) => setUploading('Uploading voice note… ' + Math.round((snap.bytesTransferred / snap.totalBytes) * 100) + '%'),
           reject,
@@ -306,7 +350,9 @@ export default function ChatThread({ convoId, currentUid, currentProfile, nurseB
         lastMessageText: '🎤 Voice note', lastMessageAt: serverTimestamp(), lastMessageSenderUid: currentUid
       });
     } catch (e) {
-      alert("Couldn't upload voice note: " + (e.code || e.message || 'unknown error'));
+      // Upload started but the connection dropped — queue it rather than
+      // discard a voice note the nurse already recorded.
+      await enqueueUpload(record);
     }
     setUploading(null);
   }

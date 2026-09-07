@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "postbuild": "node scripts/generate-sw-precache.mjs",
     "lint": "oxlint",
     "preview": "vite preview"
   },

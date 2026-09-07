@@ -67,6 +67,13 @@ self.addEventListener('notificationclick', function (event) {
   event.waitUntil(clients.openWindow(link));
 });
 
+// CACHE_NAME and PRECACHE_URLS below are placeholders overwritten by
+// scripts/generate-sw-precache.mjs (runs as the build's postbuild step) —
+// it fills PRECACHE_URLS with every hashed JS/CSS/asset file Vite just
+// produced, so the full app shell is cached at install time instead of
+// trickling in one URL at a time as the nurse happens to visit each page.
+// If you're reading this in public/sw.js (source, not dist/sw.js) these
+// are just the safe fallback values used in dev (`vite dev` — see below).
 const CACHE_NAME = 'narhy-app-shell-v5';
 const PRECACHE_URLS = ['/', '/index.html', '/manifest.json'];
 
