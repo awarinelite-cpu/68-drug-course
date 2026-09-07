@@ -128,8 +128,10 @@ export default function Home() {
   }
 
   const q = searchQuery.trim().toLowerCase();
+  const myWard = profile?.ward || '';
   const visiblePatients = (allPatients || []).filter(p =>
-    !q || (p.emr || '').toLowerCase().includes(q) || (p.name || '').toLowerCase().includes(q)
+    (!myWard || p.ward === myWard) &&
+    (!q || (p.emr || '').toLowerCase().includes(q) || (p.name || '').toLowerCase().includes(q))
   );
 
   return (
@@ -158,7 +160,7 @@ export default function Home() {
               onChange={(e) => setSearchQuery(e.target.value)}
             />
             <button className="btn btn-primary" onClick={() => searchInputRef.current && searchInputRef.current.focus()}>Search</button>
-            <button className="btn btn-success" onClick={() => setShowNewForm(true)}>+ New Patient</button>
+            <button className="btn btn-success" onClick={() => { setNewForm((f) => ({ ...f, ward: f.ward || myWard })); setShowNewForm(true); }}>+ New Patient</button>
           </div>
         </div>
 
@@ -229,12 +231,18 @@ export default function Home() {
         )}
 
         <div className="card-box">
-          <h3 style={{ marginTop: 0 }}>Patients on This Ward</h3>
+          <h3 style={{ marginTop: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
+            <span>Patients on {myWard || 'All Wards'}</span>
+            <a href="/profile" onClick={(e) => { e.preventDefault(); navigate('/profile'); }} style={{ fontSize: 12, fontWeight: 'normal' }}>
+              {myWard ? 'Switch ward' : 'Set your ward'}
+            </a>
+          </h3>
           <div className="search-results">
             {allPatients === null && 'Loading patients…'}
             {allPatients && visiblePatients.length === 0 && (
               <div className="error-msg">
-                {q ? 'No patient matches that search.' : 'No patients on this ward yet. Use "+ New Patient" to register one.'}
+                {q ? 'No patient matches that search.' :
+                  (myWard ? 'No patients on ' + myWard + ' yet. Use "+ New Patient" to register one.' : 'No patients registered yet. Use "+ New Patient" to register one.')}
               </div>
             )}
             {allPatients && visiblePatients.map(p => (

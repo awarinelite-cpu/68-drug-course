@@ -7,6 +7,7 @@ import { useAuth } from "../contexts/AuthContext.jsx";
 import { useGoBack } from "../hooks/useGoBack.js";
 import { avatarMarkup } from "../lib/avatar.js";
 import { pushIsEnabled, enablePushForThisDevice, disablePushForThisDevice } from "../lib/push.js";
+import { WARD_OPTIONS } from "../lib/drugChartHelpers.js";
 import Topbar from "../components/Topbar.jsx";
 
 function withTimeout(promise, ms) {
@@ -36,6 +37,9 @@ export default function Profile() {
   const [pushState, setPushState] = useState('loading'); // 'loading' | 'unsupported' | 'blocked' | 'on' | 'off'
   const [pushBusy, setPushBusy] = useState(false);
   const [pushMsg, setPushMsg] = useState(null);
+
+  const [wardBusy, setWardBusy] = useState(false);
+  const [wardMsg, setWardMsg] = useState(null);
 
   useEffect(() => {
     if (profile) {
@@ -72,6 +76,22 @@ export default function Profile() {
     }
     updateLocalProfile(updates);
     setPfMsg({ type: 'info', text: 'Profile updated.' });
+  }
+
+  // Switches immediately on selection — this is meant as a quick "I've
+  // moved wards" action for the start of a shift or a ward transfer, not
+  // something bundled with the rest of the profile-edit form below.
+  async function changeWard(newWard) {
+    setWardBusy(true);
+    setWardMsg(null);
+    try {
+      await updateDoc(doc(db, 'users', user.uid), { ward: newWard });
+      updateLocalProfile({ ward: newWard });
+      setWardMsg({ type: 'info', text: newWard ? 'Switched to ' + newWard + '.' : 'Cleared — you\u2019ll see patients from every ward on Home.' });
+    } catch (e) {
+      setWardMsg({ type: 'error', text: 'Could not switch ward: ' + (e.code || e.message || 'unknown error') });
+    }
+    setWardBusy(false);
   }
 
   async function togglePush() {
@@ -135,6 +155,18 @@ export default function Profile() {
       </Topbar>
 
       <div className="container">
+        <div className="card-box">
+          <h3 style={{ marginTop: 0 }}>Current Ward</h3>
+          <div className="field">
+            <label>You're seeing patients from this ward on Home</label>
+            <select value={profile.ward || ''} disabled={wardBusy} onChange={(e) => changeWard(e.target.value)}>
+              <option value="">All Wards (not set)</option>
+              {WARD_OPTIONS.map(w => <option key={w} value={w}>{w}</option>)}
+            </select>
+          </div>
+          {wardMsg && <div className={wardMsg.type === 'error' ? 'error-msg' : 'info-msg'}>{wardMsg.text}</div>}
+        </div>
+
         <div className="card-box">
           <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 6 }}>
             <div className="avatar" dangerouslySetInnerHTML={{ __html: avatarMarkup({ name, gender }, 56) }} />
