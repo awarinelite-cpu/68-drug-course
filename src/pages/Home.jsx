@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { collection, getDocs, doc, setDoc, serverTimestamp } from "firebase/firestore";
 import { db } from "../firebase.js";
 import { useAuth } from "../contexts/AuthContext.jsx";
+import { useExitOnDoubleBack } from "../hooks/useExitOnDoubleBack.js";
 import { avatarMarkup } from "../lib/avatar.js";
 import Topbar from "../components/Topbar.jsx";
 import PatientForm from "../components/PatientForm.jsx";
@@ -32,6 +33,8 @@ export default function Home() {
   const [pendingDrugs, setPendingDrugs] = useState([]);
 
   const [showTransfers, setShowTransfers] = useState(false);
+
+  const showExitToast = useExitOnDoubleBack();
 
   useEffect(() => {
     if (window.location.hash === '#search' && searchInputRef.current) {
@@ -282,6 +285,10 @@ export default function Home() {
           onClose={() => setShowTransfers(false)}
           onResolved={() => loadAllPatients(true)}
         />
+      )}
+
+      {showExitToast && (
+        <div className="exit-toast no-print" role="status">Press back again to exit</div>
       )}
     </>
   );

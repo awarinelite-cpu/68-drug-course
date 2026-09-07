@@ -6,7 +6,7 @@ import {
 import { db } from "../firebase.js";
 import { useAuth } from "../contexts/AuthContext.jsx";
 import { useBackLock } from "../hooks/useBackLock.js";
-import { useChartBack } from "../hooks/useChartBack.js";
+import { useChartBack, chartBackTarget } from "../hooks/useChartBack.js";
 import { usePatientHeader } from "../hooks/usePatientHeader.js";
 import Topbar from "../components/Topbar.jsx";
 import {
@@ -82,10 +82,11 @@ export default function DrugCourseChart() {
   const [searchParams] = useSearchParams();
   const patientId = searchParams.get('patient');
   const admissionId = searchParams.get('admission');
+  const from = searchParams.get('from');
   const isArchived = !!admissionId;
 
-  useBackLock('/');
-  const goBack = useChartBack(patientId, admissionId);
+  useBackLock(chartBackTarget(patientId, admissionId, from));
+  const goBack = useChartBack(patientId, admissionId, from);
   const { patient } = usePatientHeader(patientId);
   const currentNurseName = profile?.name || '';
 

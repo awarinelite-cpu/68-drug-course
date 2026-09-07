@@ -11,6 +11,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@capacitor/app": "^8.1.1",
     "chart.js": "^4.4.7",
     "firebase": "^12.18.0",
     "jspdf": "^4.2.1",

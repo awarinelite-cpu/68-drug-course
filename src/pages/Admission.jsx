@@ -4,6 +4,7 @@ import { doc, getDoc, setDoc, deleteDoc, addDoc, collection, getDocs, serverTime
 import { db } from "../firebase.js";
 import { useAuth } from "../contexts/AuthContext.jsx";
 import { useGoBack } from "../hooks/useGoBack.js";
+import { useBackLock } from "../hooks/useBackLock.js";
 import { usePatientHeader } from "../hooks/usePatientHeader.js";
 import { buildExportRecord, downloadRecordAsPdf, downloadRecordAsJson, sharePdf } from "../lib/export.js";
 import Topbar from "../components/Topbar.jsx";
@@ -27,7 +28,9 @@ export default function Admission() {
   const patientId = searchParams.get('patient');
   const admissionId = searchParams.get('admission');
   const isArchived = !!admissionId;
-  const goBack = useGoBack(patientId ? '/charts/overview?patient=' + patientId : '/');
+  const backTarget = patientId ? '/charts/overview?patient=' + patientId : '/';
+  const goBack = useGoBack(backTarget);
+  useBackLock(backTarget);
   const { patient } = usePatientHeader(patientId);
 
   const [info, setInfo] = useState(null); // { diagnosis, metaLabel, badgeText, badgeClass }
@@ -158,7 +161,7 @@ export default function Admission() {
       await deleteDoc(doc(db, 'patients', patientId, 'admissions', admissionId));
 
       setReadmitStatus({ color: '#16a34a', text: 'Readmitted \u2014 redirecting to the active chart\u2026' });
-      setTimeout(() => navigate('/charts/drug-course-chart?patient=' + patientId), 900);
+      setTimeout(() => navigate('/charts/drug-course-chart?patient=' + patientId + '&from=admission'), 900);
     } catch (e) {
       setReadmitStatus({ color: '#b91c1c', text: 'Readmit failed: ' + (e.code || e.message || 'unknown error') });
       setReadmitBusy(false);
@@ -166,7 +169,7 @@ export default function Admission() {
   }
 
   function chartHref(key) {
-    return '/charts/' + key + '?patient=' + patientId + (isArchived ? '&admission=' + admissionId : '');
+    return '/charts/' + key + '?patient=' + patientId + (isArchived ? '&admission=' + admissionId : '') + '&from=admission';
   }
 
   async function shareAdmission() {

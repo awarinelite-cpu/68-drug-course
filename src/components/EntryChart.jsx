@@ -6,7 +6,7 @@ import {
 import { db } from "../firebase.js";
 import { useAuth } from "../contexts/AuthContext.jsx";
 import { useBackLock } from "../hooks/useBackLock.js";
-import { useChartBack } from "../hooks/useChartBack.js";
+import { useChartBack, chartBackTarget } from "../hooks/useChartBack.js";
 import { usePatientHeader } from "../hooks/usePatientHeader.js";
 import Topbar from "./Topbar.jsx";
 import PatientBanner from "./PatientBanner.jsx";
@@ -129,10 +129,11 @@ export default function EntryChart({ title, collectionName, columns, deriveRows,
   const [searchParams] = useSearchParams();
   const patientId = searchParams.get('patient');
   const admissionId = searchParams.get('admission');
+  const from = searchParams.get('from');
   const isArchived = !!admissionId;
 
-  useBackLock('/');
-  const goBack = useChartBack(patientId, admissionId);
+  useBackLock(chartBackTarget(patientId, admissionId, from));
+  const goBack = useChartBack(patientId, admissionId, from);
   const { patient } = usePatientHeader(patientId);
 
   const displayColumns = columns.filter(c => !c.formOnly);

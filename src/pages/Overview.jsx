@@ -4,6 +4,7 @@ import { doc, collection, query, orderBy } from "firebase/firestore";
 import { db } from "../firebase.js";
 import { useAuth } from "../contexts/AuthContext.jsx";
 import { useGoBack } from "../hooks/useGoBack.js";
+import { useBackLock } from "../hooks/useBackLock.js";
 import { usePatientHeader } from "../hooks/usePatientHeader.js";
 import { getDocSafe, getDocsSafe } from "../lib/firestoreOffline.js";
 import { buildExportRecord, downloadRecordAsPdf, downloadRecordAsJson } from "../lib/export.js";
@@ -24,6 +25,7 @@ export default function Overview() {
   const [searchParams] = useSearchParams();
   const patientId = searchParams.get('patient');
   const goBack = useGoBack('/');
+  useBackLock('/');
   const { patient, error: patientError } = usePatientHeader(patientId);
 
   const [items, setItems] = useState(null); // null = loading

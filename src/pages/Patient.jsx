@@ -4,6 +4,7 @@ import { doc, getDoc, setDoc, deleteDoc, updateDoc, serverTimestamp } from "fire
 import { db } from "../firebase.js";
 import { useAuth } from "../contexts/AuthContext.jsx";
 import { useGoBack } from "../hooks/useGoBack.js";
+import { useBackLock } from "../hooks/useBackLock.js";
 import { usePatientHeader } from "../hooks/usePatientHeader.js";
 import { applyPatientStatus } from "../lib/patientAdmissionStatus.js";
 import { STATUS_LABELS, WARD_OPTIONS } from "../lib/drugChartHelpers.js";
@@ -17,6 +18,7 @@ export default function Patient() {
   const { profile, user } = useAuth();
   const navigate = useNavigate();
   const goBack = useGoBack('/');
+  useBackLock('/');
   const [searchParams] = useSearchParams();
   const patientId = searchParams.get('patient');
 
@@ -179,7 +181,7 @@ export default function Patient() {
 
   function openChart(chartName) {
     if (!patient) return;
-    navigate('/charts/' + chartName + '?patient=' + patient.id);
+    navigate('/charts/' + chartName + '?patient=' + patient.id + '&from=patient');
   }
 
   function openOverview() {
