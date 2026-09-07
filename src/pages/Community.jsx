@@ -5,6 +5,7 @@ import {
 } from "firebase/firestore";
 import { db } from "../firebase.js";
 import { useAuth } from "../contexts/AuthContext.jsx";
+import { useGoBack } from "../hooks/useGoBack.js";
 import { avatarMarkup } from "../lib/avatar.js";
 import Topbar from "../components/Topbar.jsx";
 
@@ -19,6 +20,7 @@ function fmtWhen(ts) {
 export default function Community() {
   const { user, profile } = useAuth();
   const navigate = useNavigate();
+  const goBack = useGoBack('/');
 
   const [postText, setPostText] = useState('');
   const [posting, setPosting] = useState(false);
@@ -163,7 +165,7 @@ export default function Community() {
   return (
     <>
       <Topbar brand="Community">
-        <button className="btn btn-secondary" style={{ padding: '6px 12px' }} onClick={() => navigate('/')}>Back</button>
+        <button className="btn btn-secondary" style={{ padding: '6px 12px' }} onClick={goBack}>Back</button>
       </Topbar>
 
       <div className="container">

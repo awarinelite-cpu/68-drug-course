@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { collection, getDocs, query, where, deleteDoc, doc } from "firebase/firestore";
 import { db } from "../firebase.js";
 import { useAuth } from "../contexts/AuthContext.jsx";
+import { useGoBack } from "../hooks/useGoBack.js";
 import Topbar from "../components/Topbar.jsx";
 
 function fmtWhen(ts, shift) {
@@ -16,6 +17,7 @@ function fmtWhen(ts, shift) {
 export default function MyPatients() {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const goBack = useGoBack('/');
   const [status, setStatus] = useState('loading'); // 'loading' | 'ready' | error string
   const [allocations, setAllocations] = useState([]);
 
@@ -66,7 +68,7 @@ export default function MyPatients() {
   return (
     <>
       <Topbar brand="My Patients">
-        <button className="btn btn-secondary" style={{ padding: '6px 12px' }} onClick={() => navigate('/')}>Back</button>
+        <button className="btn btn-secondary" style={{ padding: '6px 12px' }} onClick={goBack}>Back</button>
       </Topbar>
 
       <div className="container">

@@ -15,6 +15,7 @@ import {
   loadHeaderLabelOverrides, saveHeaderLabelOverride, headerLabel, GROUP_LABEL_IDS,
   CUSTOM_TEXT_COLUMNS, loadCustomColumns, addCustomColumn, renameCustomColumn, removeCustomColumn
 } from "../../lib/nurses-report-common.js";
+import { useGoBack } from "../../hooks/useGoBack.js";
 import Topbar from "../../components/Topbar.jsx";
 
 const movementFields = SHIFT_STAT_FIELDS;
@@ -125,6 +126,7 @@ function PatientBlock({ p }) {
 export default function OverallNurse() {
   const { user, profile } = useAuth();
   const navigate = useNavigate();
+  const goBack = useGoBack('/nurses-report/role-select');
 
   const [access, setAccess] = useState('checking'); // 'checking' | 'denied' | 'granted'
   const [deniedMsg, setDeniedMsg] = useState('');
@@ -451,7 +453,7 @@ export default function OverallNurse() {
     return (
       <>
         <Topbar brand="Overall Nurse">
-          <button className="btn btn-secondary" style={{ padding: '6px 12px' }} onClick={() => navigate('/nurses-report/role-select')}>Back</button>
+          <button className="btn btn-secondary" style={{ padding: '6px 12px' }} onClick={goBack}>Back</button>
         </Topbar>
         <div className="container">
           <div className="card-box" style={{ textAlign: 'center' }}>
@@ -468,7 +470,7 @@ export default function OverallNurse() {
     return (
       <>
         <Topbar brand="Overall Nurse">
-          <button className="btn btn-secondary" style={{ padding: '6px 12px' }} onClick={() => navigate('/nurses-report/role-select')}>Back</button>
+          <button className="btn btn-secondary" style={{ padding: '6px 12px' }} onClick={goBack}>Back</button>
         </Topbar>
         <div className="container">
           <div className="card-box" style={{ textAlign: 'center' }}>
@@ -484,7 +486,7 @@ export default function OverallNurse() {
   return (
     <>
       <Topbar brand="Overall Nurse">
-        <button className="btn btn-secondary" style={{ padding: '6px 12px' }} onClick={() => navigate('/nurses-report/role-select')}>Back</button>
+        <button className="btn btn-secondary" style={{ padding: '6px 12px' }} onClick={goBack}>Back</button>
         <button className="btn btn-secondary" style={{ padding: '6px 12px' }} onClick={() => navigate('/nurses-report/archive-list?type=overall')}>{'\uD83D\uDCC1 Archive'}</button>
         <button className="btn btn-primary" style={{ padding: '6px 12px' }} onClick={() => window.print()}>Print</button>
       </Topbar>
