@@ -5,8 +5,6 @@ import { db } from "../firebase.js";
 import { useAuth } from "../contexts/AuthContext.jsx";
 import Topbar from "../components/Topbar.jsx";
 
-const SELECTED_PATIENT_KEY = 'selectedPatientId';
-
 function fmtWhen(ts, shift) {
   if (!ts || typeof ts.toDate !== 'function') return shift || '';
   const d = ts.toDate();
@@ -52,11 +50,7 @@ export default function MyPatients() {
   }
 
   function openPatient(patientId) {
-    // Home's own restoreSelectedPatient() picks this up on load and opens
-    // straight to that patient's profile — same mechanism used when
-    // navigating back to Home from a chart page.
-    sessionStorage.setItem(SELECTED_PATIENT_KEY, patientId);
-    navigate('/');
+    navigate('/patient?patient=' + patientId);
   }
 
   async function removeAllocation(allocationId, ev) {
