@@ -41,29 +41,21 @@ WARDS.forEach(w => { w.defaultLabel = w.label; });
 // on that page shows a single "PAED WARD" option for both, and they stay
 // two entirely separate reports underneath: own Firestore docs under
 // their own 'paedbed'/'paedcot' keys, own Shift Statistics table each,
-// and two separate rows (still PAED BED / PAED COT) on the Overall
-// Nurse's "All Wards" statistics table. The Overall Nurse's "Ward
-// Reports" section also reads WARD_GROUPS, but only to combine the
-// *narrative* report (patient write-ups + night update) under one
-// "PAED WARD" heading — each member ward still gets its own Shift
-// Statistics table underneath, just labeled with a small subheading
-// (PAED BED / PAED COT) instead of merging the numbers.
+// and two separate rows (still PAED BED / PAED COT, and MOTHERS / COTS
+// for Maternity) on the Overall Nurse's "All Wards" statistics table —
+// that table always lists every ward from WARDS as its own row, no
+// group is ever merged or totalled there.
 //
-// `showTotalRow: true` (used by MATERNITY WARD, matching the paper
-// Minute Book's Mothers/Cots/Total layout) additionally makes the "All
-// Wards" table insert one merged TOTAL row right after the group's last
-// member row, summing that group's own two rows only — it never touches
-// each member's own row or the grand Total row at the very bottom.
-//
-// `mergedTable: true` (also Maternity) further changes the Overall
+// `mergedTable: true` (Maternity only) instead changes the Overall
 // Nurse's "Ward Reports" section: instead of each member ward getting
 // its own separate Shift Statistics table under a subheading (Paed's
 // behavior), the group gets one single table with a Morning section
 // (Mothers row, then Cots row) and a Night section (same), and one
-// combined Total row — matching the paper exactly.
+// combined Total row — matching the paper exactly. This is the only
+// place the two member wards' figures are ever combined.
 export const WARD_GROUPS = [
   { key: 'paedward', label: 'PAED WARD', wardKeys: ['paedbed', 'paedcot'] },
-  { key: 'matward', label: 'MATERNITY WARD', wardKeys: ['matbed', 'matcot'], showTotalRow: true, mergedTable: true }
+  { key: 'matward', label: 'MATERNITY WARD', wardKeys: ['matbed', 'matcot'], mergedTable: true }
 ];
 
 // Builds the Ward Nurse page's ward-selection list: every ward not part

@@ -847,7 +847,6 @@ table.report input { width: 62px; padding: 4px; border: 1px solid var(--border);
 table.report input:disabled { color: inherit; -webkit-text-fill-color: currentColor; opacity: 1; }
 table.report input.duty-input { width: 100px; text-align: left; }
 table.report tr.totals-row td { font-weight: bold; background: var(--primary-light); }
-table.report tr.group-total-row td { font-weight: bold; background: #f3f4f6; }
 table.report th.renamable-col, table.report td.renamable-col { cursor: pointer; }
 table.report th.renamable-col:hover, table.report td.renamable-col:hover { background: var(--border); }
 .lock-btn { border: none; border-radius: 6px; padding: 5px 8px; font-size: 16px; font-weight: bold; cursor: pointer; white-space: nowrap; }

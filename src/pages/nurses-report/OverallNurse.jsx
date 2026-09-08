@@ -548,24 +548,6 @@ export default function OverallNurse() {
     demoTotals[f.key] = sum;
   });
 
-  // Sums just one WARD_GROUPS entry's own member rows (e.g. matbed +
-  // matcot for MATERNITY WARD) — separate from `totals` above, which
-  // sums every ward on the page.
-  function groupTotals(group) {
-    const t = {};
-    STAT_FIELDS.forEach(f => {
-      let sum = 0;
-      group.wardKeys.forEach(k => {
-        const w = WARDS.find(x => x.key === k);
-        const data = wardData[k] || {};
-        const v = typeof data[f.key] === 'number' ? data[f.key] : (f.key === 'beds' ? (w ? w.beds : 0) : 0);
-        sum += v;
-      });
-      t[f.key] = sum;
-    });
-    return t;
-  }
-
   // Builds the Ward Reports list, merging any WARD_GROUPS members (PAED
   // BED + PAED COT) that have a submitted report into one entry so their
   // patient write-ups render under a single "PAED WARD" heading. The "All
@@ -810,10 +792,8 @@ export default function OverallNurse() {
                 {WARDS.map((w) => {
                   const data = wardData[w.key] || {};
                   const locked = !!data.locked;
-                  const group = WARD_GROUPS.find(g => g.showTotalRow && g.wardKeys[g.wardKeys.length - 1] === w.key);
                   return (
-                    <Fragment key={w.key}>
-                    <tr>
+                    <tr key={w.key}>
                       <td className={"ward-name" + (isAdmin ? ' renamable-col' : '')}
                         title={isAdmin ? 'Click to rename this ward' : undefined}
                         onClick={isAdmin ? () => renameWard(w) : undefined}>{w.label}</td>
@@ -841,19 +821,6 @@ export default function OverallNurse() {
                       </td>
                       {isAdmin && <td></td>}
                     </tr>
-                    {group && (() => {
-                      const gt = groupTotals(group);
-                      return (
-                        <tr className="group-total-row">
-                          <td className="ward-name">{group.label} TOTAL</td>
-                          {STAT_FIELDS.map((f) => <td key={f.key} className={movementColorClass(f.key)}>{gt[f.key]}</td>)}
-                          {CUSTOM_TEXT_COLUMNS.map((c) => <td key={c.key}></td>)}
-                          <td></td><td></td>
-                          {isAdmin && <td></td>}
-                        </tr>
-                      );
-                    })()}
-                    </Fragment>
                   );
                 })}
                 <tr className="totals-row">
