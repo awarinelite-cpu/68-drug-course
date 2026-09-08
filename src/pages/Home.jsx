@@ -197,6 +197,7 @@ export default function Home() {
   }
 
   async function saveBulkPatients() {
+    if (profile?.role !== 'admin') { setBulkMsg('Only an admin can bulk upload patients.'); return; }
     const validRows = (bulkRows || []).filter(r => r.errors.length === 0);
     if (!validRows.length) { setBulkMsg('No valid rows to upload.'); return; }
     setBulkSaving(true);
@@ -322,11 +323,13 @@ export default function Home() {
             />
             <button className="btn btn-primary" onClick={() => searchInputRef.current && searchInputRef.current.focus()}>Search</button>
             <button className="btn btn-success" onClick={() => { setNewForm((f) => ({ ...f, ward: f.ward || myWard })); setShowNewForm(true); }}>+ New Patient</button>
-            <button className="btn btn-secondary" onClick={() => setShowBulkUpload(true)}>📁 Bulk Upload</button>
+            {profile?.role === 'admin' && (
+              <button className="btn btn-secondary" onClick={() => setShowBulkUpload(true)}>📁 Bulk Upload</button>
+            )}
           </div>
         </div>
 
-        {showBulkUpload && (
+        {showBulkUpload && profile?.role === 'admin' && (
           <div className="card-box">
             <h3 style={{ marginTop: 0 }}>Bulk Upload Patients (CSV)</h3>
             <p style={{ fontSize: 12, color: '#555' }}>
