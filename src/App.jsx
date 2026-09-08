@@ -14,8 +14,6 @@ import Login from "./pages/Login.jsx";
 import Home from "./pages/Home.jsx";
 import Patient from "./pages/Patient.jsx";
 import MyPatients from "./pages/MyPatients.jsx";
-import Community from "./pages/Community.jsx";
-import Messages from "./pages/Messages.jsx";
 import Profile from "./pages/Profile.jsx";
 import Admin from "./pages/Admin.jsx";
 import Overview from "./pages/Overview.jsx";
@@ -59,8 +57,6 @@ export default function App() {
           <Route path="/" element={<AuthedShell><Home /></AuthedShell>} />
           <Route path="/patient" element={<AuthedShell><Patient /></AuthedShell>} />
           <Route path="/my-patients" element={<AuthedShell><MyPatients /></AuthedShell>} />
-          <Route path="/community" element={<AuthedShell><Community /></AuthedShell>} />
-          <Route path="/messages" element={<AuthedShell><Messages /></AuthedShell>} />
           <Route path="/profile" element={<AuthedShell><Profile /></AuthedShell>} />
           <Route path="/admin" element={<AuthedShell><Admin /></AuthedShell>} />
           <Route path="/charts/overview" element={<AuthedShell><Overview /></AuthedShell>} />

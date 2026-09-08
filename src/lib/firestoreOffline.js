@@ -2,9 +2,8 @@ import { getDoc, getDocs, getDocFromCache, getDocsFromCache } from "firebase/fir
 
 // getDoc()/getDocs() try the server first, and when there's no connection
 // they can take a long time to give up and fall back to the local cache —
-// sometimes appearing to just hang from the UI's point of view (see
-// Messages.jsx's loadDirectory, which raced the same problem against a
-// timeout). Race the read against a short timeout and, if that fires or the
+// sometimes appearing to just hang from the UI's point of view. Race the
+// read against a short timeout and, if that fires or the
 // read errors outright, read whatever's already in the persistent local
 // cache instead. That keeps offline-first screens (patient banner, chart
 // overview, etc.) from spinning on "Loading…" forever with no network.

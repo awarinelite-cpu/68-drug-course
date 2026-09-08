@@ -43,7 +43,7 @@ export default function Patient() {
   }, [loadedPatient]);
 
   // Kept in sync so NavDrawer's Overview/Calculators shortcuts still work
-  // from pages (like Profile or Community) that don't carry ?patient= in
+  // from pages (like Profile) that don't carry ?patient= in
   // their own URL.
   useEffect(() => {
     if (patientId) sessionStorage.setItem(SELECTED_PATIENT_KEY, patientId);
