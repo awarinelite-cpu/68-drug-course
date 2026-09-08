@@ -848,7 +848,7 @@ table.report th.renamable-col:hover, table.report td.renamable-col:hover { backg
 .lock-btn.open { background: #dcfce7; color: #14532d; }
 .ward-report-block { margin-top: 16px; }
 .ward-report-heading { font-family: Arial, Helvetica, sans-serif; font-weight: 900; font-size: 22px; text-transform: uppercase; color: #000; letter-spacing: .5px; margin: 0 0 10px 0; }
-.ward-report-subheading { font-family: Arial, Helvetica, sans-serif; font-weight: 800; font-size: 15px; text-transform: uppercase; color: var(--text-secondary); letter-spacing: .5px; margin: 0 0 6px 0; padding-bottom: 4px; border-bottom: 1px solid var(--border); }
+.ward-report-subheading { font-family: "Arial Black", Arial, Helvetica, sans-serif; font-weight: 900; font-size: 22px; text-transform: uppercase; color: var(--primary-active); letter-spacing: .5px; margin: 0 0 6px 0; padding-bottom: 4px; border-bottom: 1px solid var(--border); }
 .ward-report-sub + .ward-report-sub { margin-top: 10px; }
 table.ward-shift th, table.ward-shift td { border: 1px solid var(--border); padding: 5px 4px; font-size: 16px; text-align: center; }
 table.ward-shift th { background: var(--background); text-transform: uppercase; font-size: 16px; }
