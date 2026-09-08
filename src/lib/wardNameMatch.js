@@ -21,10 +21,21 @@ function normalizeWardLabel(raw) {
     .trim();
 }
 
+// A few wards are confirmed to be the same physical ward even though
+// their names don't normalize to the same thing (the report abbreviates
+// them) — normalizeWardLabel alone can't catch these safely since e.g.
+// "ORTHO" could in principle be an abbreviation for several things.
+// Listed explicitly here once confirmed, rather than guessed at.
+const WARD_LABEL_ALIASES = {
+  'MALE MEDICAL WARD': 'mmw'
+};
+
 // Given a patient-chart ward label (a value from WARD_OPTIONS), returns
 // the matching nurse-report ward key (from WARDS), or null if none of
 // the report wards normalize to the same name.
 export function reportWardKeyForPatientWard(patientWardLabel) {
+  const upper = String(patientWardLabel || '').toUpperCase().trim();
+  if (WARD_LABEL_ALIASES[upper]) return WARD_LABEL_ALIASES[upper];
   const norm = normalizeWardLabel(patientWardLabel);
   if (!norm) return null;
   const match = WARDS.find(w => normalizeWardLabel(w.label) === norm);
@@ -56,6 +67,8 @@ export function reportWardKeysForPatientWard(patientWardLabel) {
 // patient-chart ward label (a value from WARD_OPTIONS), or null if none
 // of the patient wards normalize to the same name.
 export function patientWardForReportKey(reportWardKey) {
+  const aliased = Object.keys(WARD_LABEL_ALIASES).find(label => WARD_LABEL_ALIASES[label] === reportWardKey);
+  if (aliased) return aliased;
   const w = WARDS.find(x => x.key === reportWardKey);
   if (!w) return null;
   const norm = normalizeWardLabel(w.label);
