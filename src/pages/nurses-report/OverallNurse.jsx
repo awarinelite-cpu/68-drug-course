@@ -13,8 +13,11 @@ import {
   wardReportPeriodLabel, weekId, occDelta, defaultWardDoc, movementColorClass,
   loadWardNameOverrides, saveWardNameOverride,
   loadHeaderLabelOverrides, saveHeaderLabelOverride, headerLabel, GROUP_LABEL_IDS,
-  CUSTOM_TEXT_COLUMNS, loadCustomColumns, addCustomColumn, renameCustomColumn, removeCustomColumn
+  CUSTOM_TEXT_COLUMNS, loadCustomColumns, addCustomColumn, renameCustomColumn, removeCustomColumn,
+  isWardDocUntouched
 } from "../../lib/nurses-report-common.js";
+import { patientWardAndBedTypeForReportKey } from "../../lib/wardNameMatch.js";
+import { wardHeadcount } from "../../lib/wardCensus.js";
 import { useGoBack } from "../../hooks/useGoBack.js";
 import Topbar from "../../components/Topbar.jsx";
 
@@ -261,13 +264,40 @@ export default function OverallNurse() {
     snap.docs.forEach(d => { map[d.id] = d.data(); });
     const existing = new Set(snap.docs.map(d => d.id));
     const missing = WARDS.filter(w => !existing.has(w.key));
-    if (!missing.length) { setWardData(map); return; }
+    // Untouched existing docs (no shift figures entered on either shift
+    // yet today, not submitted/locked) are still fair game to re-seed —
+    // nothing real would be lost. Missing docs are always untouched by
+    // definition, so both groups get the same live-census treatment.
+    const untouchedExisting = WARDS.filter(w => existing.has(w.key) && isWardDocUntouched(map[w.key]));
+    if (!missing.length && !untouchedExisting.length) { setWardData(map); return; }
+
+    let patients = [];
+    try {
+      const patientsSnap = await getDocsSafe(collection(db, 'patients'));
+      patientsSnap.forEach(d => patients.push(d.data()));
+    } catch {
+      // Fall through with an empty patient list — wards just seed at 0
+      // occ below rather than the real census, same as if none of this
+      // ran at all.
+    }
+    function headcountFor(w) {
+      const info = patientWardAndBedTypeForReportKey(w.key);
+      return info ? wardHeadcount(patients, info.wardLabel, info.bedType) : 0;
+    }
+
     const batch = writeBatch(db);
     missing.forEach(w => {
-      const data = { label: w.label, beds: w.beds, locked: false };
-      STAT_FIELDS.forEach(f => { if (f.key !== 'beds') data[f.key] = 0; });
+      const headcount = headcountFor(w);
+      const data = defaultWardDoc(w, headcount);
       batch.set(doc(wardsCol, w.key), data);
       map[w.key] = data;
+    });
+    untouchedExisting.forEach(w => {
+      const headcount = headcountFor(w);
+      const beds = typeof map[w.key].beds === 'number' ? map[w.key].beds : w.beds;
+      const patch = { startOcc: headcount, occ: headcount, vac: beds - headcount };
+      batch.set(doc(wardsCol, w.key), patch, { merge: true });
+      map[w.key] = { ...map[w.key], ...patch };
     });
     try {
       await batch.commit();
