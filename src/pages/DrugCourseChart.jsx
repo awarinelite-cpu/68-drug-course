@@ -558,14 +558,15 @@ export default function DrugCourseChart() {
     const reason = statusAction;
     if (!reason) { setStatusMsg({ color: '#dc2626', text: 'Please select an action first.' }); return; }
 
-    // Unlike the plain autosave above, this reads across five collections
-    // (vitals, glycemic, intake & output, seizure, plus this chart) and then
-    // DELETES the live entries once archived. Getting that sequence right
-    // needs the real data, not whatever happens to be sitting in the local
-    // offline cache — so this action is blocked until back online instead
-    // of being made offline-tolerant like saveChart() above.
-    if (!navigator.onLine) {
-      setStatusMsg({ color: '#dc2626', text: "This needs an internet connection — referring, transferring, or discharging archives records from several charts at once and then clears them, and doing that safely requires reading the real data rather than whatever's cached locally. Please try again once online." });
+    // Discharging or referring reads across five collections (vitals,
+    // glycemic, intake & output, seizure, plus this chart) and then DELETES
+    // the live entries once archived. Getting that sequence right needs the
+    // real data, not whatever happens to be sitting in the local offline
+    // cache — so those two are blocked until back online instead of being
+    // made offline-tolerant like saveChart() above. Transferring wards
+    // doesn't archive or clear anything (see below), so it's exempt.
+    if (reason !== 'transferred' && !navigator.onLine) {
+      setStatusMsg({ color: '#dc2626', text: "This needs an internet connection — referring or discharging archives records from several charts at once and then clears them, and doing that safely requires reading the real data rather than whatever's cached locally. Please try again once online." });
       return;
     }
 
@@ -575,6 +576,39 @@ export default function DrugCourseChart() {
       wardChosen = transferWard;
       if (!wardChosen) { setStatusMsg({ color: '#dc2626', text: 'Please select which ward the patient is being transferred to.' }); return; }
       label = 'Transferred to ' + wardChosen;
+
+      if (!confirm('Confirm: ' + label + '?\n\nThe patient moves to ' + wardChosen + '\u2019s New Patient queue \u2014 a nurse there still has to accept them before they show up on that ward\u2019s patient list. Their drug chart, vitals, glycemic chart, intake & output, and seizure chart all stay exactly as they are; care just continues on the new ward.')) return;
+
+      logAudit('Patient status set: ' + label);
+      setStatusApplying(true);
+      setStatusMsg({ color: '#555', text: 'Sending transfer…' });
+      await saveChart(); // flush latest drug-chart edits first
+
+      // A ward transfer isn't a discharge: the admission carries on, just
+      // on a different ward, so none of the charts get archived or reset
+      // here. We only park the patient in a pendingTransfer for the
+      // receiving ward to accept — same flow as Patient.jsx's status
+      // control. See src/lib/wardTransfer.js.
+      try {
+        await updateDoc(doc(db, 'patients', patientId), {
+          pendingTransfer: {
+            toWard: wardChosen,
+            fromWard: patient?.ward || '',
+            transferredByName: profile?.name || '',
+            transferredAt: serverTimestamp(),
+            transferredAtDisplay: new Date().toLocaleString()
+          },
+          updatedAt: serverTimestamp()
+        });
+      } catch (e) {
+        setStatusMsg({ color: '#dc2626', text: 'Could not start the transfer: ' + (e.code || e.message) });
+        setStatusApplying(false);
+        return;
+      }
+
+      setStatusMsg({ color: '#16a34a', text: 'Sent to ' + wardChosen + ' \u2014 awaiting acceptance there. Redirecting…' });
+      setTimeout(() => navigate('/'), 900);
+      return;
     }
 
     // Discharge Date is locked (readonly) so it can only ever be set here,
@@ -637,7 +671,6 @@ export default function DrugCourseChart() {
       diagnosis: f.f_diagnosis,
       archiveReason: reason,
       archiveReasonLabel: label,
-      transferWard: wardChosen || null,
       archivedAt: serverTimestamp(),
       archivedAtDisplay: new Date().toLocaleString(),
       drugCourseChart: drugChartData,
@@ -654,12 +687,6 @@ export default function DrugCourseChart() {
       setStatusMsg({ color: '#dc2626', text: 'Could not save to Overview: ' + (e.code || e.message) });
       setStatusApplying(false);
       return;
-    }
-
-    if (reason === 'transferred' && wardChosen) {
-      try {
-        await updateDoc(doc(db, 'patients', patientId), { ward: wardChosen, updatedAt: serverTimestamp() });
-      } catch (e) { /* not fatal — the admission itself is already saved */ }
     }
 
     const blankDrugChart = {

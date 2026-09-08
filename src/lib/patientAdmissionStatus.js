@@ -23,6 +23,29 @@ export async function applyPatientStatus({ patientId, reason, transferWard, from
     wardChosen = transferWard;
     if (!wardChosen) return { ok: false, message: 'Please select which ward the patient is being transferred to.' };
     label = 'Transferred to ' + wardChosen;
+
+    // A ward transfer isn't a discharge: the patient's admission carries
+    // on, just on a different ward, so none of the current charts (drug
+    // course chart, vitals, blood glucose, intake & output, seizure)
+    // get archived or reset here. We only park the patient in a
+    // pendingTransfer for the receiving ward to accept. See
+    // src/lib/wardTransfer.js's acceptTransfer, which now simply moves
+    // `ward` over with everything else left untouched.
+    try {
+      await updateDoc(doc(db, 'patients', patientId), {
+        pendingTransfer: {
+          toWard: wardChosen,
+          fromWard: fromWard || '',
+          transferredByName: transferredByName || '',
+          transferredAt: serverTimestamp(),
+          transferredAtDisplay: new Date().toLocaleString()
+        },
+        updatedAt: serverTimestamp()
+      });
+    } catch (e) {
+      return { ok: false, message: 'Could not start the transfer: ' + (e.code || e.message) };
+    }
+    return { ok: true, label, wardChosen };
   }
 
   async function fetchEntries(collName) {
@@ -86,7 +109,6 @@ export async function applyPatientStatus({ patientId, reason, transferWard, from
     diagnosis: drugChartData.f_diagnosis,
     archiveReason: reason,
     archiveReasonLabel: label,
-    transferWard: wardChosen || null,
     archivedAt: serverTimestamp(),
     archivedAtDisplay: new Date().toLocaleString(),
     drugCourseChart: { ...drugChartData, f_discharge: dischargeDate },
@@ -101,28 +123,6 @@ export async function applyPatientStatus({ patientId, reason, transferWard, from
     await addDoc(collection(db, 'patients', patientId, 'admissions'), admissionDoc);
   } catch (e) {
     return { ok: false, message: 'Could not save to Overview: ' + (e.code || e.message) };
-  }
-
-  if (reason === 'transferred' && wardChosen) {
-    // Don't move the patient onto the new ward yet — leave `ward` as-is
-    // (the sending ward) and park them in a pendingTransfer instead. The
-    // receiving ward's nurse sees them in their "New Patient" queue and
-    // has to Accept (which finally sets ward: wardChosen) or Reject
-    // (which just clears pendingTransfer, so the patient — having never
-    // left `ward` — lands straight back on the sending ward's list with
-    // nothing else to undo). See src/lib/wardTransfer.js.
-    try {
-      await updateDoc(doc(db, 'patients', patientId), {
-        pendingTransfer: {
-          toWard: wardChosen,
-          fromWard: fromWard || '',
-          transferredByName: transferredByName || '',
-          transferredAt: serverTimestamp(),
-          transferredAtDisplay: new Date().toLocaleString()
-        },
-        updatedAt: serverTimestamp()
-      });
-    } catch (e) { /* not fatal — the admission itself is already saved */ }
   }
 
   const blankDrugChart = {

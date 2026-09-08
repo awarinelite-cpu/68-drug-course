@@ -145,23 +145,25 @@ export default function Patient() {
       return;
     }
 
-    // Same as the Drug Course Chart's own Patient Status control: this
-    // reads across five collections and then deletes the live entries once
-    // archived, so it's blocked until back online rather than made
-    // offline-tolerant like the rest of this page's edits.
-    if (!navigator.onLine) {
-      setStatusMsg({ color: '#dc2626', text: "This needs an internet connection — referring, transferring, or discharging archives records from several charts at once and then clears them, and doing that safely requires reading the real data rather than whatever's cached locally. Please try again once online." });
+    // Same as the Drug Course Chart's own Patient Status control: discharging
+    // or referring reads across five collections and then deletes the live
+    // entries once archived, so those two are blocked until back online
+    // rather than made offline-tolerant like the rest of this page's edits.
+    // Transferring wards no longer touches any of that — it's just a single
+    // pendingTransfer write — so it doesn't need this gate.
+    if (reason !== 'transferred' && !navigator.onLine) {
+      setStatusMsg({ color: '#dc2626', text: "This needs an internet connection — referring or discharging archives records from several charts at once and then clears them, and doing that safely requires reading the real data rather than whatever's cached locally. Please try again once online." });
       return;
     }
 
     const label = reason === 'transferred' ? ('Transferred to ' + transferWard) : STATUS_LABELS[reason];
-    const confirmExtra = reason === 'transferred'
-      ? ' The patient will move to ' + transferWard + '\u2019s New Patient queue \u2014 a nurse there still has to accept them before they show up on that ward\u2019s patient list.'
-      : '';
-    if (!confirm('Confirm: ' + label + '?\n\nAll care records for this admission (drug chart, vitals, glycemic chart, intake & output, seizure chart) will be saved together to Overview, and fresh charts will open for this patient.' + confirmExtra)) return;
+    const confirmBody = reason === 'transferred'
+      ? 'The patient moves to ' + transferWard + '\u2019s New Patient queue \u2014 a nurse there still has to accept them before they show up on that ward\u2019s patient list. Their drug chart, vitals, glycemic chart, intake & output, and seizure chart all stay exactly as they are; care just continues on the new ward.'
+      : 'All care records for this admission (drug chart, vitals, glycemic chart, intake & output, seizure chart) will be saved together to Overview, and fresh charts will open for this patient.';
+    if (!confirm('Confirm: ' + label + '?\n\n' + confirmBody)) return;
 
     setStatusApplying(true);
-    setStatusMsg({ color: '#555', text: 'Saving all charts for this admission…' });
+    setStatusMsg({ color: '#555', text: reason === 'transferred' ? 'Sending transfer…' : 'Saving all charts for this admission…' });
 
     const result = await applyPatientStatus({ patientId: patient.id, reason, transferWard, fromWard: patient.ward, transferredByName: profile?.name });
     if (!result.ok) {
