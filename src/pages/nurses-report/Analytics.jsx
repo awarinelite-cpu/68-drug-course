@@ -230,13 +230,11 @@ export default function Analytics() {
   const monthPickerRef = useRef(null);
   const yearPickerRef = useRef(null);
 
-  const barCanvasRef = useRef(null);
   const movementCanvasRef = useRef(null);
   const sexPieCanvasRef = useRef(null);
   const affiliationPieCanvasRef = useRef(null);
   const wardBreakdownCanvasRef = useRef(null);
 
-  const barChartRef = useRef(null);
   const movementChartRef = useRef(null);
   const sexPieRef = useRef(null);
   const affiliationPieRef = useRef(null);
@@ -301,7 +299,7 @@ export default function Analytics() {
   // Destroy every chart instance on unmount.
   useEffect(() => {
     return () => {
-      [barChartRef, movementChartRef, sexPieRef, affiliationPieRef, wardBreakdownChartRef].forEach(r => {
+      [movementChartRef, sexPieRef, affiliationPieRef, wardBreakdownChartRef].forEach(r => {
         if (r.current) r.current.destroy();
       });
     };
@@ -310,35 +308,6 @@ export default function Analytics() {
   // Bar / movement / pie charts — redraw whenever totals change.
   useEffect(() => {
     if (!totals) return;
-
-    if (barChartRef.current) barChartRef.current.destroy();
-    barChartRef.current = new Chart(barCanvasRef.current.getContext('2d'), {
-      type: 'bar',
-      data: {
-        labels: CLINICAL_FIELDS.map(f => f.label),
-        datasets: [{
-          data: CLINICAL_FIELDS.map(f => totals[f.key]),
-          backgroundColor: (c) => {
-            const colors = ['#2563eb', '#dc2626', '#d97706', '#7c3aed', '#0891b2'];
-            return barFrontGradient(c.chart.ctx, c.chart.chartArea, colors[c.dataIndex]);
-          },
-          borderColor: ['#2563eb', '#dc2626', '#d97706', '#7c3aed', '#0891b2'].map(h => shadeHex(h, -0.25)),
-          borderWidth: 1.5,
-          borderRadius: 2,
-          _solidColors: ['#2563eb', '#dc2626', '#d97706', '#7c3aed', '#0891b2']
-        }]
-      },
-      plugins: [dropShadowPlugin, bar3dPlugin],
-      options: {
-        responsive: true, maintainAspectRatio: false,
-        layout: { padding: { top: 12, right: 12 } },
-        plugins: { legend: { display: false } },
-        scales: {
-          x: { ticks: { color: chartTextColor }, grid: { color: chartGridColor } },
-          y: { beginAtZero: true, ticks: { precision: 0, color: chartTextColor }, grid: { color: chartGridColor } }
-        }
-      }
-    });
 
     if (movementChartRef.current) movementChartRef.current.destroy();
     movementChartRef.current = new Chart(movementCanvasRef.current.getContext('2d'), {
@@ -593,24 +562,7 @@ export default function Analytics() {
             </div>
 
             <div className="card-box">
-              <h2>Ward Breakdown</h2>
-              <div className="range-label" style={{ marginTop: 0 }}>Pick a ward to see how its columns (Adm, Disch, Dama, etc.) compare, for the selected period.</div>
-              <select
-                value={breakdownWard}
-                onChange={e => setBreakdownWard(e.target.value)}
-                style={{ marginTop: 10, width: '100%', padding: '10px 8px', borderRadius: 8, border: '2px solid #e5e7eb', fontWeight: 'bold', fontSize: 13, color: '#374151' }}
-              >
-                {WARDS.map(w => <option key={w.key} value={w.key}>{w.label}</option>)}
-              </select>
-              <div className="range-label" style={{ marginTop: 8, fontWeight: 'bold', color: '#111827' }}>{breakdownLeaderText}</div>
-              <div className="chart-wrap" id="wardBreakdownWrap"><canvas ref={wardBreakdownCanvasRef}></canvas></div>
-            </div>
-
-            <div className="card-box">
-              <h2>Admission, Death, BID, S/C, VS/C</h2>
-              <div className="chart-wrap"><canvas ref={barCanvasRef}></canvas></div>
-
-              <h3>Patient Movement — what added or reduced the count</h3>
+              <h2>HOSPITAL STATISTICS BREAKDOWN</h2>
               <div className="chart-wrap"><canvas ref={movementCanvasRef}></canvas></div>
 
               <div className="pie-grid">
@@ -623,6 +575,20 @@ export default function Analytics() {
                   <div className="chart-wrap" style={{ height: 220 }}><canvas ref={affiliationPieCanvasRef}></canvas></div>
                 </div>
               </div>
+            </div>
+
+            <div className="card-box">
+              <h2>Ward Breakdown</h2>
+              <div className="range-label" style={{ marginTop: 0 }}>Pick a ward to see how its columns (Adm, Disch, Dama, etc.) compare, for the selected period.</div>
+              <select
+                value={breakdownWard}
+                onChange={e => setBreakdownWard(e.target.value)}
+                style={{ marginTop: 10, width: '100%', padding: '10px 8px', borderRadius: 8, border: '2px solid #e5e7eb', fontWeight: 'bold', fontSize: 13, color: '#374151' }}
+              >
+                {WARDS.map(w => <option key={w.key} value={w.key}>{w.label}</option>)}
+              </select>
+              <div className="range-label" style={{ marginTop: 8, fontWeight: 'bold', color: '#111827' }}>{breakdownLeaderText}</div>
+              <div className="chart-wrap" id="wardBreakdownWrap"><canvas ref={wardBreakdownCanvasRef}></canvas></div>
             </div>
           </>
         )}
