@@ -400,8 +400,11 @@ function useWardReport(wardKey, isAdmin, profile, user) {
 // Shift Statistics table, when includeShiftTable], Patient Demographics,
 // Patients, Night Update, Save/Submit. `includeShiftTable` is false for
 // a mergedTable group's members (MergedWardReportPanel renders one
-// shared table above instead) and true everywhere else.
-function WardPanelRest({ h, showLabel, isAdmin, navigate, includeShiftTable = true }) {
+// shared table above instead) and true everywhere else. Likewise
+// `includePreviousOcc` is false for a mergedTable group's members —
+// MergedWardReportPanel renders both members' Previous Occ inline atop
+// the shared table instead of as a separate card down here.
+function WardPanelRest({ h, showLabel, isAdmin, navigate, includeShiftTable = true, includePreviousOcc = true }) {
   const {
     w, wardDoc, topStatus, saveStatus, editable, adminEditOverride, setAdminEditOverride,
     census, movementTotals, demographicTotals, emrLookup,
@@ -435,12 +438,14 @@ function WardPanelRest({ h, showLabel, isAdmin, navigate, includeShiftTable = tr
             </div>
           )}
 
-          <div className="card-box">
-            <h2>Previous Occ</h2>
-            <div className="patient-field" style={{ maxWidth: 140 }}>
-              <input type="number" inputMode="numeric" disabled={!editable} value={wardDoc.startOcc} onChange={(e) => updateStartOcc(e.target.value)} />
+          {includePreviousOcc && (
+            <div className="card-box">
+              <h2>Previous Occ</h2>
+              <div className="patient-field" style={{ maxWidth: 140 }}>
+                <input type="number" inputMode="numeric" disabled={!editable} value={wardDoc.startOcc} onChange={(e) => updateStartOcc(e.target.value)} />
+              </div>
             </div>
-          </div>
+          )}
 
           {includeShiftTable && (
             <div className="card-box">
@@ -617,13 +622,16 @@ function MergedShiftTable({ panels }) {
 
 // A mergedTable group's full report (currently just MATERNITY WARD):
 // one shared editable Shift Statistics table for both member wards
-// (Mothers/Cots), then each member's own Previous Occ, Demographics,
-// Patients, Night Update and Save/Submit below it, labeled separately —
-// those still save to two entirely separate Firestore docs, same as
-// two side-by-side WardReportPanels would. Assumes exactly two member
-// wards, true for every mergedTable group defined today; a third member
-// would need a third useWardReport call added here explicitly (hooks
-// can't be called from a loop).
+// A mergedTable group's full report (currently just MATERNITY WARD):
+// one shared editable Shift Statistics table for both member wards
+// (Mothers/Cots) with both members' Previous Occ inline just above it,
+// then each member's own Demographics, Patients, Night Update and
+// Save/Submit below, labeled separately — those still save to two
+// entirely separate Firestore docs, same as two side-by-side
+// WardReportPanels would. Assumes exactly two member wards, true for
+// every mergedTable group defined today; a third member would need a
+// third useWardReport call added here explicitly (hooks can't be
+// called from a loop).
 function MergedWardReportPanel({ group, isAdmin, profile, user, navigate }) {
   const hA = useWardReport(group.wardKeys[0], isAdmin, profile, user);
   const hB = useWardReport(group.wardKeys[1], isAdmin, profile, user);
@@ -635,6 +643,14 @@ function MergedWardReportPanel({ group, isAdmin, profile, user, navigate }) {
       {bothLoaded && (
         <div className="card-box">
           <h2>{group.label} — Shift Statistics</h2>
+          <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginBottom: 12 }}>
+            {hooks.map((h) => (
+              <div className="patient-field" style={{ maxWidth: 140 }} key={h.w.key}>
+                <label>{'Previous Occ (' + h.w.label + ')'}</label>
+                <input type="number" inputMode="numeric" disabled={!h.editable} value={h.wardDoc.startOcc} onChange={(e) => h.updateStartOcc(e.target.value)} />
+              </div>
+            ))}
+          </div>
           <div className="table-wrap">
             <MergedShiftTable panels={hooks.map((h) => ({
               w: h.w, wardDoc: h.wardDoc, census: h.census, movementTotals: h.movementTotals,
@@ -644,7 +660,7 @@ function MergedWardReportPanel({ group, isAdmin, profile, user, navigate }) {
         </div>
       )}
       {hooks.map((h, i) => (
-        <WardPanelRest key={group.wardKeys[i]} h={h} showLabel isAdmin={isAdmin} navigate={navigate} includeShiftTable={false} />
+        <WardPanelRest key={group.wardKeys[i]} h={h} showLabel isAdmin={isAdmin} navigate={navigate} includeShiftTable={false} includePreviousOcc={false} />
       ))}
     </>
   );
