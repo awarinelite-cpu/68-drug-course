@@ -290,6 +290,26 @@ export function blankShift() {
   return s;
 }
 
+// True when a ward's report doc for today has not actually been worked
+// on yet — no movement/demographic figures entered on either shift, no
+// nurse signed onto a shift, and not submitted or locked. A doc can
+// reach this state even after being created (e.g. Firestore rules or an
+// earlier page visit auto-vivifies it with defaultWardDoc()'s zeros), so
+// callers that only special-case "doc doesn't exist yet" — like Previous
+// Occ auto-fill from the live patient census — miss it; this lets them
+// treat an untouched-but-existing doc the same as a missing one, since
+// no real data would be lost by re-seeding it.
+export function isWardDocUntouched(wardDoc) {
+  if (!wardDoc || wardDoc.submitted || wardDoc.locked) return false;
+  const shifts = wardDoc.shifts || {};
+  return SHIFTS.every(s => {
+    const shift = shifts[s.key] || {};
+    if (shift.nurseOnDuty) return false;
+    return SHIFT_STAT_FIELDS.every(f => !shift[f.key]) &&
+      DEMOGRAPHIC_FIELDS.every(f => !shift[f.key]);
+  });
+}
+
 // The empty-state shape for one ward's live report: no shifts entered,
 // nothing submitted, nothing locked. Used both on a ward's first-ever
 // load and to reset a ward's live doc once its report has been filed to

@@ -8,7 +8,8 @@ import { useGoBack } from "../../hooks/useGoBack.js";
 import {
   WARDS, SHIFT_STAT_FIELDS, SHIFTS, PATIENT_FIELDS, PATIENT_STATUS_OPTIONS,
   DEMOGRAPHIC_FIELDS, computeDemographicTotals, movementColorClass,
-  reportDateId, occDelta, blankShift, defaultWardDoc, wardSelectorOptions
+  reportDateId, occDelta, blankShift, defaultWardDoc, wardSelectorOptions,
+  isWardDocUntouched
 } from "../../lib/nurses-report-common.js";
 import { patientWardForReportKey } from "../../lib/wardNameMatch.js";
 import { wardHeadcount } from "../../lib/wardCensus.js";
@@ -222,14 +223,18 @@ function WardReportPanel({ wardKey, showLabel, isAdmin, profile, user, navigate 
       next.nightUpdate = typeof next.nightUpdate === 'string' ? next.nightUpdate : '';
       next.nightUpdateBy = next.nightUpdateBy || '';
 
-      if (!snap.exists()) {
-        // On taking over — i.e. the first time this ward's report for
-        // today is opened — Previous Occ should equal what the nurse
-        // actually meets on the patient list, not a number carried
-        // forward from yesterday's manually-typed closing Occ (which can
-        // drift from reality). Only possible for wards whose name matches
-        // a patient-chart ward (see wardNameMatch.js); everything else
-        // keeps the old carry-forward behavior.
+      // On taking over — the first time this ward's report for today is
+      // opened, OR any later time it's opened while still untouched (no
+      // shift figures entered yet, e.g. because a patient was registered
+      // on the ward after someone merely opened this page without
+      // entering anything) — Previous Occ should equal what the nurse
+      // actually meets on the patient list, not a number carried forward
+      // or stuck at a stale zero. Re-seeding an untouched doc loses
+      // nothing, since there's no real shift data on it yet. Only
+      // possible for wards whose name matches a patient-chart ward (see
+      // wardNameMatch.js); everything else keeps the old carry-forward
+      // behavior.
+      if (!snap.exists() || isWardDocUntouched(next)) {
         const patientWardLabel = patientWardForReportKey(wardKey);
         let filledFromPatients = false;
         if (patientWardLabel) {
@@ -237,11 +242,12 @@ function WardReportPanel({ wardKey, showLabel, isAdmin, profile, user, navigate 
             const patientsSnap = await getDocs(collection(db, 'patients'));
             const patients = [];
             patientsSnap.forEach(d => patients.push(d.data()));
-            next = { ...next, startOcc: wardHeadcount(patients, patientWardLabel) };
+            const headcount = wardHeadcount(patients, patientWardLabel);
+            next = { ...next, startOcc: headcount, occ: headcount, vac: (next.beds || 0) - headcount };
             filledFromPatients = true;
           } catch (e) { /* fall through to the old carry-forward below */ }
         }
-        if (!filledFromPatients) {
+        if (!filledFromPatients && !snap.exists()) {
           try {
             const prevRef = doc(db, 'nurseReports', prevDateId(dateId), 'wards', wardKey);
             const prevSnap = await getDocSafe(prevRef);

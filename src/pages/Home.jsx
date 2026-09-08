@@ -13,7 +13,7 @@ import { parsePatientFields, extractDrugSection } from "../lib/patientParse.js";
 import { pendingTransfersFor } from "../lib/wardTransfer.js";
 import { wardHeadcount } from "../lib/wardCensus.js";
 import { reportWardKeysForPatientWard } from "../lib/wardNameMatch.js";
-import { reportDateId, WARDS } from "../lib/nurses-report-common.js";
+import { reportDateId, WARDS, isWardDocUntouched } from "../lib/nurses-report-common.js";
 
 const EMPTY_FORM = { name: '', emr: '', diagnosis: '', ward: '', age: '', hospNo: '', admissionDate: '', allergies: '' };
 
@@ -63,9 +63,16 @@ export default function Home() {
     Promise.all(keys.map(async (key) => {
       try {
         const snap = await getDoc(doc(db, 'nurseReports', dateId, 'wards', key));
-        return [key, snap.exists() && typeof snap.data().occ === 'number' ? snap.data().occ : 0];
+        const data = snap.exists() ? snap.data() : null;
+        return [key, {
+          occ: data && typeof data.occ === 'number' ? data.occ : 0,
+          // A doc that exists but hasn't actually been filled in yet (no
+          // shift figures entered) shouldn't be trusted over the real
+          // patient list below the badge — see wardPatientCount below.
+          untouched: !data || isWardDocUntouched(data)
+        }];
       } catch {
-        return [key, 0];
+        return [key, { occ: 0, untouched: true }];
       }
     })).then((entries) => { if (!cancelled) setWardOccByKey(Object.fromEntries(entries)); });
     return () => { cancelled = true; };
@@ -186,8 +193,17 @@ export default function Home() {
   // ward report's Previous Occ auto-fills from on shift handover.
   const reportWardKeys = reportWardKeysForPatientWard(myWard);
   const isSplitWard = reportWardKeys.length > 1;
+  // For a single (non-split) matching report ward, an untouched report
+  // doc (see isWardDocUntouched) hasn't been given a real Occ figure yet
+  // today — trust the actual patient headcount instead of a stale/zero
+  // report Occ, so this badge always matches the patient list right
+  // below it. Split wards can't be headcount-derived this way (patient
+  // records don't distinguish e.g. Bed vs Cot), so they keep using
+  // whatever report Occ is available.
   const wardPatientCount = reportWardKeys.length
-    ? reportWardKeys.reduce((sum, k) => sum + (wardOccByKey[k] || 0), 0)
+    ? (!isSplitWard && (wardOccByKey[reportWardKeys[0]]?.untouched ?? true)
+        ? wardHeadcount(allPatients, myWard)
+        : reportWardKeys.reduce((sum, k) => sum + (wardOccByKey[k]?.occ || 0), 0))
     : wardHeadcount(allPatients, myWard);
   const incomingTransfers = pendingTransfersFor(allPatients, myWard);
 
@@ -306,7 +322,7 @@ export default function Home() {
                 const w = WARDS.find((x) => x.key === k);
                 return (
                   <span className="ward-split-badge" key={k}>
-                    {w ? w.label : k}<span className="ward-count-badge">{wardOccByKey[k] || 0}</span>
+                    {w ? w.label : k}<span className="ward-count-badge">{wardOccByKey[k]?.occ || 0}</span>
                   </span>
                 );
               })}
