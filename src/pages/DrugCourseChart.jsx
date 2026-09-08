@@ -320,6 +320,11 @@ export default function DrugCourseChart() {
     setDiagModalOpen(true);
   }
   function saveDiagnosisEdit() {
+    const oldVal = (fields.f_diagnosis || '').trim();
+    const newVal = diagEditText.trim();
+    if (oldVal !== newVal) {
+      logAudit('Diagnosis: "' + (oldVal || '—') + '" → "' + (newVal || '—') + '"');
+    }
     updateField('f_diagnosis', diagEditText);
     setDiagModalOpen(false);
   }
@@ -740,22 +745,24 @@ export default function DrugCourseChart() {
         <div className="header"><h1>68 Nigerian Army Reference Hospital Yaba</h1></div>
         <div className="header-sub"><h2>Drugs Course Chart</h2></div>
 
-        <div className="info-grid">
-          <div className="info-row"><label>NAME:</label><span className="val">{patient?.name || ''}</span></div>
-          <div className="info-row"><label>EMR:</label><span className="val">{patient?.emr || ''}</span></div>
-          <div className="info-row"><label>WARD:</label><span className="val">{patient?.ward || ''}</span></div>
-          <div className="info-row"><label>Hospital No:</label><span className="val">{patient?.hospNo || ''}</span></div>
-          <div className="info-row"><label>AGE:</label><span className="val">{patient?.age || ''}</span></div>
-          <div className="info-row"><label>Date of Admission:</label>
-            <input type="date" readOnly={isArchived} value={fields.f_admission} onChange={(e) => updateField('f_admission', e.target.value)} />
-          </div>
-          <div className="info-row"><label>Diagnosis:</label>
-            <input type="text" placeholder="Enter diagnosis for this chart" readOnly value={fields.f_diagnosis} onClick={() => openDiagnosisModal()} />
-          </div>
-          <div className="info-row"><label>Discharge Date:</label>
-            <input type="date" readOnly value={fields.f_discharge}
-              title="Auto-filled when the patient is discharged — cannot be entered manually"
-              style={{ background: '#f3f4f6', cursor: 'not-allowed', pointerEvents: 'none' }} />
+        <div className="info-grid-wrap table-wrap">
+          <div className="info-grid">
+            <div className="info-row"><label>NAME:</label><span className="val">{patient?.name || ''}</span></div>
+            <div className="info-row"><label>EMR:</label><span className="val">{patient?.emr || ''}</span></div>
+            <div className="info-row"><label>WARD:</label><span className="val">{patient?.ward || ''}</span></div>
+            <div className="info-row"><label>Hospital No:</label><span className="val">{patient?.hospNo || ''}</span></div>
+            <div className="info-row"><label>AGE:</label><span className="val">{patient?.age || ''}</span></div>
+            <div className="info-row"><label>Date of Admission:</label>
+              <input type="date" readOnly={isArchived} value={fields.f_admission} onChange={(e) => updateField('f_admission', e.target.value)} />
+            </div>
+            <div className="info-row"><label>Diagnosis:</label>
+              <input type="text" placeholder="Enter diagnosis for this chart" readOnly value={fields.f_diagnosis} onClick={() => openDiagnosisModal()} />
+            </div>
+            <div className="info-row"><label>Discharge Date:</label>
+              <input type="date" readOnly value={fields.f_discharge}
+                title="Auto-filled when the patient is discharged — cannot be entered manually"
+                style={{ background: '#f3f4f6', cursor: 'not-allowed', pointerEvents: 'none' }} />
+            </div>
           </div>
         </div>
 
