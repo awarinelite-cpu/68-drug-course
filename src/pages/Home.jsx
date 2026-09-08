@@ -17,6 +17,12 @@ import { reportDateId, WARDS, isWardDocUntouched } from "../lib/nurses-report-co
 
 const EMPTY_FORM = { name: '', emr: '', diagnosis: '', ward: '', pedBedType: '', age: '', hospNo: '', admissionDate: '', allergies: '' };
 
+// Wards are stored/compared in ALL CAPS (matches WARD_OPTIONS); this is
+// purely for display so headings don't shout at the reader.
+function titleCase(str) {
+  return (str || '').toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
 export default function Home() {
   const { user, profile } = useAuth();
   const navigate = useNavigate();
@@ -335,7 +341,7 @@ export default function Home() {
 
         <div className="card-box">
           <h3 style={{ marginTop: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
-            <span>Patients on {myWard || 'All Wards'} <span className="ward-count-badge">{wardPatientCount}</span></span>
+            <span>Patients on {myWard ? titleCase(myWard) : 'All Wards'} <span className="ward-count-badge">{wardPatientCount}</span></span>
             <a href="/profile" onClick={(e) => { e.preventDefault(); navigate('/profile'); }} style={{ fontSize: 12, fontWeight: 'normal' }}>
               {myWard ? 'Switch ward' : 'Set your ward'}
             </a>
