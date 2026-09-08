@@ -7,8 +7,8 @@ import { doc, getDoc, setDoc } from 'firebase/firestore';
 // Overall Report" — beds is the default bed capacity, editable per ward.
 export const WARDS = [
   { key: 'ae',       label: 'A/E',       beds: 20 },
-  { key: 'matbed',   label: 'MATBED',    beds: 20 },
-  { key: 'matcot',   label: 'MAT COT',   beds: 20 },
+  { key: 'matbed',   label: 'MOTHERS',   beds: 20 },
+  { key: 'matcot',   label: 'COTS',      beds: 20 },
   { key: 'officers', label: 'OFFICERS',  beds: 9  },
   { key: 'fmw1',     label: 'FMW I',     beds: 18 },
   { key: 'fsw2',     label: 'FSW II',    beds: 20 },
@@ -48,8 +48,15 @@ WARDS.forEach(w => { w.defaultLabel = w.label; });
 // "PAED WARD" heading — each member ward still gets its own Shift
 // Statistics table underneath, just labeled with a small subheading
 // (PAED BED / PAED COT) instead of merging the numbers.
+//
+// `showTotalRow: true` (used by MATERNITY WARD, matching the paper
+// Minute Book's Mothers/Cots/Total layout) additionally makes the "All
+// Wards" table insert one merged TOTAL row right after the group's last
+// member row, summing that group's own two rows only — it never touches
+// each member's own row or the grand Total row at the very bottom.
 export const WARD_GROUPS = [
-  { key: 'paedward', label: 'PAED WARD', wardKeys: ['paedbed', 'paedcot'] }
+  { key: 'paedward', label: 'PAED WARD', wardKeys: ['paedbed', 'paedcot'] },
+  { key: 'matward', label: 'MATERNITY WARD', wardKeys: ['matbed', 'matcot'], showTotalRow: true }
 ];
 
 // Builds the Ward Nurse page's ward-selection list: every ward not part

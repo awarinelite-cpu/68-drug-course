@@ -32,7 +32,12 @@ const WARD_LABEL_ALIASES = {
   'ACCIDENT & EMERGENCY': 'ae',
   'FEMALE MEDICAL WARD': 'fmw1',
   'FEMALE SURGICAL WARD': 'fsw2',
-  'ORTHOPEDIC WARD': 'ortho'
+  'ORTHOPEDIC WARD': 'ortho',
+  // Maternity's "Cots" row (newborns) has no patient-chart equivalent —
+  // babies aren't given their own patient record in this app — so only
+  // the Mothers row (matbed) maps back to real patients here. Cots stays
+  // manual entry, same as before this alias existed.
+  'MATERNITY WARD': 'matbed'
 };
 
 // Given a patient-chart ward label (a value from WARD_OPTIONS), returns
