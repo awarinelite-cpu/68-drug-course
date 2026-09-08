@@ -533,7 +533,7 @@ export default function Analytics() {
         {phase === 'summary' && totals && (
           <>
             <div className="card-box">
-              <h2>Patient Movement (Additions / Reductions)</h2>
+              <h2>HOSPITAL STATISTICS</h2>
               <div className="stat-grid">
                 <div className="stat-box"><div className="n" style={{ color: '#16a34a' }}>{additions}</div><div className="l">Total Additions</div></div>
                 <div className="stat-box"><div className="n" style={{ color: '#dc2626' }}>{reductions}</div><div className="l">Total Reductions</div></div>
