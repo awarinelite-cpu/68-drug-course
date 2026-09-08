@@ -203,7 +203,7 @@ export default function Analytics() {
   const [rangeLabel, setRangeLabel] = useState('');
   const [totals, setTotals] = useState(null);
   const [perWard, setPerWard] = useState(null);
-  const [breakdownField, setBreakdownField] = useState('adm');
+  const [breakdownWard, setBreakdownWard] = useState(WARDS[0]?.key || '');
 
   const periodSelectionRef = useRef({ today: null, week: null, month: null, year: null });
   const loadTokenRef = useRef(0);
@@ -349,37 +349,38 @@ export default function Analytics() {
     });
   }, [totals]);
 
-  // Ward Breakdown chart — redraw whenever perWard or the chosen field
-  // changes. Ranked descending so the leading ward reads first.
+  // Ward Breakdown chart — redraw whenever perWard or the chosen ward
+  // changes. Ranked descending so the leading column reads first.
   const breakdownLeaderText = useMemo(() => {
     if (!perWard) return '';
-    const field = MOVEMENT_GRID_FIELDS.find(f => f.key === breakdownField) || MOVEMENT_GRID_FIELDS[0];
-    const ranked = WARDS
-      .map(w => ({ label: w.label, count: perWard[w.key][field.key] || 0 }))
+    const w = WARDS.find(x => x.key === breakdownWard) || WARDS[0];
+    if (!w) return '';
+    const wardTotals = perWard[w.key] || {};
+    const ranked = MOVEMENT_GRID_FIELDS
+      .map(f => ({ label: f.label, count: wardTotals[f.key] || 0 }))
       .sort((a, b) => b.count - a.count);
     if (ranked[0] && ranked[0].count > 0) {
       const tiedLeaders = ranked.filter(r => r.count === ranked[0].count);
       return tiedLeaders.length > 1
-        ? tiedLeaders.map(r => r.label).join(', ') + ' tied for the most ' + field.label + ' (' + ranked[0].count + ' each)'
-        : ranked[0].label + ' led with ' + ranked[0].count + ' ' + field.label;
+        ? tiedLeaders.map(r => r.label).join(', ') + ' tied for the most on ' + w.label + ' (' + ranked[0].count + ' each)'
+        : ranked[0].label + ' led on ' + w.label + ' with ' + ranked[0].count;
     }
-    return 'No ' + field.label + ' recorded by any ward this period.';
-  }, [perWard, breakdownField]);
+    return 'Nothing recorded for ' + w.label + ' this period.';
+  }, [perWard, breakdownWard]);
 
   useEffect(() => {
     if (!perWard || !wardBreakdownCanvasRef.current) return;
-    const field = MOVEMENT_GRID_FIELDS.find(f => f.key === breakdownField) || MOVEMENT_GRID_FIELDS[0];
-    const ranked = WARDS
-      .map(w => ({ label: w.label, count: perWard[w.key][field.key] || 0 }))
-      .sort((a, b) => b.count - a.count);
-    const color = field.direction === 'increase' ? '#16a34a' : field.direction === 'decrease' ? '#dc2626' : '#2563eb';
+    const w = WARDS.find(x => x.key === breakdownWard) || WARDS[0];
+    if (!w) return;
+    const wardTotals = perWard[w.key] || {};
+    const colorFor = (f) => f.direction === 'increase' ? '#16a34a' : f.direction === 'decrease' ? '#dc2626' : '#2563eb';
 
     if (wardBreakdownChartRef.current) wardBreakdownChartRef.current.destroy();
     wardBreakdownChartRef.current = new Chart(wardBreakdownCanvasRef.current.getContext('2d'), {
       type: 'bar',
       data: {
-        labels: ranked.map(r => r.label),
-        datasets: [{ data: ranked.map(r => r.count), backgroundColor: color }]
+        labels: MOVEMENT_GRID_FIELDS.map(f => f.label),
+        datasets: [{ data: MOVEMENT_GRID_FIELDS.map(f => wardTotals[f.key] || 0), backgroundColor: MOVEMENT_GRID_FIELDS.map(colorFor) }]
       },
       options: {
         indexAxis: 'y',
@@ -388,7 +389,7 @@ export default function Analytics() {
         scales: { x: { beginAtZero: true, ticks: { precision: 0 } } }
       }
     });
-  }, [perWard, breakdownField]);
+  }, [perWard, breakdownWard]);
 
   const additions = totals ? MOVEMENT_FIELDS.filter(f => f.direction === 'increase').reduce((s, f) => s + totals[f.key], 0) : 0;
   const reductions = totals ? MOVEMENT_FIELDS.filter(f => f.direction === 'decrease').reduce((s, f) => s + totals[f.key], 0) : 0;
@@ -512,13 +513,13 @@ export default function Analytics() {
 
             <div className="card-box">
               <h2>Ward Breakdown</h2>
-              <div className="range-label" style={{ marginTop: 0 }}>Which ward led in a given column, for the selected period.</div>
+              <div className="range-label" style={{ marginTop: 0 }}>Pick a ward to see how its columns (Adm, Disch, Dama, etc.) compare, for the selected period.</div>
               <select
-                value={breakdownField}
-                onChange={e => setBreakdownField(e.target.value)}
+                value={breakdownWard}
+                onChange={e => setBreakdownWard(e.target.value)}
                 style={{ marginTop: 10, width: '100%', padding: '10px 8px', borderRadius: 8, border: '2px solid #e5e7eb', fontWeight: 'bold', fontSize: 13, color: '#374151' }}
               >
-                {MOVEMENT_GRID_FIELDS.map(f => <option key={f.key} value={f.key}>{f.label}</option>)}
+                {WARDS.map(w => <option key={w.key} value={w.key}>{w.label}</option>)}
               </select>
               <div className="range-label" style={{ marginTop: 8, fontWeight: 'bold', color: '#111827' }}>{breakdownLeaderText}</div>
               <div className="chart-wrap" id="wardBreakdownWrap"><canvas ref={wardBreakdownCanvasRef}></canvas></div>
