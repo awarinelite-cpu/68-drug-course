@@ -171,6 +171,8 @@ export default function OverallNurse() {
   const [whoLabel, setWhoLabel] = useState('');
   const [wardData, setWardData] = useState({});
   const [saveStatus, setSaveStatus] = useState({ text: '', error: false });
+  const [syncBusy, setSyncBusy] = useState(false);
+  const [syncStatus, setSyncStatus] = useState({ text: '', error: false });
   const [archiveBusy, setArchiveBusy] = useState(false);
   const [archiveStatus, setArchiveStatus] = useState({ text: '', error: false });
   const [usersByUid, setUsersByUid] = useState({});
@@ -305,6 +307,42 @@ export default function OverallNurse() {
       setSaveStatus({ text: "Couldn't seed ward list: " + (e.code || e.message || 'unknown error'), error: true });
     }
     setWardData(map);
+  }
+
+  // Manual override: unlike ensureSeeded()'s automatic reseed (which only
+  // touches wards nobody's entered anything for today, and leaves a
+  // locked or submitted doc alone), this forces every ward with a
+  // matching patient-chart ward to match the live patient list right
+  // now, regardless of lock/submitted status — for a deliberate one-off
+  // reset when today's Occ figures are known to be stale.
+  async function resyncOccFromPatients() {
+    if (!confirm("This will reset every ward's Occ, Vac, and Previous Occ to match the patients currently registered under that ward in the app, overwriting today's current figures (even locked or submitted ones). Shift movement entries (Adm, Disch, etc.) are left alone. Continue?")) return;
+    setSyncBusy(true);
+    setSyncStatus({ text: '', error: false });
+    try {
+      const patientsSnap = await getDocsSafe(collection(db, 'patients'));
+      const patients = [];
+      patientsSnap.forEach(d => patients.push(d.data()));
+      const batch = writeBatch(db);
+      const nextWardData = { ...wardData };
+      let touched = 0;
+      WARDS.forEach(w => {
+        const info = patientWardAndBedTypeForReportKey(w.key);
+        if (!info) return; // no patient-chart equivalent for this ward — leave it as-is
+        const headcount = wardHeadcount(patients, info.wardLabel, info.bedType);
+        const beds = typeof wardData[w.key]?.beds === 'number' ? wardData[w.key].beds : w.beds;
+        const patch = { startOcc: headcount, occ: headcount, vac: beds - headcount };
+        batch.set(doc(wardsCol, w.key), patch, { merge: true });
+        nextWardData[w.key] = { ...(nextWardData[w.key] || {}), ...patch };
+        touched += 1;
+      });
+      await batch.commit();
+      setWardData(nextWardData);
+      setSyncStatus({ text: 'Synced ' + touched + ' ward(s) with the current patient list.', error: false });
+    } catch (e) {
+      setSyncStatus({ text: "Couldn't sync: " + (e.code || e.message || 'unknown error'), error: true });
+    }
+    setSyncBusy(false);
   }
 
   async function toggleLock(wardKey) {
@@ -606,6 +644,12 @@ export default function OverallNurse() {
 
         <div className="card-box">
           <h2>All Wards — 24-Hour Statistics</h2>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 10 }}>
+            <button className="btn btn-secondary" style={{ padding: '6px 12px', fontSize: 13 }} disabled={syncBusy} onClick={resyncOccFromPatients}>
+              {syncBusy ? 'Syncing…' : '\u21BB Reset Occ from patient list'}
+            </button>
+            {syncStatus.text && <span style={{ fontSize: 12, color: syncStatus.error ? '#dc2626' : '#16a34a' }}>{syncStatus.text}</span>}
+          </div>
           <div className="table-wrap">
             <table className="report">
               <thead>
