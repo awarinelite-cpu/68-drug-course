@@ -807,6 +807,7 @@ table.shift th, table.shift td { border: 1px solid var(--border); padding: 5px 4
 table.shift th { background: var(--background); text-transform: uppercase; font-size: 16px; }
 table.shift td.shift-name { font-weight: bold; text-align: left; }
 table.shift tr.total-row td { font-weight: bold; background: var(--primary-light); }
+table.shift tr.shift-section-row td { font-weight: bold; text-align: left; text-transform: uppercase; background: var(--background); color: var(--text-secondary); }
 table.shift input { width: 60px; padding: 4px; border: 1px solid var(--border); border-radius: 4px; font-size: 16px; text-align: center; background: transparent; color: inherit; }
 table.shift input:disabled { color: inherit; -webkit-text-fill-color: currentColor; opacity: 1; }
 table.shift input.duty-input { width: 130px; text-align: left; }

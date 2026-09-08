@@ -68,7 +68,7 @@ export function wardSelectorOptions() {
   WARDS.forEach(w => {
     if (!groupedKeys.has(w.key)) { out.push({ key: w.key, label: w.label, wardKeys: [w.key] }); return; }
     const group = WARD_GROUPS.find(g => g.wardKeys[0] === w.key);
-    if (group) out.push({ key: group.key, label: group.label, wardKeys: group.wardKeys });
+    if (group) out.push({ key: group.key, label: group.label, wardKeys: group.wardKeys, mergedTable: !!group.mergedTable });
   });
   return out;
 }

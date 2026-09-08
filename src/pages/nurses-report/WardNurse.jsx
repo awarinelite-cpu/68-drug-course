@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { doc, getDocs, collection, query, where, limit, setDoc, serverTimestamp } from "firebase/firestore";
 import { getDocSafe, getDocsSafe } from "../../lib/firestoreOffline.js";
@@ -182,12 +182,14 @@ function DemographicsTable({ wardDoc, totals, editable, onField }) {
   );
 }
 
-// One ward's full report — Previous Occ, Shift Statistics, Patient
-// Demographics, Patients, Night Update, Save/Submit. Used once per
-// selected ward, and twice side-by-side when the nurse picks a grouped
-// option (e.g. PAED WARD) — each instance loads and saves its own
-// Firestore doc under its own wardKey, completely independently.
-function WardReportPanel({ wardKey, showLabel, isAdmin, profile, user, navigate }) {
+// All of one ward's report state/logic — loading, editing, saving,
+// submitting — with no rendering. Extracted out of WardReportPanel so
+// MergedWardReportPanel below can run two of these (one per member
+// ward) and feed both into a single shared Shift Statistics table,
+// while everything else about each ward (Previous Occ, Demographics,
+// Patients, Save/Submit) still saves to that ward's own Firestore doc
+// completely independently, same as before this split existed.
+function useWardReport(wardKey, isAdmin, profile, user) {
   const [wardDoc, setWardDoc] = useState(null);
   const [adminEditOverride, setAdminEditOverride] = useState(false);
   const [nightUpdateOpen, setNightUpdateOpen] = useState(false);
@@ -384,6 +386,30 @@ function WardReportPanel({ wardKey, showLabel, isAdmin, profile, user, navigate 
   const pillClass = !wardDoc ? '' : wardDoc.locked ? 'locked' : wardDoc.submitted ? 'submitted' : 'draft';
   const pillText = !wardDoc ? '' : wardDoc.locked ? 'Locked' : wardDoc.submitted ? 'Submitted' : 'Draft';
 
+  return {
+    w, wardDoc, adminEditOverride, setAdminEditOverride, nightUpdateOpen, topStatus, saveStatus, emrLookup,
+    census, movementTotals, demographicTotals, editable,
+    updateWardDoc, updateShiftField, updateDuty, updateBeds, updateStartOcc,
+    addPatient, removePatient, updatePatientField, updatePatientStatus, lookupPatientByEmr,
+    openNightUpdate, saveReport, submitReport, pillClass, pillText
+  };
+}
+
+// Everything about one ward's report except the Shift Statistics table
+// itself: header/status/archive, locked notice, Previous Occ, [the
+// Shift Statistics table, when includeShiftTable], Patient Demographics,
+// Patients, Night Update, Save/Submit. `includeShiftTable` is false for
+// a mergedTable group's members (MergedWardReportPanel renders one
+// shared table above instead) and true everywhere else.
+function WardPanelRest({ h, showLabel, isAdmin, navigate, includeShiftTable = true }) {
+  const {
+    w, wardDoc, topStatus, saveStatus, editable, adminEditOverride, setAdminEditOverride,
+    census, movementTotals, demographicTotals, emrLookup,
+    updateWardDoc, updateShiftField, updateDuty, updateBeds, updateStartOcc,
+    addPatient, removePatient, updatePatientField, updatePatientStatus, lookupPatientByEmr,
+    nightUpdateOpen, openNightUpdate, saveReport, submitReport, pillClass, pillText
+  } = h;
+
   return (
     <>
       <div className="card-box">
@@ -392,7 +418,7 @@ function WardReportPanel({ wardKey, showLabel, isAdmin, profile, user, navigate 
           {wardDoc && <span className={"status-pill " + pillClass}>{pillText}</span>}
           {w && (
             <button className="btn btn-secondary" style={{ padding: '6px 12px' }} type="button"
-              onClick={() => navigate('/nurses-report/archive-list?type=ward&ward=' + encodeURIComponent(wardKey) + '&label=' + encodeURIComponent(w.label))}>
+              onClick={() => navigate('/nurses-report/archive-list?type=ward&ward=' + encodeURIComponent(w.key) + '&label=' + encodeURIComponent(w.label))}>
               {'\uD83D\uDCC1 Archive'}
             </button>
           )}
@@ -416,13 +442,15 @@ function WardReportPanel({ wardKey, showLabel, isAdmin, profile, user, navigate 
             </div>
           </div>
 
-          <div className="card-box">
-            <h2>Shift Statistics</h2>
-            <div className="table-wrap">
-              <ShiftTable wardDoc={wardDoc} census={census} movementTotals={movementTotals} editable={editable}
-                onBeds={updateBeds} onField={updateShiftField} onDuty={updateDuty} />
+          {includeShiftTable && (
+            <div className="card-box">
+              <h2>Shift Statistics</h2>
+              <div className="table-wrap">
+                <ShiftTable wardDoc={wardDoc} census={census} movementTotals={movementTotals} editable={editable}
+                  onBeds={updateBeds} onField={updateShiftField} onDuty={updateDuty} />
+              </div>
             </div>
-          </div>
+          )}
 
           <div className="card-box">
             <h2>Patient Demographics</h2>
@@ -504,6 +532,124 @@ function WardReportPanel({ wardKey, showLabel, isAdmin, profile, user, navigate 
   );
 }
 
+// One ward's full report — Previous Occ, Shift Statistics, Patient
+// Demographics, Patients, Night Update, Save/Submit. Used once per
+// selected ward, and twice side-by-side when the nurse picks a grouped
+// option that isn't a mergedTable group (e.g. PAED WARD) — each
+// instance loads and saves its own Firestore doc under its own
+// wardKey, completely independently.
+function WardReportPanel({ wardKey, showLabel, isAdmin, profile, user, navigate }) {
+  const h = useWardReport(wardKey, isAdmin, profile, user);
+  return <WardPanelRest h={h} showLabel={showLabel} isAdmin={isAdmin} navigate={navigate} includeShiftTable />;
+}
+
+// One shared, editable Shift Statistics table for a mergedTable group
+// (currently just MATERNITY WARD) — matches the paper Minute Book
+// exactly: a Morning section with a Mothers row then a Cots row, a
+// Night section the same way, and one combined Total row. `panels` is
+// one entry per member ward, each still writing to its own wardDoc/
+// Firestore record via its own handlers — this table only combines how
+// they're displayed and totalled, never the underlying data.
+function MergedShiftTable({ panels }) {
+  const totalBeds = panels.reduce((s, p) => s + p.census.beds, 0);
+  const totalOcc = panels.reduce((s, p) => s + p.census.occ, 0);
+  const totalVac = panels.reduce((s, p) => s + p.census.vac, 0);
+  const totalMovement = {};
+  ORDERED_MOVEMENT.forEach((f) => {
+    totalMovement[f.key] = panels.reduce((s, p) => s + (typeof p.movementTotals[f.key] === 'number' ? p.movementTotals[f.key] : 0), 0);
+  });
+  const dutyNames = panels.map((p) => p.wardDoc.shifts.pm.nurseOnDuty).filter(Boolean).join(', ');
+  const colSpanAll = 4 + ORDERED_MOVEMENT.length + 1;
+
+  return (
+    <table className="shift">
+      <thead>
+        <tr>
+          <th rowSpan={2}>Shift</th><th rowSpan={2}>Beds</th><th rowSpan={2}>Occ</th><th rowSpan={2}>Vac</th>
+          {SOLO_BEFORE.map(f => <th key={f.key} rowSpan={2}>{f.label}</th>)}
+          <th colSpan={2}>Int. Transfer</th>
+          <th colSpan={2}>Ext. Transfer</th>
+          {SOLO_AFTER.map(f => <th key={f.key} rowSpan={2}>{f.label}</th>)}
+          <th rowSpan={2}>Nurses on Duty</th>
+        </tr>
+        <tr>{['In', 'Out', 'In', 'Out'].map((l, i) => <th key={i}>{l}</th>)}</tr>
+      </thead>
+      <tbody>
+        {SHIFTS.map((s) => (
+          <Fragment key={s.key}>
+            <tr className="shift-section-row"><td colSpan={colSpanAll}>{s.label === 'Am' ? 'Morning' : 'Night'}</td></tr>
+            {panels.map((p) => (
+              <tr key={p.w.key}>
+                <td className="shift-name">{p.w.label}</td>
+                <td className={"stat-beds" + (s.key === 'am' ? '' : ' mirrored')}>
+                  {s.key === 'am'
+                    ? <input type="number" inputMode="numeric" disabled={!p.editable} value={p.wardDoc.beds} onChange={(e) => p.updateBeds(e.target.value)} />
+                    : p.census.beds}
+                </td>
+                <td className="computed stat-occ">{p.census.perShiftOcc[s.key]}</td>
+                <td className="computed stat-vac">{p.census.beds - p.census.perShiftOcc[s.key]}</td>
+                {ORDERED_MOVEMENT.map((f) => (
+                  <td key={f.key} className={movementColorClass(f.key)}>
+                    <input type="number" inputMode="numeric" disabled={!p.editable}
+                      value={p.wardDoc.shifts[s.key][f.key]} onChange={(e) => p.updateShiftField(s.key, f.key, e.target.value)} />
+                  </td>
+                ))}
+                <td>
+                  <input type="text" className="duty-input" placeholder="Nurse name(s)" disabled={!p.editable}
+                    value={p.wardDoc.shifts[s.key].nurseOnDuty} onChange={(e) => p.updateDuty(s.key, e.target.value)} />
+                </td>
+              </tr>
+            ))}
+          </Fragment>
+        ))}
+        <tr className="total-row">
+          <td className="shift-name">Total</td>
+          <td className="stat-beds">{totalBeds}</td>
+          <td className="stat-occ">{totalOcc}</td>
+          <td className="stat-vac">{totalVac}</td>
+          {ORDERED_MOVEMENT.map((f) => <td key={f.key} className={movementColorClass(f.key)}>{totalMovement[f.key]}</td>)}
+          <td style={{ textAlign: 'left' }}>{dutyNames || '\u2014'}</td>
+        </tr>
+      </tbody>
+    </table>
+  );
+}
+
+// A mergedTable group's full report (currently just MATERNITY WARD):
+// one shared editable Shift Statistics table for both member wards
+// (Mothers/Cots), then each member's own Previous Occ, Demographics,
+// Patients, Night Update and Save/Submit below it, labeled separately —
+// those still save to two entirely separate Firestore docs, same as
+// two side-by-side WardReportPanels would. Assumes exactly two member
+// wards, true for every mergedTable group defined today; a third member
+// would need a third useWardReport call added here explicitly (hooks
+// can't be called from a loop).
+function MergedWardReportPanel({ group, isAdmin, profile, user, navigate }) {
+  const hA = useWardReport(group.wardKeys[0], isAdmin, profile, user);
+  const hB = useWardReport(group.wardKeys[1], isAdmin, profile, user);
+  const hooks = [hA, hB];
+  const bothLoaded = hooks.every((h) => h.wardDoc);
+
+  return (
+    <>
+      {bothLoaded && (
+        <div className="card-box">
+          <h2>{group.label} — Shift Statistics</h2>
+          <div className="table-wrap">
+            <MergedShiftTable panels={hooks.map((h) => ({
+              w: h.w, wardDoc: h.wardDoc, census: h.census, movementTotals: h.movementTotals,
+              editable: h.editable, updateBeds: h.updateBeds, updateShiftField: h.updateShiftField, updateDuty: h.updateDuty
+            }))} />
+          </div>
+        </div>
+      )}
+      {hooks.map((h, i) => (
+        <WardPanelRest key={group.wardKeys[i]} h={h} showLabel isAdmin={isAdmin} navigate={navigate} includeShiftTable={false} />
+      ))}
+    </>
+  );
+}
+
 export default function WardNurse() {
   const { user, profile } = useAuth();
   const navigate = useNavigate();
@@ -529,10 +675,14 @@ export default function WardNurse() {
           </div>
         </div>
 
-        {activeOption && activeOption.wardKeys.map(key => (
-          <WardReportPanel key={key} wardKey={key} showLabel={activeOption.wardKeys.length > 1}
-            isAdmin={isAdmin} profile={profile} user={user} navigate={navigate} />
-        ))}
+        {activeOption && (
+          activeOption.mergedTable
+            ? <MergedWardReportPanel group={activeOption} isAdmin={isAdmin} profile={profile} user={user} navigate={navigate} />
+            : activeOption.wardKeys.map(key => (
+                <WardReportPanel key={key} wardKey={key} showLabel={activeOption.wardKeys.length > 1}
+                  isAdmin={isAdmin} profile={profile} user={user} navigate={navigate} />
+              ))
+        )}
       </div>
     </>
   );
