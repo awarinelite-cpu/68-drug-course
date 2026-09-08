@@ -745,7 +745,7 @@ export default function DrugCourseChart() {
         <div className="header"><h1>68 Nigerian Army Reference Hospital Yaba</h1></div>
         <div className="header-sub"><h2>Drugs Course Chart</h2></div>
 
-        <div className="info-grid-wrap table-wrap">
+        <div className="info-grid-wrap">
           <div className="info-grid">
             <div className="info-row"><label>NAME:</label><span className="val">{patient?.name || ''}</span></div>
             <div className="info-row"><label>EMR:</label><span className="val">{patient?.emr || ''}</span></div>

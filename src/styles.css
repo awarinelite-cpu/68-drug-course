@@ -663,19 +663,24 @@ table.chart td input { width:100%; border:none; background:transparent; text-ali
    width), not 0 — that's what lets a long label like "Date of Admission:"
    plus a native date-picker input push the row wider than it should be.
    min-width:0 down the whole chain (grid item -> flex row -> input/value)
-   lets each field shrink to fit; the wrapper below handles the rest via
-   horizontal scroll, matching the drug/vitals tables' .table-wrap. */
+   lets each field shrink to fit its column instead of overflowing it. */
 .info-row { display:flex; align-items:baseline; font-size: 16px; min-width:0; }
 .info-row label { font-weight:bold; margin-right:6px; white-space:nowrap; flex-shrink:0; }
 .info-row input { flex:1; min-width:0; border:none; border-bottom:1px solid #000; padding:2px 4px; font-size: 16px; background:transparent; }
 .info-row span.val { flex:1; min-width:0; border-bottom:1px solid #000; padding:2px 4px; font-size: 16px; overflow:hidden; text-overflow:ellipsis; }
-/* On a narrow phone, two full-width columns (long labels + a native date
-   input) don't fit — rather than clip or shrink them illegibly, let the
-   whole banner scroll sideways, same as the drug/chart tables already do
-   via .table-wrap. min-width on .info-grid itself is what forces it to
-   actually overflow (and thus become scrollable) instead of squeezing down
-   to fit. */
-.info-grid-wrap .info-grid { min-width:620px; margin-bottom:0; }
+.info-grid-wrap { margin-bottom:14px; }
+.info-grid-wrap .info-grid { margin-bottom:0; }
+/* Unlike the drug/vitals tables (which genuinely have too many columns for
+   any phone and are meant to be swiped), this banner only has 8 short
+   fields — a sideways scroll just to read the diagnosis is worse than
+   fitting it. Below ~560px, drop to one column and trim size slightly so
+   every field stays fully visible with no scrolling and nothing clipped. */
+@media (max-width:560px) {
+  .info-grid-wrap .info-grid { grid-template-columns:1fr; gap:8px; }
+  .info-row { font-size:13px; }
+  .info-row label { font-size:13px; }
+  .info-row input, .info-row span.val { font-size:13px; }
+}
 
 .drugs-block { margin-bottom:18px; }
 .drugs-block h3 { font-size:15px; margin:0 0 8px; text-transform:uppercase; }
