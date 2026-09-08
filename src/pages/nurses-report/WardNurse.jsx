@@ -11,7 +11,7 @@ import {
   reportDateId, occDelta, blankShift, defaultWardDoc, wardSelectorOptions,
   isWardDocUntouched
 } from "../../lib/nurses-report-common.js";
-import { patientWardForReportKey } from "../../lib/wardNameMatch.js";
+import { patientWardAndBedTypeForReportKey } from "../../lib/wardNameMatch.js";
 import { wardHeadcount } from "../../lib/wardCensus.js";
 import Topbar from "../../components/Topbar.jsx";
 
@@ -235,14 +235,14 @@ function WardReportPanel({ wardKey, showLabel, isAdmin, profile, user, navigate 
       // wardNameMatch.js); everything else keeps the old carry-forward
       // behavior.
       if (!snap.exists() || isWardDocUntouched(next)) {
-        const patientWardLabel = patientWardForReportKey(wardKey);
+        const patientWardInfo = patientWardAndBedTypeForReportKey(wardKey);
         let filledFromPatients = false;
-        if (patientWardLabel) {
+        if (patientWardInfo) {
           try {
             const patientsSnap = await getDocs(collection(db, 'patients'));
             const patients = [];
             patientsSnap.forEach(d => patients.push(d.data()));
-            const headcount = wardHeadcount(patients, patientWardLabel);
+            const headcount = wardHeadcount(patients, patientWardInfo.wardLabel, patientWardInfo.bedType);
             next = { ...next, startOcc: headcount, occ: headcount, vac: (next.beds || 0) - headcount };
             filledFromPatients = true;
           } catch (e) { /* fall through to the old carry-forward below */ }

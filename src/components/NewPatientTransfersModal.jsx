@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { acceptTransfer, rejectTransfer } from "../lib/wardTransfer.js";
+import { PED_BED_TYPES } from "../lib/drugChartHelpers.js";
 
 // `transfers` is the list of patient objects (each carrying its own
 // `pendingTransfer` field) whose pendingTransfer.toWard === this ward.
@@ -8,12 +9,21 @@ import { acceptTransfer, rejectTransfer } from "../lib/wardTransfer.js";
 export default function NewPatientTransfersModal({ ward, transfers, onClose, onResolved }) {
   const [busyId, setBusyId] = useState('');
   const [errMsg, setErrMsg] = useState('');
+  // Only asked for PEDIATRIC/NICU WARD transfers (see acceptTransfer's
+  // pedBedType param) — the sending ward has no way to know which side
+  // the receiving nurse will actually place the patient on, so it's
+  // picked here at accept time instead of guessed earlier.
+  const [pedBedTypeById, setPedBedTypeById] = useState({});
 
   async function handleAccept(p) {
     setErrMsg('');
+    if (ward === 'PEDIATRIC/NICU WARD' && !pedBedTypeById[p.id]) {
+      setErrMsg('Select Bed or Cot for ' + (p.name || 'this patient') + ' before accepting.');
+      return;
+    }
     setBusyId(p.id);
     try {
-      await acceptTransfer(p.id, p.pendingTransfer);
+      await acceptTransfer(p.id, p.pendingTransfer, ward === 'PEDIATRIC/NICU WARD' ? pedBedTypeById[p.id] : undefined);
       onResolved(p.id);
     } catch (e) {
       setErrMsg('Could not accept ' + (p.name || 'this patient') + ': ' + (e.code || e.message));
@@ -54,6 +64,15 @@ export default function NewPatientTransfersModal({ ward, transfers, onClose, onR
                 Trans in from: {p.pendingTransfer.fromWard || 'Unknown ward'}
               </div>
               {p.diagnosis && <div style={{ fontSize: 12, color: '#555', marginTop: 2 }}>{p.diagnosis}</div>}
+              {ward === 'PEDIATRIC/NICU WARD' && (
+                <div className="field" style={{ marginTop: 6 }}>
+                  <label style={{ fontSize: 12 }}>Bed / Cot</label>
+                  <select value={pedBedTypeById[p.id] || ''} onChange={(e) => setPedBedTypeById((m) => ({ ...m, [p.id]: e.target.value }))}>
+                    <option value="">Select…</option>
+                    {PED_BED_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                  </select>
+                </div>
+              )}
               <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
                 <button className="btn btn-success" style={{ padding: '6px 12px', fontSize: 13 }} disabled={busyId === p.id} onClick={() => handleAccept(p)}>
                   {busyId === p.id ? '…' : 'Accept'}

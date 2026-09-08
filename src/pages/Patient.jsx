@@ -109,6 +109,7 @@ export default function Patient() {
     setEditForm({
       name: patient.name || '', emr: patient.emr || '',
       diagnosis: patient.diagnosis || '', ward: patient.ward || '',
+      pedBedType: patient.pedBedType || '',
       age: patient.age || '', hospNo: patient.hospNo || '',
       admissionDate: patient.admissionDate || '', allergies: patient.allergies || ''
     });
@@ -124,7 +125,9 @@ export default function Patient() {
     if (!name || !emr) { setEditMsg('Name and EMR number are required.'); return; }
     const updates = {
       name, emr,
-      diagnosis: editForm.diagnosis.trim(), ward: editForm.ward.trim(), age: editForm.age.trim(),
+      diagnosis: editForm.diagnosis.trim(), ward: editForm.ward.trim(),
+      pedBedType: editForm.ward.trim() === 'PEDIATRIC/NICU WARD' ? (editForm.pedBedType || '') : '',
+      age: editForm.age.trim(),
       hospNo: editForm.hospNo.trim(), admissionDate: editForm.admissionDate.trim(), allergies: editForm.allergies.trim(),
       updatedAt: serverTimestamp()
     };

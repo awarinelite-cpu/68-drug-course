@@ -68,14 +68,35 @@ export function reportWardKeysForPatientWard(patientWardLabel) {
   return single ? [single] : [];
 }
 
+// Report keys behind PEDIATRIC/NICU WARD's split (see SPLIT_PATIENT_WARDS
+// above) map to a Bed/Cot value on the patient record (see PED_BED_TYPES
+// in drugChartHelpers.js) rather than to a wholly separate ward label —
+// both keys' patients live under the same 'PEDIATRIC/NICU WARD' value,
+// distinguished only by pedBedType.
+const PED_BED_TYPE_BY_REPORT_KEY = { paedbed: 'Bed', paedcot: 'Cot' };
+
 // The reverse lookup: given a nurse-report ward key, returns the matching
 // patient-chart ward label (a value from WARD_OPTIONS), or null if none
 // of the patient wards normalize to the same name.
 export function patientWardForReportKey(reportWardKey) {
+  if (PED_BED_TYPE_BY_REPORT_KEY[reportWardKey]) return 'PEDIATRIC/NICU WARD';
   const aliased = Object.keys(WARD_LABEL_ALIASES).find(label => WARD_LABEL_ALIASES[label] === reportWardKey);
   if (aliased) return aliased;
   const w = WARDS.find(x => x.key === reportWardKey);
   if (!w) return null;
   const norm = normalizeWardLabel(w.label);
   return WARD_OPTIONS.find(label => normalizeWardLabel(label) === norm) || null;
+}
+
+// Like patientWardForReportKey, but also returns which pedBedType value
+// (if any) further narrows that ward label — non-null only for
+// paedbed/paedcot, where the patient-chart ward alone (PEDIATRIC/NICU
+// WARD) covers both report wards and pedBedType is what tells them
+// apart. Callers computing a headcount for a report ward (e.g.
+// WardNurse.jsx's Previous Occ auto-fill) should pass this bedType
+// through to wardCensus.js's wardHeadcount().
+export function patientWardAndBedTypeForReportKey(reportWardKey) {
+  const wardLabel = patientWardForReportKey(reportWardKey);
+  if (!wardLabel) return null;
+  return { wardLabel, bedType: PED_BED_TYPE_BY_REPORT_KEY[reportWardKey] || null };
 }

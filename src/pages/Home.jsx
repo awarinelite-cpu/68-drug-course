@@ -12,10 +12,10 @@ import { parseBulkText } from "../lib/drugChartHelpers.js";
 import { parsePatientFields, extractDrugSection } from "../lib/patientParse.js";
 import { pendingTransfersFor } from "../lib/wardTransfer.js";
 import { wardHeadcount } from "../lib/wardCensus.js";
-import { reportWardKeysForPatientWard } from "../lib/wardNameMatch.js";
+import { reportWardKeysForPatientWard, patientWardAndBedTypeForReportKey } from "../lib/wardNameMatch.js";
 import { reportDateId, WARDS, isWardDocUntouched } from "../lib/nurses-report-common.js";
 
-const EMPTY_FORM = { name: '', emr: '', diagnosis: '', ward: '', age: '', hospNo: '', admissionDate: '', allergies: '' };
+const EMPTY_FORM = { name: '', emr: '', diagnosis: '', ward: '', pedBedType: '', age: '', hospNo: '', admissionDate: '', allergies: '' };
 
 export default function Home() {
   const { user, profile } = useAuth();
@@ -129,7 +129,9 @@ export default function Home() {
     const diagnosis = newForm.diagnosis.trim();
     const data = {
       name, emr,
-      diagnosis, ward: newForm.ward.trim(), age: newForm.age.trim(),
+      diagnosis, ward: newForm.ward.trim(),
+      pedBedType: newForm.ward.trim() === 'PEDIATRIC/NICU WARD' ? (newForm.pedBedType || '') : '',
+      age: newForm.age.trim(),
       hospNo: newForm.hospNo.trim(), admissionDate: newForm.admissionDate.trim(), allergies: newForm.allergies.trim(),
       createdAt: serverTimestamp(), createdBy: user ? user.uid : null
     };
@@ -193,19 +195,41 @@ export default function Home() {
   // ward report's Previous Occ auto-fills from on shift handover.
   const reportWardKeys = reportWardKeysForPatientWard(myWard);
   const isSplitWard = reportWardKeys.length > 1;
-  // For a single (non-split) matching report ward, an untouched report
-  // doc (see isWardDocUntouched) hasn't been given a real Occ figure yet
-  // today — trust the actual patient headcount instead of a stale/zero
-  // report Occ, so this badge always matches the patient list right
-  // below it. Split wards can't be headcount-derived this way (patient
-  // records don't distinguish e.g. Bed vs Cot), so they keep using
-  // whatever report Occ is available.
+  // Per report-ward-key count: an untouched report doc (see
+  // isWardDocUntouched) hasn't been given a real Occ figure yet today —
+  // trust the actual patient headcount instead, so this badge always
+  // matches the patient list right below it. For a split ward (currently
+  // only PEDIATRIC/NICU WARD), each key's headcount is further narrowed
+  // to patients whose pedBedType matches that key's Bed/Cot side (see
+  // patientWardAndBedTypeForReportKey) — patients with no pedBedType set
+  // yet aren't counted on either side here, but still show up in the
+  // "Bed/Cot not set" group in the list below.
+  const wardBreakdown = reportWardKeys.map((k) => {
+    const untouched = wardOccByKey[k]?.untouched ?? true;
+    const info = patientWardAndBedTypeForReportKey(k);
+    const count = untouched ? wardHeadcount(allPatients, myWard, info?.bedType) : (wardOccByKey[k]?.occ || 0);
+    return { key: k, bedType: info?.bedType || null, count };
+  });
   const wardPatientCount = reportWardKeys.length
-    ? (!isSplitWard && (wardOccByKey[reportWardKeys[0]]?.untouched ?? true)
-        ? wardHeadcount(allPatients, myWard)
-        : reportWardKeys.reduce((sum, k) => sum + (wardOccByKey[k]?.occ || 0), 0))
+    ? wardBreakdown.reduce((sum, x) => sum + x.count, 0)
     : wardHeadcount(allPatients, myWard);
   const incomingTransfers = pendingTransfersFor(allPatients, myWard);
+  // Grouped view of the patient list for a split ward — Bed / Cot
+  // sections plus an "unset" bucket, instead of one flat list, so the
+  // list matches the per-key badges above it. Only makes sense for the
+  // unfiltered "my ward" view; a cross-ward search stays a flat list.
+  const pedGroups = isSplitWard && !q
+    ? (() => {
+        const groups = wardBreakdown.map((b) => ({
+          ...b,
+          label: (WARDS.find((w) => w.key === b.key) || {}).label || b.key,
+          patients: visiblePatients.filter((p) => p.pedBedType === b.bedType)
+        }));
+        const assigned = new Set(groups.flatMap((g) => g.patients.map((p) => p.id)));
+        const unassigned = visiblePatients.filter((p) => !assigned.has(p.id));
+        return { groups, unassigned };
+      })()
+    : null;
 
   return (
     <>
@@ -318,11 +342,11 @@ export default function Home() {
           </h3>
           {isSplitWard && (
             <div className="ward-split-counts">
-              {reportWardKeys.map((k) => {
+              {wardBreakdown.map(({ key: k, count }) => {
                 const w = WARDS.find((x) => x.key === k);
                 return (
                   <span className="ward-split-badge" key={k}>
-                    {w ? w.label : k}<span className="ward-count-badge">{wardOccByKey[k]?.occ || 0}</span>
+                    {w ? w.label : k}<span className="ward-count-badge">{count}</span>
                   </span>
                 );
               })}
@@ -336,7 +360,36 @@ export default function Home() {
                   (myWard ? 'No patients on ' + myWard + ' yet. Use "+ New Patient" to register one.' : 'No patients registered yet. Use "+ New Patient" to register one.')}
               </div>
             )}
-            {allPatients && visiblePatients.map(p => (
+            {allPatients && visiblePatients.length > 0 && pedGroups && (
+              <>
+                {pedGroups.groups.map((g) => (
+                  <div key={g.key} style={{ marginBottom: 10 }}>
+                    <div style={{ fontWeight: 'bold', fontSize: 13, margin: '8px 0 4px' }}>{g.label} ({g.patients.length})</div>
+                    {g.patients.length === 0 && <div style={{ fontSize: 12, color: '#888' }}>No patients yet.</div>}
+                    {g.patients.map(p => (
+                      <div key={p.id} className="search-result-item" onClick={() => openPatient(p)}>
+                        <span><b>{p.name || 'Unnamed'}</b>{'. '}EMR: {p.emr || 'N/A'}</span>
+                        <span>{p.diagnosis || ''}</span>
+                      </div>
+                    ))}
+                  </div>
+                ))}
+                {pedGroups.unassigned.length > 0 && (
+                  <div style={{ marginBottom: 10 }}>
+                    <div style={{ fontWeight: 'bold', fontSize: 13, margin: '8px 0 4px', color: '#b45309' }}>
+                      Bed/Cot not set ({pedGroups.unassigned.length})
+                    </div>
+                    {pedGroups.unassigned.map(p => (
+                      <div key={p.id} className="search-result-item" onClick={() => openPatient(p)}>
+                        <span><b>{p.name || 'Unnamed'}</b>{'. '}EMR: {p.emr || 'N/A'}</span>
+                        <span>{p.diagnosis || ''}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </>
+            )}
+            {allPatients && visiblePatients.length > 0 && !pedGroups && visiblePatients.map(p => (
               <div key={p.id} className="search-result-item" onClick={() => openPatient(p)}>
                 <span><b>{p.name || 'Unnamed'}</b>{'. '}EMR: {p.emr || 'N/A'}{q && p.ward ? '. Ward: ' + p.ward : ''}</span>
                 <span>{p.diagnosis || ''}</span>

@@ -8,6 +8,15 @@ export const WARD_OPTIONS = [
   'ORTHOPEDIC WARD', 'EXTENSION WARD', 'OFFICERS WARD'
 ];
 
+// PEDIATRIC/NICU WARD is one patient-chart ward but two physically
+// separate report wards (PAED BED / PAED COT, see wardNameMatch.js) —
+// a patient registered there needs to say which one they're actually
+// in so census counts and the Home page list can be split correctly.
+// Blank means "not set yet" (e.g. an older record, or a patient just
+// transferred in from another ward) — treated as unassigned rather than
+// guessed at.
+export const PED_BED_TYPES = ['Bed', 'Cot'];
+
 const ACTION_COLORS = { Ongoing: '#2563eb', Completed: '#16a34a', Discontinued: '#dc2626', Withheld: '#d97706', Other: '#6b7280' };
 export function actionColor(action) { return ACTION_COLORS[action] || '#9ca3af'; }
 

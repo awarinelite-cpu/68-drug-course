@@ -14,13 +14,17 @@ export function pendingTransfersFor(patients, ward) {
 // archives and resets them), so this is just the ward reassignment the
 // receiving nurse has been holding off on — care continues on the same
 // drug course chart, vitals, blood glucose, intake & output, and seizure
-// records the sending ward was using.
-export async function acceptTransfer(patientId, pendingTransfer) {
-  await updateDoc(doc(db, 'patients', patientId), {
+// records the sending ward was using. `pedBedType` ('Bed' | 'Cot') is
+// only relevant when accepting into PEDIATRIC/NICU WARD — see
+// NewPatientTransfersModal, which is the only caller that passes it.
+export async function acceptTransfer(patientId, pendingTransfer, pedBedType) {
+  const updates = {
     ward: pendingTransfer.toWard,
     pendingTransfer: deleteField(),
     updatedAt: serverTimestamp()
-  });
+  };
+  if (pendingTransfer.toWard === 'PEDIATRIC/NICU WARD') updates.pedBedType = pedBedType || '';
+  await updateDoc(doc(db, 'patients', patientId), updates);
 }
 
 // Rejecting (e.g. no bed space) just clears the pending transfer. The
