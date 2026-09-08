@@ -849,6 +849,10 @@ table.report th.renamable-col:hover, table.report td.renamable-col:hover { backg
 .ward-report-block { margin-top: 16px; }
 .ward-report-heading { font-family: Arial, Helvetica, sans-serif; font-weight: 900; font-size: 22px; text-transform: uppercase; color: #000; letter-spacing: .5px; margin: 0 0 10px 0; }
 .ward-report-subheading { font-family: "Arial Black", Arial, Helvetica, sans-serif; font-weight: 900; font-size: 22px; text-transform: uppercase; color: var(--primary-active); letter-spacing: .5px; margin: 0 0 6px 0; padding-bottom: 4px; border-bottom: 1px solid var(--border); }
+/* Gap above the subheading of every grouped ward section after the first
+   (e.g. before PAED COT, which follows PAED BED) — the first section's
+   heading (right after the "PAED WARD" title) is unaffected. */
+.ward-report-sub + .ward-report-sub .ward-report-subheading { margin-top: 90px; }
 .ward-report-sub + .ward-report-sub { margin-top: 10px; }
 table.ward-shift th, table.ward-shift td { border: 1px solid var(--border); padding: 5px 4px; font-size: 16px; text-align: center; }
 table.ward-shift th { background: var(--background); text-transform: uppercase; font-size: 16px; }
