@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { collection, getDocs, doc, setDoc, serverTimestamp } from "firebase/firestore";
+import { collection, getDocs, doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
 import { db } from "../firebase.js";
 import { useAuth } from "../contexts/AuthContext.jsx";
 import { useExitOnDoubleBack } from "../hooks/useExitOnDoubleBack.js";
@@ -12,6 +12,8 @@ import { parseBulkText } from "../lib/drugChartHelpers.js";
 import { parsePatientFields, extractDrugSection } from "../lib/patientParse.js";
 import { pendingTransfersFor } from "../lib/wardTransfer.js";
 import { wardHeadcount } from "../lib/wardCensus.js";
+import { reportWardKeysForPatientWard } from "../lib/wardNameMatch.js";
+import { reportDateId, WARDS } from "../lib/nurses-report-common.js";
 
 const EMPTY_FORM = { name: '', emr: '', diagnosis: '', ward: '', age: '', hospNo: '', admissionDate: '', allergies: '' };
 
@@ -34,6 +36,13 @@ export default function Home() {
 
   const [showTransfers, setShowTransfers] = useState(false);
 
+  // Today's Occ figure(s) from the nurses' Shift Statistics report for
+  // whichever report ward(s) the current myWard maps to — {reportWardKey:
+  // occ}. Empty when myWard has no report-ward match (see
+  // reportWardKeysForPatientWard), in which case the patient headcount is
+  // used instead (see wardPatientCount below).
+  const [wardOccByKey, setWardOccByKey] = useState({});
+
   const showExitToast = useExitOnDoubleBack();
 
   useEffect(() => {
@@ -44,6 +53,23 @@ export default function Home() {
     loadAllPatients();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const myWardForOcc = profile?.ward || '';
+  useEffect(() => {
+    let cancelled = false;
+    const keys = reportWardKeysForPatientWard(myWardForOcc);
+    if (!keys.length) { setWardOccByKey({}); return; }
+    const dateId = reportDateId();
+    Promise.all(keys.map(async (key) => {
+      try {
+        const snap = await getDoc(doc(db, 'nurseReports', dateId, 'wards', key));
+        return [key, snap.exists() && typeof snap.data().occ === 'number' ? snap.data().occ : 0];
+      } catch {
+        return [key, 0];
+      }
+    })).then((entries) => { if (!cancelled) setWardOccByKey(Object.fromEntries(entries)); });
+    return () => { cancelled = true; };
+  }, [myWardForOcc]);
 
   async function loadAllPatients(force) {
     if (allPatients && !force) return allPatients;
@@ -149,10 +175,20 @@ export default function Home() {
       ? ((p.emr || '').toLowerCase().includes(q) || (p.name || '').toLowerCase().includes(q))
       : (!myWard || p.ward === myWard))
   );
-  // Independent of any active search filter above — this is the ward's
-  // real headcount, shown next to the heading and what a matching ward
-  // report's Previous Occ auto-fills from on shift handover.
-  const wardPatientCount = wardHeadcount(allPatients, myWard);
+  // The count shown next to the heading. Where myWard has a matching
+  // nurse-report ward (see reportWardKeysForPatientWard), it's that
+  // ward's live Occ from today's Shift Statistics report — a split ward
+  // like PEDIATRIC/NICU WARD sums both its report wards' Occ here, with
+  // the per-ward breakdown rendered separately below. Wards with no
+  // report equivalent (e.g. THEATER) fall back to the actual patient
+  // headcount, same as before. Either way this is independent of any
+  // active search filter above, and headcount is still what a matching
+  // ward report's Previous Occ auto-fills from on shift handover.
+  const reportWardKeys = reportWardKeysForPatientWard(myWard);
+  const isSplitWard = reportWardKeys.length > 1;
+  const wardPatientCount = reportWardKeys.length
+    ? reportWardKeys.reduce((sum, k) => sum + (wardOccByKey[k] || 0), 0)
+    : wardHeadcount(allPatients, myWard);
   const incomingTransfers = pendingTransfersFor(allPatients, myWard);
 
   return (
@@ -264,6 +300,18 @@ export default function Home() {
               {myWard ? 'Switch ward' : 'Set your ward'}
             </a>
           </h3>
+          {isSplitWard && (
+            <div className="ward-split-counts">
+              {reportWardKeys.map((k) => {
+                const w = WARDS.find((x) => x.key === k);
+                return (
+                  <span className="ward-split-badge" key={k}>
+                    {w ? w.label : k}<span className="ward-count-badge">{wardOccByKey[k] || 0}</span>
+                  </span>
+                );
+              })}
+            </div>
+          )}
           <div className="search-results">
             {allPatients === null && 'Loading patients…'}
             {allPatients && visiblePatients.length === 0 && (

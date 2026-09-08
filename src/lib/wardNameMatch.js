@@ -31,6 +31,27 @@ export function reportWardKeyForPatientWard(patientWardLabel) {
   return match ? match.key : null;
 }
 
+// A handful of patient-chart wards (WARD_OPTIONS) cover what the nurse
+// report tracks as two separate physical areas with their own Occ each
+// (see nurses-report-common.js's WARD_GROUPS comment) — normalized-name
+// matching alone can't find these since e.g. "PEDIATRIC/NICU WARD"
+// shares no words with "PAED BED" or "PAED COT". Listed here explicitly
+// so callers that need every report ward behind a patient ward (e.g. Home
+// page Occ counts) get both instead of just the first normalized match.
+const SPLIT_PATIENT_WARDS = {
+  'PEDIATRIC/NICU WARD': ['paedbed', 'paedcot']
+};
+
+// Given a patient-chart ward label, returns every matching nurse-report
+// ward key — normally zero or one (see reportWardKeyForPatientWard), but
+// two for a known split ward like PEDIATRIC/NICU WARD.
+export function reportWardKeysForPatientWard(patientWardLabel) {
+  const upper = String(patientWardLabel || '').toUpperCase().trim();
+  if (SPLIT_PATIENT_WARDS[upper]) return SPLIT_PATIENT_WARDS[upper];
+  const single = reportWardKeyForPatientWard(patientWardLabel);
+  return single ? [single] : [];
+}
+
 // The reverse lookup: given a nurse-report ward key, returns the matching
 // patient-chart ward label (a value from WARD_OPTIONS), or null if none
 // of the patient wards normalize to the same name.

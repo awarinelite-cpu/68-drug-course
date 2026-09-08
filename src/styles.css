@@ -659,6 +659,8 @@ table.chart td input { width:100%; border:none; background:transparent; text-ali
 
 /* --- Ward patient count / new-patient-transfer notification badges --- */
 .ward-count-badge { display:inline-flex; align-items:center; justify-content:center; min-width:24px; height:24px; padding:0 6px; border-radius:999px; background:var(--primary-blue); color:var(--surface); font-size:13px; font-weight:700; margin-left:6px; vertical-align:middle; }
+.ward-split-counts { display:flex; flex-wrap:wrap; gap:10px; margin:-4px 0 10px 0; }
+.ward-split-badge { display:inline-flex; align-items:center; gap:4px; font-size:13px; font-weight:600; color:var(--text-secondary); background:var(--primary-light); border:1px solid var(--border); border-radius:8px; padding:4px 8px 4px 10px; }
 .notif-bell-btn { position:relative; }
 .notif-count-badge { position:absolute; top:-6px; right:-6px; background:#dc2626; color:#fff; border-radius:999px; font-size:11px; font-weight:700; min-width:18px; height:18px; display:flex; align-items:center; justify-content:center; padding:0 4px; line-height:1; }
 
