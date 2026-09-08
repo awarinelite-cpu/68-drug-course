@@ -54,9 +54,16 @@ WARDS.forEach(w => { w.defaultLabel = w.label; });
 // Wards" table insert one merged TOTAL row right after the group's last
 // member row, summing that group's own two rows only — it never touches
 // each member's own row or the grand Total row at the very bottom.
+//
+// `mergedTable: true` (also Maternity) further changes the Overall
+// Nurse's "Ward Reports" section: instead of each member ward getting
+// its own separate Shift Statistics table under a subheading (Paed's
+// behavior), the group gets one single table with a Morning section
+// (Mothers row, then Cots row) and a Night section (same), and one
+// combined Total row — matching the paper exactly.
 export const WARD_GROUPS = [
   { key: 'paedward', label: 'PAED WARD', wardKeys: ['paedbed', 'paedcot'] },
-  { key: 'matward', label: 'MATERNITY WARD', wardKeys: ['matbed', 'matcot'], showTotalRow: true }
+  { key: 'matward', label: 'MATERNITY WARD', wardKeys: ['matbed', 'matcot'], showTotalRow: true, mergedTable: true }
 ];
 
 // Builds the Ward Nurse page's ward-selection list: every ward not part

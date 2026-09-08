@@ -121,6 +121,85 @@ function WardStatsSection({ w, data, labeled }) {
   );
 }
 
+// Single merged Shift Statistics table for a WARD_GROUPS entry with
+// mergedTable: true (currently just MATERNITY WARD) — matches the paper
+// Minute Book's layout exactly: a Morning section with a Mothers row
+// then a Cots row, a Night section the same way, and one combined Total
+// row summing both member wards' figures. WardStatsSection above (used
+// by every other grouped ward) keeps each member as its own separate
+// table instead — this is Maternity-specific.
+function GroupedWardShiftTable({ group, wardData }) {
+  const members = group.wardKeys.map((k) => {
+    const w = WARDS.find((x) => x.key === k);
+    const data = wardData[k] || {};
+    const shifts = data.shifts || {};
+    const beds = typeof data.beds === 'number' ? data.beds : (w?.beds || 0);
+    const startOcc = typeof data.startOcc === 'number' ? data.startOcc : 0;
+    let runningOcc = startOcc;
+    const perShiftOcc = {};
+    SHIFTS.forEach((s) => {
+      runningOcc += occDelta(shifts[s.key] || {});
+      if (runningOcc < 0) runningOcc = 0;
+      perShiftOcc[s.key] = runningOcc;
+    });
+    const finalOcc = typeof data.occ === 'number' ? data.occ : runningOcc;
+    return { w, data, shifts, beds, perShiftOcc, finalOcc };
+  });
+
+  const totalBeds = members.reduce((s, m) => s + m.beds, 0);
+  const totalOcc = members.reduce((s, m) => s + m.finalOcc, 0);
+  const totalMovement = {};
+  ORDERED_MOVEMENT.forEach((f) => {
+    totalMovement[f.key] = members.reduce((s, m) => s + (typeof m.data[f.key] === 'number' ? m.data[f.key] : 0), 0);
+  });
+  const dutyNames = members.map((m) => (m.shifts.pm || {}).nurseOnDuty).filter(Boolean).join(', ');
+  const colSpanAll = 4 + ORDERED_MOVEMENT.length + 1;
+
+  return (
+    <table className="ward-shift">
+      <thead>
+        <tr>
+          <th rowSpan={2}>Shift</th><th rowSpan={2}>Beds</th><th rowSpan={2}>Occ</th><th rowSpan={2}>Vac</th>
+          {SOLO_BEFORE.map(f => <th key={f.key} rowSpan={2}>{f.label}</th>)}
+          <th colSpan={2}>Int. Transfer</th>
+          <th colSpan={2}>Ext. Transfer</th>
+          {SOLO_AFTER.map(f => <th key={f.key} rowSpan={2}>{f.label}</th>)}
+          <th rowSpan={2}>Nurses on Duty</th>
+        </tr>
+        <tr>{['In', 'Out', 'In', 'Out'].map((l, i) => <th key={i}>{l}</th>)}</tr>
+      </thead>
+      <tbody>
+        {SHIFTS.map((s) => (
+          <Fragment key={s.key}>
+            <tr className="shift-section-row"><td colSpan={colSpanAll}>{s.label === 'Am' ? 'Morning' : 'Night'}</td></tr>
+            {members.map(({ w, shifts, beds, perShiftOcc }) => {
+              const sData = shifts[s.key] || {};
+              return (
+                <tr key={w.key}>
+                  <td className="shift-name">{w.label}</td>
+                  <td className="stat-beds">{beds}</td>
+                  <td className="stat-occ">{perShiftOcc[s.key]}</td>
+                  <td className="stat-vac">{beds - perShiftOcc[s.key]}</td>
+                  {ORDERED_MOVEMENT.map(f => <td key={f.key} className={movementColorClass(f.key)}>{typeof sData[f.key] === 'number' ? sData[f.key] : 0}</td>)}
+                  <td style={{ textAlign: 'left' }}>{sData.nurseOnDuty || '\u2014'}</td>
+                </tr>
+              );
+            })}
+          </Fragment>
+        ))}
+        <tr className="total-row">
+          <td className="shift-name">Total</td>
+          <td className="stat-beds">{totalBeds}</td>
+          <td className="stat-occ">{totalOcc}</td>
+          <td className="stat-vac">{totalBeds - totalOcc}</td>
+          {ORDERED_MOVEMENT.map(f => <td key={f.key} className={movementColorClass(f.key)}>{totalMovement[f.key]}</td>)}
+          <td style={{ textAlign: 'left' }}>{dutyNames || '\u2014'}</td>
+        </tr>
+      </tbody>
+    </table>
+  );
+}
+
 // Wraps a single ward's patient write-ups + night update. When merged into
 // a group's combined report, `labeled` adds the same small subheading so
 // the reader can tell which ward each write-up came from.
@@ -501,10 +580,13 @@ export default function OverallNurse() {
       const group = WARD_GROUPS.find(g => g.wardKeys.includes(w.key));
       if (seenGroupKeys.has(group.key)) return;
       seenGroupKeys.add(group.key);
-      const members = group.wardKeys
-        .map(k => ({ w: WARDS.find(x => x.key === k), data: wardData[k] }))
-        .filter(m => m.data && m.data.submitted);
-      if (members.length) reportGroups.push({ key: group.key, label: group.label, members });
+      const allMembers = group.wardKeys.map(k => ({ w: WARDS.find(x => x.key === k), data: wardData[k] || {} }));
+      if (!allMembers.some(m => m.data.submitted)) return;
+      // A merged table always shows every member row (paper always has
+      // both Mothers and Cots), even if one hasn't been submitted yet —
+      // the non-grouped case keeps the original submitted-only filter.
+      const members = group.mergedTable ? allMembers : allMembers.filter(m => m.data.submitted);
+      reportGroups.push({ key: group.key, label: group.label, members, mergedTable: !!group.mergedTable });
       return;
     }
     const data = wardData[w.key];
@@ -824,9 +906,11 @@ export default function OverallNurse() {
             return (
               <div className="ward-report-block" key={g.key}>
                 <h2 className="ward-report-heading">{g.label}</h2>
-                {g.members.map(({ w, data }) => (
-                  <WardStatsSection w={w} data={data} labeled={labeled} key={'stats-' + w.key} />
-                ))}
+                {g.mergedTable
+                  ? <GroupedWardShiftTable group={WARD_GROUPS.find(x => x.key === g.key)} wardData={wardData} />
+                  : g.members.map(({ w, data }) => (
+                      <WardStatsSection w={w} data={data} labeled={labeled} key={'stats-' + w.key} />
+                    ))}
                 {g.members.map(({ w, data }) => (
                   <WardPatientSection w={w} data={data} labeled={labeled} key={'patients-' + w.key} />
                 ))}
