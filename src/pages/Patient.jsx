@@ -6,6 +6,7 @@ import { useAuth } from "../contexts/AuthContext.jsx";
 import { useGoBack } from "../hooks/useGoBack.js";
 import { useBackLock } from "../hooks/useBackLock.js";
 import { usePatientHeader } from "../hooks/usePatientHeader.js";
+import { getDocSafe } from "../lib/firestoreOffline.js";
 import { applyPatientStatus } from "../lib/patientAdmissionStatus.js";
 import { STATUS_LABELS, WARD_OPTIONS } from "../lib/drugChartHelpers.js";
 import Topbar from "../components/Topbar.jsx";
@@ -31,6 +32,8 @@ export default function Patient() {
 
   const [allocatedToMe, setAllocatedToMe] = useState(false);
   const [allocBusy, setAllocBusy] = useState(false);
+
+  const [chartDiagnosis, setChartDiagnosis] = useState('');
 
   const [showStatusForm, setShowStatusForm] = useState(false);
   const [statusAction, setStatusAction] = useState('');
@@ -75,6 +78,18 @@ export default function Patient() {
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [patient, user]);
+
+  useEffect(() => {
+    if (!patientId) { setChartDiagnosis(''); return; }
+    let cancelled = false;
+    getDocSafe(doc(db, 'patients', patientId, 'drugCourseChart', 'main')).then((snap) => {
+      if (!cancelled && snap.exists()) setChartDiagnosis(snap.data().f_diagnosis || '');
+    }).catch(() => {
+      // No connection and nothing cached — fall back to the patient
+      // record's own diagnosis field further down.
+    });
+    return () => { cancelled = true; };
+  }, [patientId]);
 
   async function toggleAllocation() {
     if (!patient || !user) return;
@@ -207,7 +222,14 @@ export default function Patient() {
         {patient && (
           <div className="card-box">
             <PatientBanner
-              patient={patient}
+              patient={{ ...patient, diagnosis: chartDiagnosis || patient.diagnosis }}
+              ward={patient.ward}
+              boxes={
+                <>
+                  <button className="quick-box-btn" onClick={openOverview}>Overview</button>
+                  <button className="quick-box-btn" onClick={() => setShowStatusForm((v) => !v)}>Status</button>
+                </>
+              }
               extra={
                 <>
                   <button className="btn btn-secondary edit-patient-btn" title="Edit patient information" onClick={openEditPatient}>✎</button>
@@ -216,8 +238,6 @@ export default function Patient() {
                     disabled={allocBusy} onClick={toggleAllocation}>
                     {allocBusy ? '…' : (allocatedToMe ? '✓ Allocated — tap to remove' : 'Allocate to Me')}
                   </button>
-                  <button className="btn btn-purple" style={{ padding: '4px 10px', fontSize: 12, marginLeft: 6 }} onClick={openOverview}>Overview</button>
-                  <button className="btn btn-secondary" style={{ padding: '4px 10px', fontSize: 12, marginLeft: 6 }} onClick={() => setShowStatusForm((v) => !v)}>Status</button>
                 </>
               }
             />

@@ -227,10 +227,18 @@ label { font-weight: bold; font-size: 16px; display: block; margin-bottom: 4px; 
 
 .patient-banner {
   background: var(--primary-light); border: 1px solid #bfdbfe; border-radius: 8px; padding: 14px 16px; margin-top: 16px;
-  display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;
+  display: flex; flex-direction: column; gap: 10px;
 }
+.patient-banner-row1 { display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 10px; }
+.patient-banner-boxes { display: flex; gap: 8px; flex-wrap: wrap; }
+.quick-box-btn {
+  background: var(--surface); color: var(--accent-purple); border: 1.5px solid var(--accent-purple);
+  border-radius: 10px; padding: 10px 16px; font-size: 13px; font-weight: bold; min-width: 88px; text-align: center;
+}
+.patient-banner-row2 { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
 .pname { font-size: 16px; font-weight: bold; }
 .pmeta { font-size: 16px; color: var(--text-secondary); }
+.pward { font-size: 14px; color: var(--text-secondary); margin-top: 2px; }
 .edit-patient-btn {
   display: inline-flex; align-items: center; justify-content: center;
   width: 22px; height: 22px; padding: 0; margin-left: 8px; vertical-align: middle;
