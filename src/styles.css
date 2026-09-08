@@ -43,6 +43,7 @@
    a card read as a solid, separate surface here. */
 :root[data-theme="dark"] .card-box,
 :root[data-theme="dark"] .chart-card,
+:root[data-theme="dark"] .stat-box,
 :root[data-theme="dark"] .calc-panel,
 :root[data-theme="dark"] .calc-bmi-card,
 :root[data-theme="dark"] .sheet,
@@ -887,7 +888,10 @@ h1.period-label { margin: 0; display: flex; align-items: center; flex-wrap: wrap
 .range-label { font-size: 16px; color: var(--text-secondary); margin-top: 8px; }
 .stat-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-top: 14px; }
 @media (min-width: 480px) { .stat-grid { grid-template-columns: repeat(3, 1fr); } }
-.stat-box { background: #f9fafb; border-radius: 8px; padding: 12px 8px; text-align: center; }
+.stat-box {
+  background: var(--surface-bg); border-radius: 12px; padding: 14px 8px; text-align: center;
+  border: 1.5px solid var(--border); box-shadow: 0 2px 10px rgba(15,35,80,0.12);
+}
 .stat-box .n { font-size: 22px; font-weight: 900; color: var(--primary-navy); }
 .stat-box .l { font-size: 16px; text-transform: uppercase; color: var(--text-secondary); margin-top: 2px; }
 .stat-box.demo { background: var(--primary-light); }
