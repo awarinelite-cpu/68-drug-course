@@ -141,6 +141,9 @@ export default function DrugCourseChart() {
   const [freqModalText, setFreqModalText] = useState('');
   const freqApplyRef = useRef(null);
 
+  const [snoPickerRow, setSnoPickerRow] = useState(-1);
+  const [snoPickerSelected, setSnoPickerSelected] = useState([]);
+
   const [statusAction, setStatusAction] = useState('');
   const [transferWard, setTransferWard] = useState('');
   const [statusMsg, setStatusMsg] = useState({ color: '', text: '' });
@@ -423,16 +426,28 @@ export default function DrugCourseChart() {
     scheduleSave();
   }
 
-  // Drug S/N field: on blur, block and revert if it now references a flagged drug.
-  function handleSnoBlur(i) {
-    const row = chartRows[i];
-    const blocked = flaggedDrugRefs(row?.sno, drugs);
-    if (!blocked.length) return;
-    alert(flaggedDrugMessage(blocked));
-    const snapshot = chartRowSnapshots.current[i] || {};
-    const revertedSno = snapshot.sno || '';
-    setChartRows((rows) => rows.map((r, idx) => idx === i ? { ...r, sno: revertedSno, route: computeRouteFromSno(revertedSno, drugs) } : r));
-    scheduleSave();
+  // Drug S/N field: nurse picks from a checklist of the chart's active
+  // drugs instead of typing (see openSnoPicker below) — Completed/
+  // Discontinued/Withheld/Other drugs are excluded from the list entirely,
+  // and drugs due now are flagged red so they stand out at a glance.
+  function activeDrugNumbers() {
+    return drugs.map((d, i) => i + 1).filter(n => { const dr = drugs[n - 1]; return !dr.action || dr.action === 'Ongoing'; });
+  }
+  function openSnoPicker(i) {
+    const nums = (chartRows[i]?.sno || '').match(/\d+/g) || [];
+    const active = activeDrugNumbers();
+    setSnoPickerSelected(nums.map(n => parseInt(n, 10)).filter(n => active.includes(n)));
+    setSnoPickerRow(i);
+  }
+  function closeSnoPicker() { setSnoPickerRow(-1); setSnoPickerSelected([]); }
+  function toggleSnoPickerDrug(num) {
+    setSnoPickerSelected((sel) => sel.includes(num) ? sel.filter(n => n !== num) : [...sel, num].sort((a, b) => a - b));
+  }
+  function applySnoPicker() {
+    const i = snoPickerRow;
+    const sno = snoPickerSelected.map(n => n + (drugs[n - 1]?.name ? ' - ' + drugs[n - 1].name : '')).join(', ');
+    updateChartRow(i, { sno, route: computeRouteFromSno(sno, drugs) });
+    closeSnoPicker();
   }
 
   function addChartRow(count) {
@@ -881,9 +896,10 @@ export default function DrugCourseChart() {
                     <tr key={i}>
                       <td className="col-rowedit no-print"><button className="row-lock-btn" title="Done editing this row" onClick={() => lockChartRow(i)}>✓</button></td>
                       <td className="col-date"><input type="date" value={row.date || ''} onChange={(e) => updateChartRow(i, { date: e.target.value })} /></td>
-                      <td className="col-sno"><input type="text" list="drugSnoList" placeholder="e.g. 1 - Paracetamol" value={row.sno || ''}
-                        onChange={(e) => { const sno = e.target.value; updateChartRow(i, { sno, route: computeRouteFromSno(sno, drugs) }); }}
-                        onBlur={() => handleSnoBlur(i)} /></td>
+                      <td className="col-sno"><button type="button" className="sno-picker-btn" onClick={() => openSnoPicker(i)}>
+                        <span className="sno-picker-text">{row.sno || 'Select drug(s)'}</span>
+                        <span className="sno-picker-caret">{'\u25BE'}</span>
+                      </button></td>
                       <td className="col-time"><input type="time" value={row.time || ''} onChange={(e) => updateChartRow(i, { time: e.target.value })} /></td>
                       <td className="col-dose"><input type="text" value={row.dose || 'AP'} onChange={(e) => updateChartRow(i, { dose: e.target.value })} /></td>
                       <td className="col-route"><input type="text" value={row.route || ''} onChange={(e) => updateChartRow(i, { route: e.target.value })} /></td>
@@ -908,9 +924,6 @@ export default function DrugCourseChart() {
             </tbody>
           </table>
         </div>
-        <datalist id="drugSnoList">
-          {drugs.map((d, i) => <option key={i} value={(i + 1) + (d.name ? ' - ' + d.name : '')} />)}
-        </datalist>
 
         {!isArchived && (
           <div className="no-print" style={{ marginTop: 10 }}>
@@ -1025,6 +1038,35 @@ export default function DrugCourseChart() {
                 <button className="btn btn-primary" onClick={submitCareInstruction}>Add</button>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {snoPickerRow !== -1 && (
+        <div className="modal-overlay no-print" onClick={(e) => { if (e.target === e.currentTarget) closeSnoPicker(); }}>
+          <div className="modal-box">
+            <div className="modal-header"><h3>Select Drug(s) Given</h3><button className="modal-close" onClick={closeSnoPicker}>&times;</button></div>
+            <div className="modal-body">
+              {activeDrugNumbers().length === 0 && <p style={{ color: '#777', fontSize: 13, margin: 0 }}>No active drugs on this chart yet.</p>}
+              {activeDrugNumbers().map((num) => {
+                const d = drugs[num - 1];
+                const due = dueLabelFor(d, num - 1, chartRows, now);
+                const checked = snoPickerSelected.includes(num);
+                return (
+                  <label className="sno-picker-option" key={num}>
+                    <input type="checkbox" checked={checked} onChange={() => toggleSnoPickerDrug(num)} />
+                    <span className="sno-picker-option-text" style={due.overdue ? { color: '#dc2626', fontWeight: 'bold' } : {}}>
+                      {num + (d.name ? ' - ' + d.name : '')}
+                      {d.route ? ' (' + d.route + ')' : ''}
+                    </span>
+                    {due.overdue && <span className="sno-picker-due-tag">Due {due.text}</span>}
+                  </label>
+                );
+              })}
+            </div>
+            <div className="modal-footer">
+              <button className="btn btn-primary" style={{ flex: 1 }} onClick={applySnoPicker}>Done</button>
+            </div>
           </div>
         </div>
       )}

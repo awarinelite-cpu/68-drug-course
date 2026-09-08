@@ -602,6 +602,17 @@ table.chart { width:100%; border-collapse:collapse; }
 table.chart th, table.chart td { border:1px solid #000; padding:6px 4px; font-size: 16px; text-align:center; }
 table.chart th { background:#f2f2f2; text-transform:uppercase; }
 table.chart td input { width:100%; border:none; background:transparent; text-align:center; font-size: 16px; font-family:inherit; }
+/* Drug S/N field is now a picker button (opens a checklist modal, see
+   .sno-picker-option below) instead of free text, so it stops looking
+   like a text input while still fitting the same table cell. */
+.sno-picker-btn { display:flex; align-items:center; justify-content:space-between; gap:6px; width:100%; border:none; background:transparent; font-size:16px; font-family:inherit; text-align:left; cursor:pointer; color:inherit; padding:0; }
+.sno-picker-text { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.sno-picker-caret { color:var(--text-secondary); flex-shrink:0; }
+.sno-picker-option { display:flex; align-items:center; gap:8px; padding:8px 2px; border-bottom:1px solid var(--border); }
+.sno-picker-option:last-child { border-bottom:none; }
+.sno-picker-option input[type="checkbox"] { width:18px; height:18px; flex-shrink:0; }
+.sno-picker-option-text { flex:1; font-size:15px; }
+.sno-picker-due-tag { font-size:11px; font-weight:bold; color:#dc2626; background:var(--danger-bg); padding:2px 7px; border-radius:999px; flex-shrink:0; }
 .unit-note { text-align:center; font-size: 16px; color:#666; margin-bottom:10px; }
 @media print {
   .sheet { box-shadow:none; margin:0; }
