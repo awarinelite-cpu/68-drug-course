@@ -10,6 +10,7 @@ import PatientForm from "../components/PatientForm.jsx";
 import NewPatientTransfersModal from "../components/NewPatientTransfersModal.jsx";
 import { parseBulkText } from "../lib/drugChartHelpers.js";
 import { parsePatientFields, extractDrugSection } from "../lib/patientParse.js";
+import { generateCsvTemplate, parsePatientCsv } from "../lib/patientCsv.js";
 import { pendingTransfersFor } from "../lib/wardTransfer.js";
 import { wardHeadcount } from "../lib/wardCensus.js";
 import { reportWardKeysForPatientWard, patientWardAndBedTypeForReportKey } from "../lib/wardNameMatch.js";
@@ -41,6 +42,12 @@ export default function Home() {
   const [pendingDrugs, setPendingDrugs] = useState([]);
 
   const [showTransfers, setShowTransfers] = useState(false);
+
+  const [showBulkUpload, setShowBulkUpload] = useState(false);
+  const [bulkFileName, setBulkFileName] = useState('');
+  const [bulkRows, setBulkRows] = useState(null); // null = no file parsed yet
+  const [bulkMsg, setBulkMsg] = useState('');
+  const [bulkSaving, setBulkSaving] = useState(false);
 
   const showExitToast = useExitOnDoubleBack();
 
@@ -145,6 +152,83 @@ export default function Home() {
     openPatient({ id: ref.id });
   }
 
+  // --- Bulk upload (CSV) --------------------------------------------------
+  function downloadCsvTemplate() {
+    const blob = new Blob([generateCsvTemplate()], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'patient-bulk-upload-template.csv';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  }
+
+  function handleBulkFile(e) {
+    const file = e.target.files && e.target.files[0];
+    e.target.value = ''; // allow re-selecting the same file after a fix
+    if (!file) return;
+    setBulkFileName(file.name);
+    setBulkMsg('');
+    setBulkRows(null);
+    const reader = new FileReader();
+    reader.onload = () => {
+      const { headerOk, rows } = parsePatientCsv(String(reader.result || ''));
+      if (!headerOk) {
+        setBulkMsg('Couldn\u2019t read that file \u2014 make sure it has "Name" and "EMR Number" columns (download the template below if unsure).');
+        setBulkRows([]);
+        return;
+      }
+      if (!rows.length) {
+        setBulkMsg('No patient rows found in that file.');
+        setBulkRows([]);
+        return;
+      }
+      setBulkRows(rows);
+      const errorCount = rows.filter(r => r.errors.length).length;
+      setBulkMsg(
+        rows.length + ' row(s) found' +
+        (errorCount ? ', ' + errorCount + ' with errors \u2014 fix or they\u2019ll be skipped.' : ', all look good.')
+      );
+    };
+    reader.onerror = () => setBulkMsg('Could not read that file.');
+    reader.readAsText(file);
+  }
+
+  async function saveBulkPatients() {
+    const validRows = (bulkRows || []).filter(r => r.errors.length === 0);
+    if (!validRows.length) { setBulkMsg('No valid rows to upload.'); return; }
+    setBulkSaving(true);
+    const created = [];
+    for (const r of validRows) {
+      const data = {
+        name: r.data.name, emr: r.data.emr, diagnosis: r.data.diagnosis,
+        ward: r.data.ward, pedBedType: r.data.ward === 'PEDIATRIC/NICU WARD' ? r.data.pedBedType : '',
+        age: r.data.age, hospNo: r.data.hospNo, admissionDate: r.data.admissionDate,
+        allergies: r.data.allergies,
+        createdAt: serverTimestamp(), createdBy: user ? user.uid : null
+      };
+      const ref = doc(collection(db, 'patients'));
+      setDoc(ref, data).catch((e) => {
+        console.warn('Bulk patient write queued locally; will retry once back online:', e);
+      });
+      created.push({ id: ref.id, ...data });
+    }
+    setAllPatients((prev) => prev ? [...prev, ...created] : created);
+    setBulkSaving(false);
+    setBulkMsg('Uploaded ' + created.length + ' patient(s).');
+    setBulkRows(null);
+    setBulkFileName('');
+  }
+
+  function clearBulkUpload() {
+    setShowBulkUpload(false);
+    setBulkRows(null);
+    setBulkFileName('');
+    setBulkMsg('');
+  }
+
   const q = searchQuery.trim().toLowerCase();
   const myWard = profile?.ward || '';
   // Patients mid-transfer (pendingTransfer set) are held out of every
@@ -238,8 +322,71 @@ export default function Home() {
             />
             <button className="btn btn-primary" onClick={() => searchInputRef.current && searchInputRef.current.focus()}>Search</button>
             <button className="btn btn-success" onClick={() => { setNewForm((f) => ({ ...f, ward: f.ward || myWard })); setShowNewForm(true); }}>+ New Patient</button>
+            <button className="btn btn-secondary" onClick={() => setShowBulkUpload(true)}>📁 Bulk Upload</button>
           </div>
         </div>
+
+        {showBulkUpload && (
+          <div className="card-box">
+            <h3 style={{ marginTop: 0 }}>Bulk Upload Patients (CSV)</h3>
+            <p style={{ fontSize: 12, color: '#555' }}>
+              Upload a CSV of patients and they\u2019ll be created and sorted into their wards automatically \u2014
+              same fields as the New Patient form. Not sure of the format? Download the template first.
+            </p>
+            <div style={{ marginBottom: 10 }}>
+              <button className="btn btn-secondary" onClick={downloadCsvTemplate}>⬇ Download CSV Template</button>
+            </div>
+            <div className="field">
+              <label>Choose CSV file</label>
+              <input type="file" accept=".csv,text/csv" onChange={handleBulkFile} />
+            </div>
+            {bulkFileName && <div style={{ fontSize: 12, color: '#555' }}>{bulkFileName}</div>}
+            {bulkMsg && <div style={{ fontSize: 12, color: '#555', marginTop: 6 }}>{bulkMsg}</div>}
+
+            {bulkRows && bulkRows.length > 0 && (
+              <div style={{ marginTop: 10, overflowX: 'auto' }}>
+                <table style={{ borderCollapse: 'collapse', width: '100%' }}>
+                  <thead>
+                    <tr>
+                      <th style={{ border: '1px solid #000', padding: 3, fontSize: 12 }}>Line</th>
+                      <th style={{ border: '1px solid #000', padding: 3, fontSize: 12 }}>Name</th>
+                      <th style={{ border: '1px solid #000', padding: 3, fontSize: 12 }}>EMR</th>
+                      <th style={{ border: '1px solid #000', padding: 3, fontSize: 12 }}>Ward</th>
+                      <th style={{ border: '1px solid #000', padding: 3, fontSize: 12 }}>Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {bulkRows.map((r) => (
+                      <tr key={r.line} style={r.errors.length ? { background: '#fef2f2' } : undefined}>
+                        <td style={{ border: '1px solid #000', padding: 3, fontSize: 12 }}>{r.line}</td>
+                        <td style={{ border: '1px solid #000', padding: 3, fontSize: 12 }}>{r.data.name || '—'}</td>
+                        <td style={{ border: '1px solid #000', padding: 3, fontSize: 12 }}>{r.data.emr || '—'}</td>
+                        <td style={{ border: '1px solid #000', padding: 3, fontSize: 12 }}>{r.data.ward || '—'}</td>
+                        <td style={{ border: '1px solid #000', padding: 3, fontSize: 12, color: r.errors.length ? '#b91c1c' : '#16a34a' }}>
+                          {r.errors.length ? r.errors.join('; ') : 'OK'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                <div style={{ fontSize: 11, color: '#888', marginTop: 4 }}>
+                  Rows in red have errors and will be skipped. Fix them in your CSV and re-upload if needed.
+                </div>
+              </div>
+            )}
+
+            <div style={{ marginTop: 10 }}>
+              <button
+                className="btn btn-primary"
+                disabled={bulkSaving || !bulkRows || !bulkRows.some(r => r.errors.length === 0)}
+                onClick={saveBulkPatients}
+              >
+                {bulkSaving ? 'Uploading…' : 'Upload Patients'}
+              </button>
+              <button className="btn btn-secondary" onClick={clearBulkUpload}>Cancel</button>
+            </div>
+          </div>
+        )}
 
         {showNewForm && (
           <div className="card-box">
