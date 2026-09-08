@@ -339,14 +339,19 @@ export const DEMOGRAPHIC_FIELDS = [
 ];
 
 // Structured fields for each patient write-up under a ward's report,
-// matching the paper form's per-patient block (name/age/sex/EMR/DOA up
-// top, then one large free-text area for diagnosis, orders, and any
-// nursing notes — matching how the paper form actually reads).
+// matching the paper form's per-patient block. EMR sits first (in the
+// slot Name used to occupy) with Name directly below it, because EMR is
+// what the nurse actually knows on sight and typing it triggers the
+// auto-fill lookup against the existing patient record (see
+// lookupPatientByEmr in WardNurse.jsx) — Age/Name/Sex/DOA fill in from
+// that record once found. Diagnosis/Notes stays one large free-text area
+// at the end for orders and nursing notes, matching how the paper form
+// actually reads.
 export const PATIENT_FIELDS = [
-  { key: 'name',      label: 'Name',      type: 'text' },
-  { key: 'age',       label: 'Age',       type: 'text' },
-  { key: 'sex',       label: 'Sex',       type: 'text' },
   { key: 'emr',       label: 'EMR',       type: 'text' },
+  { key: 'age',       label: 'Age',       type: 'text' },
+  { key: 'name',      label: 'Name',      type: 'text' },
+  { key: 'sex',       label: 'Sex',       type: 'text' },
   { key: 'doa',       label: 'DOA',       type: 'text' },
   { key: 'diagnosis', label: 'Diagnosis / Notes', type: 'textarea', big: true }
 ];

@@ -825,6 +825,7 @@ td.stat-vac, td.stat-vac input { color: #dc2626; font-weight: 800; }
 .patient-field input, .patient-field textarea { width: 100%; padding: 7px; border: 1px solid var(--border); border-radius: 6px; font-size: 16px; box-sizing: border-box; font-family: inherit; }
 .patient-field textarea { min-height: 60px; resize: vertical; }
 .patient-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 10px; }
+.emr-lookup-note { font-size: 12px; margin-top: 3px; }
 .add-patient-btn { margin-top: 12px; width: 100%; padding: 10px; border: 2px dashed #93c5fd; background: var(--primary-light); color: var(--primary-active); border-radius: 8px; font-weight: bold; font-size: 16px; cursor: pointer; }
 .submit-bar { display: flex; gap: 10px; margin-top: 14px; }
 .save-status { font-size: 16px; color: var(--text-secondary); min-height: 14px; margin-top: 6px; }

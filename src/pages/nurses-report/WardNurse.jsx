@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { doc, getDocs, collection, setDoc, serverTimestamp } from "firebase/firestore";
-import { getDocSafe } from "../../lib/firestoreOffline.js";
+import { doc, getDocs, collection, query, where, limit, setDoc, serverTimestamp } from "firebase/firestore";
+import { getDocSafe, getDocsSafe } from "../../lib/firestoreOffline.js";
 import { db } from "../../firebase.js";
 import { useAuth } from "../../contexts/AuthContext.jsx";
 import { useGoBack } from "../../hooks/useGoBack.js";
@@ -192,6 +192,11 @@ function WardReportPanel({ wardKey, showLabel, isAdmin, profile, user, navigate 
   const [nightUpdateOpen, setNightUpdateOpen] = useState(false);
   const [topStatus, setTopStatus] = useState({ text: 'Loading…', error: false });
   const [saveStatus, setSaveStatus] = useState({ text: '', error: false });
+  // Per-patient status for the EMR auto-fill lookup (see
+  // lookupPatientByEmr below) — keyed by patient id, e.g.
+  // { text: 'Filled from patient record.', error: false }. Purely for
+  // showing the nurse a small note under the EMR field; never persisted.
+  const [emrLookup, setEmrLookup] = useState({});
   const patientCounter = useRef(0);
   const w = WARDS.find(x => x.key === wardKey);
 
@@ -275,6 +280,42 @@ function WardReportPanel({ wardKey, showLabel, isAdmin, profile, user, navigate 
   function removePatient(id) { setWardDoc((d) => ({ ...d, patients: d.patients.filter(p => p.id !== id) })); }
   function updatePatientField(id, key, value) { setWardDoc((d) => ({ ...d, patients: d.patients.map(p => p.id === id ? { ...p, [key]: value } : p) })); }
   function updatePatientStatus(id, value) { setWardDoc((d) => ({ ...d, patients: d.patients.map(p => p.id === id ? { ...p, status: value } : p) })); }
+
+  // Looks the typed EMR number up against the existing 'patients'
+  // collection (the same master record used by the drug-course-chart
+  // side of the app) and, if found, fills in Age/Name/Sex/DOA — but only
+  // the fields that are still blank, so it never clobbers anything the
+  // nurse already typed. Sex isn't tracked on the patient master record,
+  // so that field is left for the nurse either way. Fires on blur of the
+  // EMR input rather than every keystroke.
+  async function lookupPatientByEmr(id, rawEmr) {
+    const emr = (rawEmr || '').trim();
+    if (!emr) { setEmrLookup((s) => ({ ...s, [id]: null })); return; }
+    setEmrLookup((s) => ({ ...s, [id]: { text: 'Looking up patient…', error: false } }));
+    try {
+      const q = query(collection(db, 'patients'), where('emr', '==', emr), limit(1));
+      const snap = await getDocsSafe(q);
+      if (snap.empty) {
+        setEmrLookup((s) => ({ ...s, [id]: { text: 'No patient found with that EMR number — fill in details manually.', error: false } }));
+        return;
+      }
+      const record = snap.docs[0].data();
+      setWardDoc((d) => ({
+        ...d,
+        patients: d.patients.map((p) => {
+          if (p.id !== id) return p;
+          const next = { ...p };
+          if (!next.name && record.name) next.name = record.name;
+          if (!next.age && record.age) next.age = record.age;
+          if (!next.doa && record.admissionDate) next.doa = record.admissionDate;
+          return next;
+        })
+      }));
+      setEmrLookup((s) => ({ ...s, [id]: { text: 'Filled in from the patient record.', error: false } }));
+    } catch (e) {
+      setEmrLookup((s) => ({ ...s, [id]: { text: "Couldn't look up patient: " + (e.code || e.message || 'unknown error'), error: true } }));
+    }
+  }
 
   function openNightUpdate() {
     if (!editable) return;
@@ -404,7 +445,13 @@ function WardReportPanel({ wardKey, showLabel, isAdmin, profile, user, navigate 
                           <label>{f.label}:</label>
                           {f.type === 'textarea'
                             ? <textarea className={f.big ? 'big' : ''} value={p[f.key] || ''} onChange={(e) => updatePatientField(p.id, f.key, e.target.value)} />
-                            : <input type="text" value={p[f.key] || ''} onChange={(e) => updatePatientField(p.id, f.key, e.target.value)} />}
+                            : <input type="text" value={p[f.key] || ''} onChange={(e) => updatePatientField(p.id, f.key, e.target.value)}
+                                onBlur={f.key === 'emr' ? (e) => lookupPatientByEmr(p.id, e.target.value) : undefined} />}
+                          {f.key === 'emr' && emrLookup[p.id] && (
+                            <div className="emr-lookup-note" style={{ color: emrLookup[p.id].error ? '#dc2626' : '#6b7280' }}>
+                              {emrLookup[p.id].text}
+                            </div>
+                          )}
                         </div>
                       ))}
                     </div>
