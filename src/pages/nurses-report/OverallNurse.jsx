@@ -316,6 +316,7 @@ export default function OverallNurse() {
   // now, regardless of lock/submitted status — for a deliberate one-off
   // reset when today's Occ figures are known to be stale.
   async function resyncOccFromPatients() {
+    if (!isAdmin) return;
     if (!confirm("This will reset every ward's Occ, Vac, and Previous Occ to match the patients currently registered under that ward in the app, overwriting today's current figures (even locked or submitted ones). Shift movement entries (Adm, Disch, etc.) are left alone. Continue?")) return;
     setSyncBusy(true);
     setSyncStatus({ text: '', error: false });
@@ -644,12 +645,14 @@ export default function OverallNurse() {
 
         <div className="card-box">
           <h2>All Wards — 24-Hour Statistics</h2>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 10 }}>
-            <button className="btn btn-secondary" style={{ padding: '6px 12px', fontSize: 13 }} disabled={syncBusy} onClick={resyncOccFromPatients}>
-              {syncBusy ? 'Syncing…' : '\u21BB Reset Occ from patient list'}
-            </button>
-            {syncStatus.text && <span style={{ fontSize: 12, color: syncStatus.error ? '#dc2626' : '#16a34a' }}>{syncStatus.text}</span>}
-          </div>
+          {isAdmin && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 10 }}>
+              <button className="btn btn-secondary" style={{ padding: '6px 12px', fontSize: 13 }} disabled={syncBusy} onClick={resyncOccFromPatients}>
+                {syncBusy ? 'Syncing…' : '\u21BB Reset Occ from patient list'}
+              </button>
+              {syncStatus.text && <span style={{ fontSize: 12, color: syncStatus.error ? '#dc2626' : '#16a34a' }}>{syncStatus.text}</span>}
+            </div>
+          )}
           <div className="table-wrap">
             <table className="report">
               <thead>
