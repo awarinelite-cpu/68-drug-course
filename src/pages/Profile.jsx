@@ -25,7 +25,6 @@ export default function Profile() {
 
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
-  const [department, setDepartment] = useState('');
   const [gender, setGender] = useState('');
   const [pfMsg, setPfMsg] = useState(null);
 
@@ -45,7 +44,6 @@ export default function Profile() {
     if (profile) {
       setName(profile.name || '');
       setPhone(profile.phone || '');
-      setDepartment(profile.department || '');
       setGender(profile.gender || '');
     }
   }, [profile]);
@@ -67,7 +65,7 @@ export default function Profile() {
     setPfMsg(null);
     const trimmedName = name.trim();
     if (!trimmedName) { setPfMsg({ type: 'error', text: 'Name cannot be empty.' }); return; }
-    const updates = { name: trimmedName, phone: phone.trim(), department: department.trim(), gender };
+    const updates = { name: trimmedName, phone: phone.trim(), gender };
     try {
       await updateDoc(doc(db, 'users', user.uid), updates);
     } catch (e) {
@@ -183,7 +181,6 @@ export default function Profile() {
 
           <div className="field"><label>Full Name</label><input type="text" value={name} onChange={(e) => setName(e.target.value)} /></div>
           <div className="field"><label>Phone Number</label><input type="text" placeholder="e.g. 080XXXXXXXX" value={phone} onChange={(e) => setPhone(e.target.value)} /></div>
-          <div className="field"><label>Department / Ward</label><input type="text" placeholder="e.g. Officers Ward" value={department} onChange={(e) => setDepartment(e.target.value)} /></div>
           <div className="field">
             <label>Gender</label>
             <select value={gender} onChange={(e) => setGender(e.target.value)}>
