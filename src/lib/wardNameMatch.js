@@ -4,13 +4,14 @@ import { WARD_OPTIONS } from "./drugChartHelpers.js";
 // Patient charts (WARD_OPTIONS, in drugChartHelpers.js) and nurse reports
 // (WARDS, in nurses-report-common.js) were built as two separate lists and
 // don't line up 1:1 — the report splits Maternity and Pediatric into
-// Bed/Cot, abbreviates several names (ORTHO, MMW), and has a few wards
-// (ECO I/II, AMENITY, FSW EXT) patient charts have no equivalent for.
-// Rather than guess at a semantic mapping, we only treat two wards as
-// "the same ward" when their names already match once normalized —
-// case, punctuation, and the standalone word "WARD" stripped out. That
-// catches e.g. '"A" WARD' (patient) === 'A WARD' (report `award`), but
-// deliberately leaves e.g. ORTHOPEDIC WARD vs ORTHO unmatched.
+// Bed/Cot, abbreviates several names (A/E, FMW I, FSW II, ORTHO, MMW),
+// and has a few wards (ECO I/II, AMENITY, FSW EXT) patient charts have no
+// equivalent for. Rather than guess at a semantic mapping, we only treat
+// two wards as "the same ward" automatically when their names already
+// match once normalized — case, punctuation, and the standalone word
+// "WARD" stripped out (e.g. '"A" WARD' (patient) === 'A WARD' (report
+// `award`)) — or via the explicit WARD_LABEL_ALIASES below for the
+// abbreviated ones normalization can't safely guess.
 function normalizeWardLabel(raw) {
   return String(raw || '')
     .toUpperCase()
@@ -27,7 +28,11 @@ function normalizeWardLabel(raw) {
 // "ORTHO" could in principle be an abbreviation for several things.
 // Listed explicitly here once confirmed, rather than guessed at.
 const WARD_LABEL_ALIASES = {
-  'MALE MEDICAL WARD': 'mmw'
+  'MALE MEDICAL WARD': 'mmw',
+  'ACCIDENT & EMERGENCY': 'ae',
+  'FEMALE MEDICAL WARD': 'fmw1',
+  'FEMALE SURGICAL WARD': 'fsw2',
+  'ORTHOPEDIC WARD': 'ortho'
 };
 
 // Given a patient-chart ward label (a value from WARD_OPTIONS), returns
