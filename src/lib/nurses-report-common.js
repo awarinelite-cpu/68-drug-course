@@ -2,38 +2,30 @@
 // (role-select.html, overall-nurse.html, and eventually ward-nurse.html).
 
 import { doc, getDoc, setDoc } from 'firebase/firestore';
-import { WARD_OPTIONS } from './drugChartHelpers.js';
 
-// The hospital's real ward list — the same one nurses pick from on patient
-// charts (WARD_OPTIONS, in drugChartHelpers.js) — rather than a separately
-// invented list. Keys are derived from the label itself so the two lists
-// can never drift apart again; beds is just a starting default and is
-// editable per ward on the Ward Nurse page.
-function wardKeyFromLabel(label) {
-  return label.toLowerCase().replace(/[^a-z0-9]+/g, '');
-}
-
-const DEFAULT_BEDS = {
-  '"A" WARD': 44,
-  'ACCIDENT & EMERGENCY': 20,
-  'GYNAE WARD': 18,
-  'MATERNITY WARD': 40,
-  'PEDIATRIC/NICU WARD': 28,
-  'THEATER': 4,
-  'ICU': 6,
-  'FEMALE MEDICAL WARD': 18,
-  'FEMALE SURGICAL WARD': 20,
-  'MALE MEDICAL WARD': 20,
-  'ORTHOPEDIC WARD': 20,
-  'EXTENSION WARD': 20,
-  'OFFICERS WARD': 9
-};
-
-export const WARDS = WARD_OPTIONS.map(label => ({
-  key: wardKeyFromLabel(label),
-  label,
-  beds: DEFAULT_BEDS[label] ?? 20
-}));
+// The hospital's fixed ward list, in the same order as the paper "24 Hours
+// Overall Report" — beds is the default bed capacity, editable per ward.
+export const WARDS = [
+  { key: 'ae',       label: 'A/E',       beds: 20 },
+  { key: 'matbed',   label: 'MATBED',    beds: 20 },
+  { key: 'matcot',   label: 'MAT COT',   beds: 20 },
+  { key: 'officers', label: 'OFFICERS',  beds: 9  },
+  { key: 'fmw1',     label: 'FMW I',     beds: 18 },
+  { key: 'fsw2',     label: 'FSW II',    beds: 20 },
+  { key: 'mmw',      label: 'MMW',       beds: 20 },
+  { key: 'paedbed',  label: 'PAED BED',  beds: 10 },
+  { key: 'paedcot',  label: 'PAED COT',  beds: 18 },
+  { key: 'ortho',    label: 'ORTHO',     beds: 20 },
+  { key: 'gynae',    label: 'GYNAE',     beds: 18 },
+  { key: 'award',    label: 'A WARD',    beds: 44 },
+  { key: 'fswext',   label: 'FSW EXT',   beds: 20 },
+  { key: 'eco1',     label: 'ECO I',     beds: 3  },
+  { key: 'eco2',     label: 'ECO II',    beds: 3  },
+  { key: 'icu',      label: 'ICU',       beds: 6  },
+  { key: 'amenity',  label: 'AMENITY',   beds: 3  },
+  { key: 'msw',      label: 'MSW',       beds: 18 },
+  { key: 'esw',      label: 'ESW',       beds: 20 }
+];
 
 // Ward keys and bed counts are fixed, but an admin can rename a ward's
 // display label (e.g. if a ward is physically renamed or relabelled).
