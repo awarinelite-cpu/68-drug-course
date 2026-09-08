@@ -332,7 +332,7 @@ function StatsTableView({ wardsMeta, wardsMap }) {
                 totals[f.key] += v;
                 return <td key={f.key} className={movementColorClass(f.key)}>{v}</td>;
               })}
-              <td style={{ textAlign: 'left' }}>{data.nurseOnDuty || '\u2014'}</td>
+              <td style={{ textAlign: 'left' }}>{data.submittedBy || '\u2014'}</td>
             </tr>
           );
         })}
@@ -386,8 +386,8 @@ function StatsTableEdit({ wardsMeta, wardsMap, onChange }) {
                 );
               })}
               <td>
-                <input type="text" className="duty-input" value={data.nurseOnDuty || ''}
-                  onChange={(e) => onChange(w.key, { ...data, nurseOnDuty: e.target.value })} />
+                <input type="text" className="duty-input" value={data.submittedBy || ''}
+                  onChange={(e) => onChange(w.key, { ...data, submittedBy: e.target.value })} />
               </td>
             </tr>
           );

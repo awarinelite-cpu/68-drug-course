@@ -218,7 +218,7 @@ export default function OverallNurse() {
     if (!missing.length) return;
     const batch = writeBatch(db);
     missing.forEach(w => {
-      const data = { label: w.label, beds: w.beds, nurseOnDuty: '', locked: false };
+      const data = { label: w.label, beds: w.beds, locked: false };
       STAT_FIELDS.forEach(f => { if (f.key !== 'beds') data[f.key] = 0; });
       batch.set(doc(wardsCol, w.key), data);
     });
