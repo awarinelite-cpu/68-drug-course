@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { doc, getDocs, collection, setDoc, serverTimestamp } from "firebase/firestore";
 import { getDocSafe } from "../../lib/firestoreOffline.js";
@@ -8,7 +8,7 @@ import { useGoBack } from "../../hooks/useGoBack.js";
 import {
   WARDS, SHIFT_STAT_FIELDS, SHIFTS, PATIENT_FIELDS, PATIENT_STATUS_OPTIONS,
   DEMOGRAPHIC_FIELDS, computeDemographicTotals, movementColorClass,
-  reportDateId, occDelta, blankShift, defaultWardDoc
+  reportDateId, occDelta, blankShift, defaultWardDoc, wardSelectorOptions
 } from "../../lib/nurses-report-common.js";
 import { patientWardForReportKey } from "../../lib/wardNameMatch.js";
 import { wardHeadcount } from "../../lib/wardCensus.js";
@@ -181,73 +181,78 @@ function DemographicsTable({ wardDoc, totals, editable, onField }) {
   );
 }
 
-export default function WardNurse() {
-  const { user, profile } = useAuth();
-  const navigate = useNavigate();
-  const goBack = useGoBack('/nurses-report/role-select');
-
-  const [wardKey, setWardKey] = useState('');
+// One ward's full report — Previous Occ, Shift Statistics, Patient
+// Demographics, Patients, Night Update, Save/Submit. Used once per
+// selected ward, and twice side-by-side when the nurse picks a grouped
+// option (e.g. PAED WARD) — each instance loads and saves its own
+// Firestore doc under its own wardKey, completely independently.
+function WardReportPanel({ wardKey, showLabel, isAdmin, profile, user, navigate }) {
   const [wardDoc, setWardDoc] = useState(null);
   const [adminEditOverride, setAdminEditOverride] = useState(false);
   const [nightUpdateOpen, setNightUpdateOpen] = useState(false);
-  const [topStatus, setTopStatus] = useState({ text: '', error: false });
+  const [topStatus, setTopStatus] = useState({ text: 'Loading…', error: false });
   const [saveStatus, setSaveStatus] = useState({ text: '', error: false });
   const patientCounter = useRef(0);
+  const w = WARDS.find(x => x.key === wardKey);
 
-  async function loadWard(key) {
-    setWardKey(key);
-    setAdminEditOverride(false); // default to read-only even for admin; they tap ✏️ per ward
-    setWardDoc(null);
-    setTopStatus({ text: 'Loading…', error: false });
-    const w = WARDS.find(x => x.key === key);
-    const ref = doc(db, 'nurseReports', dateId, 'wards', key);
-    let snap;
-    try {
-      snap = await getDocSafe(ref);
-    } catch (e) {
-      setTopStatus({ text: "Couldn't load this ward's report: " + (e.code || e.message || 'unknown error'), error: true });
-      return;
-    }
-    let next = snap.exists() ? Object.assign(defaultWardDoc(w), snap.data()) : defaultWardDoc(w);
-    next.shifts = next.shifts || {};
-    SHIFTS.forEach(s => { next.shifts[s.key] = Object.assign(blankShift(), next.shifts[s.key] || {}); });
-    next.patients = Array.isArray(next.patients) ? next.patients : [];
-    next.patients.forEach(p => { if (!p.id) p.id = 'p' + Math.random().toString(36).slice(2); if (typeof p.status !== 'string') p.status = ''; });
-    next.nightUpdate = typeof next.nightUpdate === 'string' ? next.nightUpdate : '';
-    next.nightUpdateBy = next.nightUpdateBy || '';
-
-    if (!snap.exists()) {
-      // On taking over — i.e. the first time this ward's report for
-      // today is opened — Previous Occ should equal what the nurse
-      // actually meets on the patient list, not a number carried
-      // forward from yesterday's manually-typed closing Occ (which can
-      // drift from reality). Only possible for wards whose name matches
-      // a patient-chart ward (see wardNameMatch.js); everything else
-      // keeps the old carry-forward behavior.
-      const patientWardLabel = patientWardForReportKey(key);
-      let filledFromPatients = false;
-      if (patientWardLabel) {
-        try {
-          const patientsSnap = await getDocs(collection(db, 'patients'));
-          const patients = [];
-          patientsSnap.forEach(d => patients.push(d.data()));
-          next = { ...next, startOcc: wardHeadcount(patients, patientWardLabel) };
-          filledFromPatients = true;
-        } catch (e) { /* fall through to the old carry-forward below */ }
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setAdminEditOverride(false); // default to read-only even for admin; they tap ✏️ per ward
+      setWardDoc(null);
+      setTopStatus({ text: 'Loading…', error: false });
+      const ref = doc(db, 'nurseReports', dateId, 'wards', wardKey);
+      let snap;
+      try {
+        snap = await getDocSafe(ref);
+      } catch (e) {
+        if (!cancelled) setTopStatus({ text: "Couldn't load this ward's report: " + (e.code || e.message || 'unknown error'), error: true });
+        return;
       }
-      if (!filledFromPatients) {
-        try {
-          const prevRef = doc(db, 'nurseReports', prevDateId(dateId), 'wards', key);
-          const prevSnap = await getDocSafe(prevRef);
-          if (prevSnap.exists() && typeof prevSnap.data().occ === 'number') next = { ...next, startOcc: prevSnap.data().occ };
-        } catch (e) { /* non-fatal — leave startOcc at 0, nurse can correct it */ }
-      }
-    }
+      let next = snap.exists() ? Object.assign(defaultWardDoc(w), snap.data()) : defaultWardDoc(w);
+      next.shifts = next.shifts || {};
+      SHIFTS.forEach(s => { next.shifts[s.key] = Object.assign(blankShift(), next.shifts[s.key] || {}); });
+      next.patients = Array.isArray(next.patients) ? next.patients : [];
+      next.patients.forEach(p => { if (!p.id) p.id = 'p' + Math.random().toString(36).slice(2); if (typeof p.status !== 'string') p.status = ''; });
+      next.nightUpdate = typeof next.nightUpdate === 'string' ? next.nightUpdate : '';
+      next.nightUpdateBy = next.nightUpdateBy || '';
 
-    setTopStatus({ text: '', error: false });
-    setNightUpdateOpen(!!next.nightUpdate);
-    setWardDoc(next);
-  }
+      if (!snap.exists()) {
+        // On taking over — i.e. the first time this ward's report for
+        // today is opened — Previous Occ should equal what the nurse
+        // actually meets on the patient list, not a number carried
+        // forward from yesterday's manually-typed closing Occ (which can
+        // drift from reality). Only possible for wards whose name matches
+        // a patient-chart ward (see wardNameMatch.js); everything else
+        // keeps the old carry-forward behavior.
+        const patientWardLabel = patientWardForReportKey(wardKey);
+        let filledFromPatients = false;
+        if (patientWardLabel) {
+          try {
+            const patientsSnap = await getDocs(collection(db, 'patients'));
+            const patients = [];
+            patientsSnap.forEach(d => patients.push(d.data()));
+            next = { ...next, startOcc: wardHeadcount(patients, patientWardLabel) };
+            filledFromPatients = true;
+          } catch (e) { /* fall through to the old carry-forward below */ }
+        }
+        if (!filledFromPatients) {
+          try {
+            const prevRef = doc(db, 'nurseReports', prevDateId(dateId), 'wards', wardKey);
+            const prevSnap = await getDocSafe(prevRef);
+            if (prevSnap.exists() && typeof prevSnap.data().occ === 'number') next = { ...next, startOcc: prevSnap.data().occ };
+          } catch (e) { /* non-fatal — leave startOcc at 0, nurse can correct it */ }
+        }
+      }
+
+      if (cancelled) return;
+      setTopStatus({ text: '', error: false });
+      setNightUpdateOpen(!!next.nightUpdate);
+      setWardDoc(next);
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [wardKey]);
 
   function updateWardDoc(patch) { setWardDoc((d) => ({ ...d, ...patch })); }
   function updateShiftField(shiftKey, fieldKey, raw) {
@@ -283,11 +288,10 @@ export default function WardNurse() {
   const movementTotals = useMemo(() => wardDoc ? computeMovementTotals(wardDoc) : null, [wardDoc]);
   const demographicTotals = useMemo(() => wardDoc ? computeDemographicTotals(wardDoc) : null, [wardDoc]);
 
-  const isAdmin = profile?.role === 'admin';
   const editable = wardDoc ? ((isAdmin && adminEditOverride) || !wardDoc.locked) : false;
 
   async function saveReport() {
-    if (!wardKey || !wardDoc || !editable) return;
+    if (!wardDoc || !editable) return;
     let doc_ = wardDoc;
     if (!doc_.shifts.am.nurseOnDuty && profile?.name) {
       doc_ = { ...doc_, shifts: { ...doc_.shifts, am: { ...doc_.shifts.am, nurseOnDuty: profile.name } } };
@@ -304,7 +308,7 @@ export default function WardNurse() {
   }
 
   async function submitReport() {
-    if (!wardKey || !wardDoc || !editable) return;
+    if (!wardDoc || !editable) return;
     const hasNightUpdate = !!(wardDoc.nightUpdate && wardDoc.nightUpdate.trim());
     let doc_ = wardDoc;
     if (hasNightUpdate && !doc_.shifts.pm.nurseOnDuty && profile?.name) {
@@ -332,7 +336,130 @@ export default function WardNurse() {
 
   const pillClass = !wardDoc ? '' : wardDoc.locked ? 'locked' : wardDoc.submitted ? 'submitted' : 'draft';
   const pillText = !wardDoc ? '' : wardDoc.locked ? 'Locked' : wardDoc.submitted ? 'Submitted' : 'Draft';
-  const w = WARDS.find(x => x.key === wardKey);
+
+  return (
+    <>
+      <div className="card-box">
+        <div className="ward-select-row">
+          {showLabel && <h2 style={{ margin: 0 }}>{w?.label}</h2>}
+          {wardDoc && <span className={"status-pill " + pillClass}>{pillText}</span>}
+          {w && (
+            <button className="btn btn-secondary" style={{ padding: '6px 12px' }} type="button"
+              onClick={() => navigate('/nurses-report/archive-list?type=ward&ward=' + encodeURIComponent(wardKey) + '&label=' + encodeURIComponent(w.label))}>
+              {'\uD83D\uDCC1 Archive'}
+            </button>
+          )}
+        </div>
+        <div className="save-status" style={{ color: topStatus.error ? '#dc2626' : '#6b7280' }}>{topStatus.text}</div>
+      </div>
+
+      {wardDoc && (
+        <>
+          {wardDoc.locked && (
+            <div className="locked-notice">
+              {isAdmin ? "This ward's report is locked." : "This ward's report is locked. Ask the Overall Nurse to grant access before editing."}
+              {isAdmin && !adminEditOverride && <button className="admin-edit-btn" onClick={() => setAdminEditOverride(true)}>{'\u270F\uFE0F'}</button>}
+            </div>
+          )}
+
+          <div className="card-box">
+            <h2>Previous Occ</h2>
+            <div className="patient-field" style={{ maxWidth: 140 }}>
+              <input type="number" inputMode="numeric" disabled={!editable} value={wardDoc.startOcc} onChange={(e) => updateStartOcc(e.target.value)} />
+            </div>
+          </div>
+
+          <div className="card-box">
+            <h2>Shift Statistics</h2>
+            <div className="table-wrap">
+              <ShiftTable wardDoc={wardDoc} census={census} movementTotals={movementTotals} editable={editable}
+                onBeds={updateBeds} onField={updateShiftField} onDuty={updateDuty} />
+            </div>
+          </div>
+
+          <div className="card-box">
+            <h2>Patient Demographics</h2>
+            <div className="table-wrap">
+              <DemographicsTable wardDoc={wardDoc} totals={demographicTotals} editable={editable} onField={updateShiftField} />
+            </div>
+          </div>
+
+          <div className="card-box">
+            <h2>Patients</h2>
+            {editable ? (
+              <>
+                {wardDoc.patients.map((p) => (
+                  <div className="patient-card" key={p.id}>
+                    <button type="button" className="remove-btn" onClick={() => removePatient(p.id)}>Remove</button>
+                    <div className="patient-field">
+                      <label>Status:</label>
+                      <select className={"status-select" + (p.status ? ' set' : '')} value={p.status || ''} onChange={(e) => updatePatientStatus(p.id, e.target.value)}>
+                        <option value="">{'\u2014 Select status \u2014'}</option>
+                        {PATIENT_STATUS_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                      </select>
+                    </div>
+                    <div className="patient-grid">
+                      {PATIENT_FIELDS.map((f) => (
+                        <div className="patient-field" key={f.key} style={f.type === 'textarea' ? { gridColumn: '1 / -1' } : undefined}>
+                          <label>{f.label}:</label>
+                          {f.type === 'textarea'
+                            ? <textarea className={f.big ? 'big' : ''} value={p[f.key] || ''} onChange={(e) => updatePatientField(p.id, f.key, e.target.value)} />
+                            : <input type="text" value={p[f.key] || ''} onChange={(e) => updatePatientField(p.id, f.key, e.target.value)} />}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+                <button className="add-patient-btn" type="button" onClick={addPatient}>+ Add Patient</button>
+              </>
+            ) : wardDoc.patients.length === 0 ? (
+              <div className="no-patients">No patient write-ups on this report.</div>
+            ) : (
+              wardDoc.patients.map((p) => <PatientBlockView p={p} key={p.id} />)
+            )}
+
+            <h2 className="night-update-heading">Night Update</h2>
+            {editable && <button className="btn btn-secondary" type="button" onClick={openNightUpdate}>{'\uD83C\uDF19 Night Update'}</button>}
+            {editable && nightUpdateOpen && (
+              <div className="patient-field" style={{ marginTop: 10 }}>
+                <label className="patient-note-label" style={{ marginTop: 0 }}>Night update:</label>
+                <textarea id="nightUpdateInput" placeholder="Type the night update here…" style={{ minHeight: 140 }}
+                  value={wardDoc.nightUpdate} onChange={(e) => updateWardDoc({ nightUpdate: e.target.value })} />
+              </div>
+            )}
+            {!editable && wardDoc.nightUpdate && (
+              <div className="night-update-block">
+                <h3 className="patient-note-label">{'Night Update' + (wardDoc.nightUpdateBy ? ' — ' + wardDoc.nightUpdateBy : '') + ':'}</h3>
+                <p className="patient-note-text">{wardDoc.nightUpdate}</p>
+              </div>
+            )}
+            {editable && <div className="night-update-meta">{wardDoc.nightUpdateBy ? 'Added by ' + wardDoc.nightUpdateBy : ''}</div>}
+          </div>
+
+          <div className="card-box">
+            {editable && (
+              <div className="submit-bar">
+                <button className="btn btn-secondary" style={{ flex: 1, padding: 12 }} onClick={saveReport}>Save</button>
+                <button className="btn btn-primary" style={{ flex: 1, padding: 12 }} onClick={submitReport}>Submit Report</button>
+              </div>
+            )}
+            <div className="save-status" style={{ color: saveStatus.error ? '#dc2626' : '#6b7280' }}>{saveStatus.text}</div>
+          </div>
+        </>
+      )}
+    </>
+  );
+}
+
+export default function WardNurse() {
+  const { user, profile } = useAuth();
+  const navigate = useNavigate();
+  const goBack = useGoBack('/nurses-report/role-select');
+
+  const wardOptions = useMemo(() => wardSelectorOptions(), []);
+  const [groupKey, setGroupKey] = useState('');
+  const activeOption = wardOptions.find(o => o.key === groupKey) || null;
+  const isAdmin = profile?.role === 'admin';
 
   return (
     <>
@@ -342,115 +469,17 @@ export default function WardNurse() {
       <div className="container">
         <div className="card-box">
           <div className="ward-select-row">
-            <select value={wardKey} onChange={(e) => { if (e.target.value) loadWard(e.target.value); else { setWardKey(''); setWardDoc(null); } }}>
+            <select value={groupKey} onChange={(e) => setGroupKey(e.target.value)}>
               <option value="">-- Select your ward --</option>
-              {WARDS.map(w => <option key={w.key} value={w.key}>{w.label}</option>)}
+              {wardOptions.map(o => <option key={o.key} value={o.key}>{o.label}</option>)}
             </select>
-            {wardDoc && <span className={"status-pill " + pillClass}>{pillText}</span>}
-            {wardKey && w && (
-              <button className="btn btn-secondary" style={{ padding: '6px 12px' }} type="button"
-                onClick={() => navigate('/nurses-report/archive-list?type=ward&ward=' + encodeURIComponent(wardKey) + '&label=' + encodeURIComponent(w.label))}>
-                {'\uD83D\uDCC1 Archive'}
-              </button>
-            )}
           </div>
-          <div className="save-status" style={{ color: topStatus.error ? '#dc2626' : '#6b7280' }}>{topStatus.text}</div>
         </div>
 
-        {wardDoc && (
-          <>
-            {wardDoc.locked && (
-              <div className="locked-notice">
-                {isAdmin ? "This ward's report is locked." : "This ward's report is locked. Ask the Overall Nurse to grant access before editing."}
-                {isAdmin && !adminEditOverride && <button className="admin-edit-btn" onClick={() => setAdminEditOverride(true)}>{'\u270F\uFE0F'}</button>}
-              </div>
-            )}
-
-            <div className="card-box">
-              <h2>Previous Occ</h2>
-              <div className="patient-field" style={{ maxWidth: 140 }}>
-                <input type="number" inputMode="numeric" disabled={!editable} value={wardDoc.startOcc} onChange={(e) => updateStartOcc(e.target.value)} />
-              </div>
-            </div>
-
-            <div className="card-box">
-              <h2>Shift Statistics</h2>
-              <div className="table-wrap">
-                <ShiftTable wardDoc={wardDoc} census={census} movementTotals={movementTotals} editable={editable}
-                  onBeds={updateBeds} onField={updateShiftField} onDuty={updateDuty} />
-              </div>
-            </div>
-
-            <div className="card-box">
-              <h2>Patient Demographics</h2>
-              <div className="table-wrap">
-                <DemographicsTable wardDoc={wardDoc} totals={demographicTotals} editable={editable} onField={updateShiftField} />
-              </div>
-            </div>
-
-            <div className="card-box">
-              <h2>Patients</h2>
-              {editable ? (
-                <>
-                  {wardDoc.patients.map((p) => (
-                    <div className="patient-card" key={p.id}>
-                      <button type="button" className="remove-btn" onClick={() => removePatient(p.id)}>Remove</button>
-                      <div className="patient-field">
-                        <label>Status:</label>
-                        <select className={"status-select" + (p.status ? ' set' : '')} value={p.status || ''} onChange={(e) => updatePatientStatus(p.id, e.target.value)}>
-                          <option value="">{'\u2014 Select status \u2014'}</option>
-                          {PATIENT_STATUS_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
-                        </select>
-                      </div>
-                      <div className="patient-grid">
-                        {PATIENT_FIELDS.map((f) => (
-                          <div className="patient-field" key={f.key} style={f.type === 'textarea' ? { gridColumn: '1 / -1' } : undefined}>
-                            <label>{f.label}:</label>
-                            {f.type === 'textarea'
-                              ? <textarea className={f.big ? 'big' : ''} value={p[f.key] || ''} onChange={(e) => updatePatientField(p.id, f.key, e.target.value)} />
-                              : <input type="text" value={p[f.key] || ''} onChange={(e) => updatePatientField(p.id, f.key, e.target.value)} />}
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
-                  <button className="add-patient-btn" type="button" onClick={addPatient}>+ Add Patient</button>
-                </>
-              ) : wardDoc.patients.length === 0 ? (
-                <div className="no-patients">No patient write-ups on this report.</div>
-              ) : (
-                wardDoc.patients.map((p) => <PatientBlockView p={p} key={p.id} />)
-              )}
-
-              <h2 className="night-update-heading">Night Update</h2>
-              {editable && <button className="btn btn-secondary" type="button" onClick={openNightUpdate}>{'\uD83C\uDF19 Night Update'}</button>}
-              {editable && nightUpdateOpen && (
-                <div className="patient-field" style={{ marginTop: 10 }}>
-                  <label className="patient-note-label" style={{ marginTop: 0 }}>Night update:</label>
-                  <textarea id="nightUpdateInput" placeholder="Type the night update here…" style={{ minHeight: 140 }}
-                    value={wardDoc.nightUpdate} onChange={(e) => updateWardDoc({ nightUpdate: e.target.value })} />
-                </div>
-              )}
-              {!editable && wardDoc.nightUpdate && (
-                <div className="night-update-block">
-                  <h3 className="patient-note-label">{'Night Update' + (wardDoc.nightUpdateBy ? ' — ' + wardDoc.nightUpdateBy : '') + ':'}</h3>
-                  <p className="patient-note-text">{wardDoc.nightUpdate}</p>
-                </div>
-              )}
-              {editable && <div className="night-update-meta">{wardDoc.nightUpdateBy ? 'Added by ' + wardDoc.nightUpdateBy : ''}</div>}
-            </div>
-
-            <div className="card-box">
-              {editable && (
-                <div className="submit-bar">
-                  <button className="btn btn-secondary" style={{ flex: 1, padding: 12 }} onClick={saveReport}>Save</button>
-                  <button className="btn btn-primary" style={{ flex: 1, padding: 12 }} onClick={submitReport}>Submit Report</button>
-                </div>
-              )}
-              <div className="save-status" style={{ color: saveStatus.error ? '#dc2626' : '#6b7280' }}>{saveStatus.text}</div>
-            </div>
-          </>
-        )}
+        {activeOption && activeOption.wardKeys.map(key => (
+          <WardReportPanel key={key} wardKey={key} showLabel={activeOption.wardKeys.length > 1}
+            isAdmin={isAdmin} profile={profile} user={user} navigate={navigate} />
+        ))}
       </div>
     </>
   );

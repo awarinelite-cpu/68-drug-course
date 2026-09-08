@@ -36,6 +36,33 @@ export const WARDS = [
 // updates the label everywhere it's used without any extra plumbing.
 WARDS.forEach(w => { w.defaultLabel = w.label; });
 
+// The Ward Nurse role covers PAED BED and PAED COT together (one nurse,
+// two physically separate patient groups) — the ward-selection dropdown
+// on that page shows a single "PAED WARD" option for both, but they stay
+// two entirely separate reports underneath: own Firestore docs under
+// their own 'paedbed'/'paedcot' keys, own Shift Statistics table each,
+// and two separate rows (still PAED BED / PAED COT) on the Overall
+// Nurse's "All Wards" table — grouping is selector-only, nothing else
+// reads WARD_GROUPS.
+export const WARD_GROUPS = [
+  { key: 'paedward', label: 'PAED WARD', wardKeys: ['paedbed', 'paedcot'] }
+];
+
+// Builds the Ward Nurse page's ward-selection list: every ward not part
+// of a group as its own option, plus one option per WARD_GROUPS entry in
+// place of its first member (so PAED WARD appears where PAED BED used to
+// sit in the list, and PAED COT's own slot is skipped).
+export function wardSelectorOptions() {
+  const groupedKeys = new Set(WARD_GROUPS.flatMap(g => g.wardKeys));
+  const out = [];
+  WARDS.forEach(w => {
+    if (!groupedKeys.has(w.key)) { out.push({ key: w.key, label: w.label, wardKeys: [w.key] }); return; }
+    const group = WARD_GROUPS.find(g => g.wardKeys[0] === w.key);
+    if (group) out.push({ key: group.key, label: group.label, wardKeys: group.wardKeys });
+  });
+  return out;
+}
+
 export const WARD_NAMES_COLLECTION = 'nurseReportConfig';
 export const WARD_NAMES_DOC = 'wardNames';
 
