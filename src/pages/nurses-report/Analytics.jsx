@@ -3,6 +3,7 @@ import { collection, query, where, getDocs } from "firebase/firestore";
 import Chart from "chart.js/auto";
 import { db } from "../../firebase.js";
 import { useGoBack } from "../../hooks/useGoBack.js";
+import { useTheme } from "../../contexts/ThemeContext.jsx";
 import {
   WARDS, DEMOGRAPHIC_FIELDS, STAT_FIELDS, OCC_INCREASE_KEYS, OCC_DECREASE_KEYS,
   reportDateId, weekId
@@ -196,6 +197,16 @@ function openPicker(input) {
 
 export default function Analytics() {
   const goBack = useGoBack('/nurses-report/role-select');
+  const { theme } = useTheme();
+  // Chart.js doesn't resolve CSS custom properties on its own, so pull the
+  // same light/dark colors used elsewhere in the app (--text-primary,
+  // --border, --surface-bg) as plain hex/rgba here, and redraw every chart
+  // whenever theme flips — otherwise axis labels, gridlines, and legend
+  // text default to Chart.js's mid-gray, which reads fine on a white card
+  // but nearly disappears against the dark-mode surface.
+  const chartTextColor = theme === 'dark' ? '#F1F5F9' : '#232F56';
+  const chartGridColor = theme === 'dark' ? 'rgba(255,255,255,0.18)' : 'rgba(15,35,80,0.12)';
+  const chartSliceBorder = theme === 'dark' ? '#132030' : '#FFFFFF';
 
   const [activePeriod, setActivePeriod] = useState('today');
   const [phase, setPhase] = useState('loading'); // 'loading' | 'summary' | 'empty' | 'error'
@@ -301,13 +312,17 @@ export default function Analytics() {
         labels: CLINICAL_FIELDS.map(f => f.label),
         datasets: [{
           data: CLINICAL_FIELDS.map(f => totals[f.key]),
-          backgroundColor: ['#2563eb', '#dc2626', '#d97706', '#7c3aed', '#0891b2']
+          backgroundColor: ['#2563eb', '#dc2626', '#d97706', '#7c3aed', '#0891b2'],
+          borderRadius: 4
         }]
       },
       options: {
         responsive: true, maintainAspectRatio: false,
         plugins: { legend: { display: false } },
-        scales: { y: { beginAtZero: true, ticks: { precision: 0 } } }
+        scales: {
+          x: { ticks: { color: chartTextColor }, grid: { color: chartGridColor } },
+          y: { beginAtZero: true, ticks: { precision: 0, color: chartTextColor }, grid: { color: chartGridColor } }
+        }
       }
     });
 
@@ -318,13 +333,17 @@ export default function Analytics() {
         labels: MOVEMENT_FIELDS.map(f => f.label),
         datasets: [{
           data: MOVEMENT_FIELDS.map(f => totals[f.key]),
-          backgroundColor: MOVEMENT_FIELDS.map(f => f.direction === 'increase' ? '#16a34a' : '#dc2626')
+          backgroundColor: MOVEMENT_FIELDS.map(f => f.direction === 'increase' ? '#16a34a' : '#dc2626'),
+          borderRadius: 4
         }]
       },
       options: {
         responsive: true, maintainAspectRatio: false,
         plugins: { legend: { display: false } },
-        scales: { y: { beginAtZero: true, ticks: { precision: 0 } } }
+        scales: {
+          x: { ticks: { color: chartTextColor }, grid: { color: chartGridColor } },
+          y: { beginAtZero: true, ticks: { precision: 0, color: chartTextColor }, grid: { color: chartGridColor } }
+        }
       }
     });
 
@@ -333,9 +352,9 @@ export default function Analytics() {
       type: 'pie',
       data: {
         labels: ['Male', 'Female', 'Children'],
-        datasets: [{ data: [totals.male, totals.female, totals.child], backgroundColor: ['#2563eb', '#db2777', '#f59e0b'] }]
+        datasets: [{ data: [totals.male, totals.female, totals.child], backgroundColor: ['#2563eb', '#db2777', '#f59e0b'], borderColor: chartSliceBorder, borderWidth: 2 }]
       },
-      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 11 } } } } }
+      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 11 }, color: chartTextColor } } } }
     });
 
     if (affiliationPieRef.current) affiliationPieRef.current.destroy();
@@ -343,11 +362,11 @@ export default function Analytics() {
       type: 'pie',
       data: {
         labels: ['Soldiers', 'Civilians'],
-        datasets: [{ data: [totals.soldier, totals.civilian], backgroundColor: ['#16a34a', '#6b7280'] }]
+        datasets: [{ data: [totals.soldier, totals.civilian], backgroundColor: ['#16a34a', '#6b7280'], borderColor: chartSliceBorder, borderWidth: 2 }]
       },
-      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 11 } } } } }
+      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 11 }, color: chartTextColor } } } }
     });
-  }, [totals]);
+  }, [totals, theme]);
 
   // Ward Breakdown chart — redraw whenever perWard or the chosen ward
   // changes. Ranked descending so the leading column reads first.
@@ -380,16 +399,19 @@ export default function Analytics() {
       type: 'bar',
       data: {
         labels: MOVEMENT_GRID_FIELDS.map(f => f.label),
-        datasets: [{ data: MOVEMENT_GRID_FIELDS.map(f => wardTotals[f.key] || 0), backgroundColor: MOVEMENT_GRID_FIELDS.map(colorFor) }]
+        datasets: [{ data: MOVEMENT_GRID_FIELDS.map(f => wardTotals[f.key] || 0), backgroundColor: MOVEMENT_GRID_FIELDS.map(colorFor), borderRadius: 4 }]
       },
       options: {
         indexAxis: 'y',
         responsive: true, maintainAspectRatio: false,
         plugins: { legend: { display: false } },
-        scales: { x: { beginAtZero: true, ticks: { precision: 0 } } }
+        scales: {
+          x: { beginAtZero: true, ticks: { precision: 0, color: chartTextColor }, grid: { color: chartGridColor } },
+          y: { ticks: { color: chartTextColor }, grid: { color: chartGridColor } }
+        }
       }
     });
-  }, [perWard, breakdownWard]);
+  }, [perWard, breakdownWard, theme]);
 
   const additions = totals ? MOVEMENT_FIELDS.filter(f => f.direction === 'increase').reduce((s, f) => s + totals[f.key], 0) : 0;
   const reductions = totals ? MOVEMENT_FIELDS.filter(f => f.direction === 'decrease').reduce((s, f) => s + totals[f.key], 0) : 0;
