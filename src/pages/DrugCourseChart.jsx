@@ -851,10 +851,10 @@ export default function DrugCourseChart() {
                 ? <button className="btn btn-purple" onClick={enterDrugsEditMode}>Edit</button>
                 : <button className="btn btn-success" onClick={exitDrugsEditMode}>Save</button>
               }
-              <button className="btn btn-secondary" style={{ padding: '6px 12px', fontSize: 12 }} onClick={openVerbalModal}>
-                {verbalOrders.length ? '\uD83D\uDCAC Verbal Order (' + verbalOrders.length + ')' : '+ Verbal Order'}
-              </button>
               {drugsEditMode && <>
+                <button className="btn btn-secondary" style={{ padding: '6px 12px', fontSize: 12 }} onClick={openVerbalModal}>
+                  {verbalOrders.length ? '\uD83D\uDCAC Verbal Order (' + verbalOrders.length + ')' : '+ Verbal Order'}
+                </button>
                 <button className="btn btn-secondary" onClick={addDrug}>+ Add Drug</button>
                 <button className="btn btn-secondary" onClick={openBulkModal}>+ Bulk Upload</button>
               </>}
