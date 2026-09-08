@@ -420,7 +420,7 @@ export default function OverallNurse() {
     const overallRef = doc(db, 'archives', 'overall_' + dateId);
     let existingSnap;
     try {
-      existingSnap = await getDoc(overallRef);
+      existingSnap = await getDocSafe(overallRef);
     } catch (e) {
       setArchiveStatus({ text: "Couldn't check the archive: " + (e.code || e.message || 'unknown error'), error: true });
       return;
