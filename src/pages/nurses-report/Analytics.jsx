@@ -195,6 +195,59 @@ function openPicker(input) {
   input.click();
 }
 
+// --- "3D" chart styling helpers -------------------------------------
+// Chart.js has no built-in 3D chart type, so the raised/solid look is
+// faked two ways: a top-lit-to-bottom-shaded gradient fill on each bar/
+// slice (like light hitting a beveled surface), and a soft drop shadow
+// behind every shape (via canvas shadow* props, restored right after so
+// it doesn't bleed into gridlines/text). Both need the real canvas
+// context, so backgroundColor is a function Chart.js calls per element
+// once chartArea is known, not a plain color string.
+function shadeHex(hex, percent) {
+  const n = parseInt(hex.slice(1), 16);
+  const clamp = (v) => Math.max(0, Math.min(255, v));
+  const r = clamp(((n >> 16) & 0xff) + Math.round(255 * percent));
+  const g = clamp(((n >> 8) & 0xff) + Math.round(255 * percent));
+  const b = clamp((n & 0xff) + Math.round(255 * percent));
+  return 'rgb(' + r + ',' + g + ',' + b + ')';
+}
+function barGradient(ctx, chartArea, hex, vertical) {
+  if (!chartArea) return hex;
+  const g = vertical
+    ? ctx.createLinearGradient(0, chartArea.top, 0, chartArea.bottom)
+    : ctx.createLinearGradient(chartArea.left, 0, chartArea.right, 0);
+  g.addColorStop(0, shadeHex(hex, 0.28));
+  g.addColorStop(1, shadeHex(hex, -0.18));
+  return g;
+}
+function pieGradient(ctx, chartArea, hex) {
+  if (!chartArea) return hex;
+  const cx = (chartArea.left + chartArea.right) / 2;
+  const cy = (chartArea.top + chartArea.bottom) / 2;
+  const r = Math.min(chartArea.right - chartArea.left, chartArea.bottom - chartArea.top) / 2;
+  const g = ctx.createRadialGradient(cx - r * 0.3, cy - r * 0.3, r * 0.05, cx, cy, r);
+  g.addColorStop(0, shadeHex(hex, 0.3));
+  g.addColorStop(1, shadeHex(hex, -0.15));
+  return g;
+}
+// Draws a soft shadow under every bar/slice so shapes look raised off the
+// card instead of flat-printed on it. Shadow state is cleared right after
+// datasets draw so it never touches axis lines, gridlines, or labels.
+const dropShadowPlugin = {
+  id: 'dropShadow3d',
+  beforeDatasetsDraw(chart) {
+    const ctx = chart.ctx;
+    ctx.save();
+    ctx.shadowColor = 'rgba(0,0,0,0.35)';
+    ctx.shadowBlur = 8;
+    ctx.shadowOffsetX = 0;
+    ctx.shadowOffsetY = 4;
+  },
+  afterDatasetsDraw(chart) {
+    chart.ctx.restore();
+  }
+};
+
 export default function Analytics() {
   const goBack = useGoBack('/nurses-report/role-select');
   const { theme } = useTheme();
@@ -312,10 +365,16 @@ export default function Analytics() {
         labels: CLINICAL_FIELDS.map(f => f.label),
         datasets: [{
           data: CLINICAL_FIELDS.map(f => totals[f.key]),
-          backgroundColor: ['#2563eb', '#dc2626', '#d97706', '#7c3aed', '#0891b2'],
+          backgroundColor: (c) => {
+            const colors = ['#2563eb', '#dc2626', '#d97706', '#7c3aed', '#0891b2'];
+            return barGradient(c.chart.ctx, c.chart.chartArea, colors[c.dataIndex], true);
+          },
+          borderColor: ['#2563eb', '#dc2626', '#d97706', '#7c3aed', '#0891b2'].map(h => shadeHex(h, -0.25)),
+          borderWidth: 1.5,
           borderRadius: 4
         }]
       },
+      plugins: [dropShadowPlugin],
       options: {
         responsive: true, maintainAspectRatio: false,
         plugins: { legend: { display: false } },
@@ -333,10 +392,16 @@ export default function Analytics() {
         labels: MOVEMENT_FIELDS.map(f => f.label),
         datasets: [{
           data: MOVEMENT_FIELDS.map(f => totals[f.key]),
-          backgroundColor: MOVEMENT_FIELDS.map(f => f.direction === 'increase' ? '#16a34a' : '#dc2626'),
+          backgroundColor: (c) => {
+            const hex = MOVEMENT_FIELDS[c.dataIndex].direction === 'increase' ? '#16a34a' : '#dc2626';
+            return barGradient(c.chart.ctx, c.chart.chartArea, hex, true);
+          },
+          borderColor: MOVEMENT_FIELDS.map(f => shadeHex(f.direction === 'increase' ? '#16a34a' : '#dc2626', -0.25)),
+          borderWidth: 1.5,
           borderRadius: 4
         }]
       },
+      plugins: [dropShadowPlugin],
       options: {
         responsive: true, maintainAspectRatio: false,
         plugins: { legend: { display: false } },
@@ -352,8 +417,16 @@ export default function Analytics() {
       type: 'pie',
       data: {
         labels: ['Male', 'Female', 'Children'],
-        datasets: [{ data: [totals.male, totals.female, totals.child], backgroundColor: ['#2563eb', '#db2777', '#f59e0b'], borderColor: chartSliceBorder, borderWidth: 2 }]
+        datasets: [{
+          data: [totals.male, totals.female, totals.child],
+          backgroundColor: (c) => {
+            const colors = ['#2563eb', '#db2777', '#f59e0b'];
+            return pieGradient(c.chart.ctx, c.chart.chartArea, colors[c.dataIndex]);
+          },
+          borderColor: chartSliceBorder, borderWidth: 2
+        }]
       },
+      plugins: [dropShadowPlugin],
       options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 11 }, color: chartTextColor } } } }
     });
 
@@ -362,8 +435,16 @@ export default function Analytics() {
       type: 'pie',
       data: {
         labels: ['Soldiers', 'Civilians'],
-        datasets: [{ data: [totals.soldier, totals.civilian], backgroundColor: ['#16a34a', '#6b7280'], borderColor: chartSliceBorder, borderWidth: 2 }]
+        datasets: [{
+          data: [totals.soldier, totals.civilian],
+          backgroundColor: (c) => {
+            const colors = ['#16a34a', '#6b7280'];
+            return pieGradient(c.chart.ctx, c.chart.chartArea, colors[c.dataIndex]);
+          },
+          borderColor: chartSliceBorder, borderWidth: 2
+        }]
       },
+      plugins: [dropShadowPlugin],
       options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 11 }, color: chartTextColor } } } }
     });
   }, [totals, theme]);
@@ -399,8 +480,15 @@ export default function Analytics() {
       type: 'bar',
       data: {
         labels: MOVEMENT_GRID_FIELDS.map(f => f.label),
-        datasets: [{ data: MOVEMENT_GRID_FIELDS.map(f => wardTotals[f.key] || 0), backgroundColor: MOVEMENT_GRID_FIELDS.map(colorFor), borderRadius: 4 }]
+        datasets: [{
+          data: MOVEMENT_GRID_FIELDS.map(f => wardTotals[f.key] || 0),
+          backgroundColor: (c) => barGradient(c.chart.ctx, c.chart.chartArea, colorFor(MOVEMENT_GRID_FIELDS[c.dataIndex]), false),
+          borderColor: MOVEMENT_GRID_FIELDS.map(f => shadeHex(colorFor(f), -0.25)),
+          borderWidth: 1.5,
+          borderRadius: 4
+        }]
       },
+      plugins: [dropShadowPlugin],
       options: {
         indexAxis: 'y',
         responsive: true, maintainAspectRatio: false,
