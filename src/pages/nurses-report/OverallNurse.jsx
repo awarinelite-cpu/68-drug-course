@@ -208,7 +208,6 @@ export default function OverallNurse() {
       }
 
       setWhoLabel('Overall Nurse this week: ' + (overall ? overall.name : profile.name) + ((isAdmin || isSubadmin) && !isOverall ? ' (viewing as ' + profile.role + ')' : ''));
-      setAccess('granted');
 
       await Promise.all([loadWardNameOverrides(db), loadHeaderLabelOverrides(db), loadCustomColumns(db)]);
       setOverridesTick((t) => t + 1);
@@ -226,7 +225,17 @@ export default function OverallNurse() {
         // numbers if this fails (e.g. permissions).
       }
 
+      // Load and seed ward data BEFORE granting access. Previously access
+      // was granted (and the Save to Archive button made clickable) right
+      // away, while this real ward data only arrived later via the
+      // onSnapshot listener below — a fast click in that window archived
+      // (and then reset-overwrote) every ward as blank, even though real
+      // submitted reports existed on the server the whole time. wardData
+      // is now seeded synchronously from this fetch first, so the report
+      // page — and Save to Archive — never render with stale/empty data.
       await ensureSeeded();
+      setAccess('granted');
+
       unsub = onSnapshot(wardsCol, (snap) => {
         snap.docChanges().forEach((change) => {
           if (change.type === 'removed') return;
@@ -248,20 +257,24 @@ export default function OverallNurse() {
       setSaveStatus({ text: "Couldn't load ward data: " + (e.code || e.message || 'unknown error'), error: true });
       return;
     }
+    const map = {};
+    snap.docs.forEach(d => { map[d.id] = d.data(); });
     const existing = new Set(snap.docs.map(d => d.id));
     const missing = WARDS.filter(w => !existing.has(w.key));
-    if (!missing.length) return;
+    if (!missing.length) { setWardData(map); return; }
     const batch = writeBatch(db);
     missing.forEach(w => {
       const data = { label: w.label, beds: w.beds, locked: false };
       STAT_FIELDS.forEach(f => { if (f.key !== 'beds') data[f.key] = 0; });
       batch.set(doc(wardsCol, w.key), data);
+      map[w.key] = data;
     });
     try {
       await batch.commit();
     } catch (e) {
       setSaveStatus({ text: "Couldn't seed ward list: " + (e.code || e.message || 'unknown error'), error: true });
     }
+    setWardData(map);
   }
 
   async function toggleLock(wardKey) {
@@ -417,6 +430,14 @@ export default function OverallNurse() {
   // the Overall Nurse *create* an archive entry — only admin/subadmin may
   // update an already-archived one.
   async function saveToArchive() {
+    // Belt-and-suspenders guard alongside the load-order fix above: never
+    // archive (and then reset-overwrite) live ward data unless every
+    // ward's doc has actually loaded into wardData.
+    const loadedWardCount = WARDS.filter(w => wardData[w.key]).length;
+    if (loadedWardCount < WARDS.length) {
+      setArchiveStatus({ text: 'Ward data is still loading (' + loadedWardCount + '/' + WARDS.length + ' wards ready) \u2014 please wait a moment and try again.', error: true });
+      return;
+    }
     const overallRef = doc(db, 'archives', 'overall_' + dateId);
     let existingSnap;
     try {
