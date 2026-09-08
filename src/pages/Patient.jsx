@@ -224,12 +224,6 @@ export default function Patient() {
             <PatientBanner
               patient={{ ...patient, diagnosis: chartDiagnosis || patient.diagnosis }}
               ward={patient.ward}
-              boxes={
-                <>
-                  <button className="quick-box-btn" onClick={openOverview}>Overview</button>
-                  <button className="quick-box-btn" onClick={() => setShowStatusForm((v) => !v)}>Status</button>
-                </>
-              }
               extra={
                 <>
                   <button className="btn btn-secondary edit-patient-btn" title="Edit patient information" onClick={openEditPatient}>✎</button>
@@ -238,6 +232,8 @@ export default function Patient() {
                     disabled={allocBusy} onClick={toggleAllocation}>
                     {allocBusy ? '…' : (allocatedToMe ? '✓ Allocated — tap to remove' : 'Allocate to Me')}
                   </button>
+                  <button className="btn btn-purple" style={{ padding: '4px 10px', fontSize: 12, marginLeft: 6 }} onClick={openOverview}>Overview</button>
+                  <button className="btn btn-secondary" style={{ padding: '4px 10px', fontSize: 12, marginLeft: 6 }} onClick={() => setShowStatusForm((v) => !v)}>Status</button>
                 </>
               }
             />
