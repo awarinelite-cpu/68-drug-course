@@ -38,12 +38,16 @@ WARDS.forEach(w => { w.defaultLabel = w.label; });
 
 // The Ward Nurse role covers PAED BED and PAED COT together (one nurse,
 // two physically separate patient groups) — the ward-selection dropdown
-// on that page shows a single "PAED WARD" option for both, but they stay
+// on that page shows a single "PAED WARD" option for both, and they stay
 // two entirely separate reports underneath: own Firestore docs under
 // their own 'paedbed'/'paedcot' keys, own Shift Statistics table each,
 // and two separate rows (still PAED BED / PAED COT) on the Overall
-// Nurse's "All Wards" table — grouping is selector-only, nothing else
-// reads WARD_GROUPS.
+// Nurse's "All Wards" statistics table. The Overall Nurse's "Ward
+// Reports" section also reads WARD_GROUPS, but only to combine the
+// *narrative* report (patient write-ups + night update) under one
+// "PAED WARD" heading — each member ward still gets its own Shift
+// Statistics table underneath, just labeled with a small subheading
+// (PAED BED / PAED COT) instead of merging the numbers.
 export const WARD_GROUPS = [
   { key: 'paedward', label: 'PAED WARD', wardKeys: ['paedbed', 'paedcot'] }
 ];

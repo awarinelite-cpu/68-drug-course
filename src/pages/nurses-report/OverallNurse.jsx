@@ -8,7 +8,7 @@ import ReportContactModal from "../../components/ReportContactModal.jsx";
 import { db } from "../../firebase.js";
 import { useAuth } from "../../contexts/AuthContext.jsx";
 import {
-  WARDS, STAT_FIELDS, SHIFT_STAT_FIELDS, SHIFTS, PATIENT_FIELDS, DEMOGRAPHIC_FIELDS,
+  WARDS, WARD_GROUPS, STAT_FIELDS, SHIFT_STAT_FIELDS, SHIFTS, PATIENT_FIELDS, DEMOGRAPHIC_FIELDS,
   reportDateId, reportPeriodLabel,
   wardReportPeriodLabel, weekId, occDelta, defaultWardDoc, movementColorClass,
   loadWardNameOverrides, saveWardNameOverride,
@@ -101,6 +101,41 @@ function WardShiftTable({ w, data }) {
         </tr>
       </tbody>
     </table>
+  );
+}
+
+// Wraps a single ward's Shift Statistics table. When a ward is shown as
+// part of a merged group (e.g. PAED WARD), `labeled` adds a small
+// subheading naming which ward (PAED BED / PAED COT) the table below it
+// belongs to — the table itself is untouched and never merges data across
+// wards.
+function WardStatsSection({ w, data, labeled }) {
+  return (
+    <div className="ward-report-sub">
+      {labeled && <h3 className="ward-report-subheading">{w.label}</h3>}
+      <div className="table-wrap"><WardShiftTable w={w} data={data} /></div>
+    </div>
+  );
+}
+
+// Wraps a single ward's patient write-ups + night update. When merged into
+// a group's combined report, `labeled` adds the same small subheading so
+// the reader can tell which ward each write-up came from.
+function WardPatientSection({ w, data, labeled }) {
+  const patients = Array.isArray(data.patients) ? data.patients : [];
+  return (
+    <div className="ward-report-sub">
+      {labeled && <h3 className="ward-report-subheading">{w.label}</h3>}
+      {patients.length === 0
+        ? <div className="no-patients" style={{ marginTop: 10 }}>No patient write-ups submitted for this ward.</div>
+        : patients.map((p, i) => <PatientBlock p={p} key={p.id || i} />)}
+      {data.nightUpdate && (
+        <div className="night-update-block">
+          <h3 className="patient-note-label">{'Night Update' + (data.nightUpdateBy ? ' — ' + data.nightUpdateBy : '') + ':'}</h3>
+          <p className="patient-note-text">{data.nightUpdate}</p>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -352,7 +387,29 @@ export default function OverallNurse() {
     demoTotals[f.key] = sum;
   });
 
-  const submittedWards = WARDS.filter(w => wardData[w.key] && wardData[w.key].submitted);
+  // Builds the Ward Reports list, merging any WARD_GROUPS members (PAED
+  // BED + PAED COT) that have a submitted report into one entry so their
+  // patient write-ups render under a single "PAED WARD" heading. The "All
+  // Wards" statistics table above is untouched by this — it still lists
+  // every ward from WARDS separately — and each grouped ward keeps its own
+  // Shift Statistics table below, just labeled with a subheading.
+  const groupedWardKeys = new Set(WARD_GROUPS.flatMap(g => g.wardKeys));
+  const reportGroups = [];
+  const seenGroupKeys = new Set();
+  WARDS.forEach((w) => {
+    if (groupedWardKeys.has(w.key)) {
+      const group = WARD_GROUPS.find(g => g.wardKeys.includes(w.key));
+      if (seenGroupKeys.has(group.key)) return;
+      seenGroupKeys.add(group.key);
+      const members = group.wardKeys
+        .map(k => ({ w: WARDS.find(x => x.key === k), data: wardData[k] }))
+        .filter(m => m.data && m.data.submitted);
+      if (members.length) reportGroups.push({ key: group.key, label: group.label, members });
+      return;
+    }
+    const data = wardData[w.key];
+    if (data && data.submitted) reportGroups.push({ key: w.key, label: w.label, members: [{ w, data }] });
+  });
 
   // Files the current 24-hour period to the permanent Ward Charts Archive:
   // one "overall_<dateId>" doc plus one "ward_<wardKey>_<dateId>" doc per
@@ -630,23 +687,18 @@ export default function OverallNurse() {
 
         <div className="card-box">
           <h2>Ward Reports</h2>
-          {submittedWards.length === 0 && <div className="ward-report-empty">No ward reports submitted yet.</div>}
-          {submittedWards.map((w) => {
-            const data = wardData[w.key];
-            const patients = Array.isArray(data.patients) ? data.patients : [];
+          {reportGroups.length === 0 && <div className="ward-report-empty">No ward reports submitted yet.</div>}
+          {reportGroups.map((g) => {
+            const labeled = g.members.length > 1;
             return (
-              <div className="ward-report-block" key={w.key}>
-                <h2 className="ward-report-heading">{w.label}</h2>
-                <div className="table-wrap"><WardShiftTable w={w} data={data} /></div>
-                {patients.length === 0
-                  ? <div className="no-patients" style={{ marginTop: 10 }}>No patient write-ups submitted for this ward.</div>
-                  : patients.map((p, i) => <PatientBlock p={p} key={p.id || i} />)}
-                {data.nightUpdate && (
-                  <div className="night-update-block">
-                    <h3 className="patient-note-label">{'Night Update' + (data.nightUpdateBy ? ' — ' + data.nightUpdateBy : '') + ':'}</h3>
-                    <p className="patient-note-text">{data.nightUpdate}</p>
-                  </div>
-                )}
+              <div className="ward-report-block" key={g.key}>
+                <h2 className="ward-report-heading">{g.label}</h2>
+                {g.members.map(({ w, data }) => (
+                  <WardStatsSection w={w} data={data} labeled={labeled} key={'stats-' + w.key} />
+                ))}
+                {g.members.map(({ w, data }) => (
+                  <WardPatientSection w={w} data={data} labeled={labeled} key={'patients-' + w.key} />
+                ))}
               </div>
             );
           })}
