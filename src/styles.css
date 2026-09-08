@@ -673,13 +673,11 @@ table.chart td input { width:100%; border:none; background:transparent; text-ali
 /* Unlike the drug/vitals tables (which genuinely have too many columns for
    any phone and are meant to be swiped), this banner only has 8 short
    fields — a sideways scroll just to read the diagnosis is worse than
-   fitting it. Below ~560px, drop to one column and trim size slightly so
+   fitting it. Below ~560px, drop to one column (font size unchanged —
+   the single-column layout already fits without needing to shrink it) so
    every field stays fully visible with no scrolling and nothing clipped. */
 @media (max-width:560px) {
   .info-grid-wrap .info-grid { grid-template-columns:1fr; gap:8px; }
-  .info-row { font-size:13px; }
-  .info-row label { font-size:13px; }
-  .info-row input, .info-row span.val { font-size:13px; }
 }
 
 .drugs-block { margin-bottom:18px; }
