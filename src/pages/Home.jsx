@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { collection, getDocs, doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
+import { collection, getDocs, doc, setDoc, serverTimestamp } from "firebase/firestore";
 import { db } from "../firebase.js";
 import { useAuth } from "../contexts/AuthContext.jsx";
 import { useExitOnDoubleBack } from "../hooks/useExitOnDoubleBack.js";
@@ -13,7 +13,7 @@ import { parsePatientFields, extractDrugSection } from "../lib/patientParse.js";
 import { pendingTransfersFor } from "../lib/wardTransfer.js";
 import { wardHeadcount } from "../lib/wardCensus.js";
 import { reportWardKeysForPatientWard, patientWardAndBedTypeForReportKey } from "../lib/wardNameMatch.js";
-import { reportDateId, WARDS, isWardDocUntouched } from "../lib/nurses-report-common.js";
+import { WARDS } from "../lib/nurses-report-common.js";
 
 const EMPTY_FORM = { name: '', emr: '', diagnosis: '', ward: '', pedBedType: '', age: '', hospNo: '', admissionDate: '', allergies: '' };
 
@@ -42,13 +42,6 @@ export default function Home() {
 
   const [showTransfers, setShowTransfers] = useState(false);
 
-  // Today's Occ figure(s) from the nurses' Shift Statistics report for
-  // whichever report ward(s) the current myWard maps to — {reportWardKey:
-  // occ}. Empty when myWard has no report-ward match (see
-  // reportWardKeysForPatientWard), in which case the patient headcount is
-  // used instead (see wardPatientCount below).
-  const [wardOccByKey, setWardOccByKey] = useState({});
-
   const showExitToast = useExitOnDoubleBack();
 
   useEffect(() => {
@@ -59,30 +52,6 @@ export default function Home() {
     loadAllPatients();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  const myWardForOcc = profile?.ward || '';
-  useEffect(() => {
-    let cancelled = false;
-    const keys = reportWardKeysForPatientWard(myWardForOcc);
-    if (!keys.length) { setWardOccByKey({}); return; }
-    const dateId = reportDateId();
-    Promise.all(keys.map(async (key) => {
-      try {
-        const snap = await getDoc(doc(db, 'nurseReports', dateId, 'wards', key));
-        const data = snap.exists() ? snap.data() : null;
-        return [key, {
-          occ: data && typeof data.occ === 'number' ? data.occ : 0,
-          // A doc that exists but hasn't actually been filled in yet (no
-          // shift figures entered) shouldn't be trusted over the real
-          // patient list below the badge — see wardPatientCount below.
-          untouched: !data || isWardDocUntouched(data)
-        }];
-      } catch {
-        return [key, { occ: 0, untouched: true }];
-      }
-    })).then((entries) => { if (!cancelled) setWardOccByKey(Object.fromEntries(entries)); });
-    return () => { cancelled = true; };
-  }, [myWardForOcc]);
 
   async function loadAllPatients(force) {
     if (allPatients && !force) return allPatients;
@@ -201,19 +170,18 @@ export default function Home() {
   // ward report's Previous Occ auto-fills from on shift handover.
   const reportWardKeys = reportWardKeysForPatientWard(myWard);
   const isSplitWard = reportWardKeys.length > 1;
-  // Per report-ward-key count: an untouched report doc (see
-  // isWardDocUntouched) hasn't been given a real Occ figure yet today —
-  // trust the actual patient headcount instead, so this badge always
-  // matches the patient list right below it. For a split ward (currently
-  // only PEDIATRIC/NICU WARD), each key's headcount is further narrowed
-  // to patients whose pedBedType matches that key's Bed/Cot side (see
+  // Per report-ward-key count: the actual number of patients currently
+  // registered on this ward in the app (not the shift report's Occ
+  // figure), so the badge always matches the patient list right below
+  // it. For a split ward (currently only PEDIATRIC/NICU WARD), each
+  // key's headcount is further narrowed to patients whose pedBedType
+  // matches that key's Bed/Cot side (see
   // patientWardAndBedTypeForReportKey) — patients with no pedBedType set
   // yet aren't counted on either side here, but still show up in the
   // "Bed/Cot not set" group in the list below.
   const wardBreakdown = reportWardKeys.map((k) => {
-    const untouched = wardOccByKey[k]?.untouched ?? true;
     const info = patientWardAndBedTypeForReportKey(k);
-    const count = untouched ? wardHeadcount(allPatients, myWard, info?.bedType) : (wardOccByKey[k]?.occ || 0);
+    const count = wardHeadcount(allPatients, myWard, info?.bedType);
     return { key: k, bedType: info?.bedType || null, count };
   });
   const wardPatientCount = reportWardKeys.length
