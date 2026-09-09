@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { collection, getDocs, doc, setDoc, serverTimestamp } from "firebase/firestore";
+import { collection, getDocs, getDoc, doc, setDoc, serverTimestamp } from "firebase/firestore";
 import { db } from "../firebase.js";
 import { useAuth } from "../contexts/AuthContext.jsx";
 import { useExitOnDoubleBack } from "../hooks/useExitOnDoubleBack.js";
@@ -181,29 +181,85 @@ export default function Home() {
     reader.readAsText(file);
   }
 
+  // Matches an "add drugs to an existing patient" CSV row against a patient
+  // already in Firestore, purely by EMR Number (case/whitespace-insensitive)
+  // — the same identifier the admin already used the first time they
+  // uploaded that patient.
+  function findExistingPatientByEmr(emr) {
+    const norm = (emr || '').trim().toLowerCase();
+    if (!norm) return null;
+    return (allPatients || []).find(p => (p.emr || '').trim().toLowerCase() === norm) || null;
+  }
+
+  // Adds a CSV row's parsed drugs onto a patient's Drug Course Chart —
+  // creating the chart doc if the patient doesn't have one yet, or
+  // appending onto its existing `drugs` array (skipping anything that's an
+  // exact name+route+frequency+duration repeat of a drug already on the
+  // chart, so re-uploading the same CSV twice doesn't double up the list).
+  async function addDrugsToChart(patientId, drugsParsed) {
+    if (!drugsParsed || !drugsParsed.length) return 0;
+    const ref = doc(db, 'patients', patientId, 'drugCourseChart', 'main');
+    let existingDrugs = [];
+    try {
+      const snap = await getDoc(ref);
+      if (snap.exists()) existingDrugs = Array.isArray(snap.data().drugs) ? snap.data().drugs : [];
+    } catch (e) {
+      console.warn('Could not read existing drug chart before merging bulk-uploaded drugs:', e);
+    }
+    const key = (d) => [d.name, d.route, d.frequency, d.duration].map(v => (v || '').trim().toLowerCase()).join('|');
+    const existingKeys = new Set(existingDrugs.map(key));
+    const toAdd = drugsParsed.filter(d => !existingKeys.has(key(d)));
+    if (!toAdd.length) return 0;
+    const merged = [...existingDrugs, ...toAdd];
+    setDoc(ref, { drugs: merged, updatedAt: serverTimestamp() }, { merge: true }).catch((e) => {
+      console.warn('Bulk-uploaded drugs write queued locally; will retry once back online:', e);
+    });
+    return toAdd.length;
+  }
+
   async function saveBulkPatients() {
     if (profile?.role !== 'admin') { setBulkMsg('Only an admin can bulk upload patients.'); return; }
     const validRows = (bulkRows || []).filter(r => r.errors.length === 0);
     if (!validRows.length) { setBulkMsg('No valid rows to upload.'); return; }
     setBulkSaving(true);
     const created = [];
+    let newCount = 0, updatedCount = 0, drugCount = 0;
     for (const r of validRows) {
-      const data = {
-        name: r.data.name, emr: r.data.emr, diagnosis: r.data.diagnosis,
-        ward: r.data.ward, pedBedType: r.data.ward === 'PEDIATRIC/NICU WARD' ? r.data.pedBedType : '',
-        age: r.data.age, hospNo: r.data.hospNo, admissionDate: r.data.admissionDate,
-        allergies: r.data.allergies, insurance: r.data.insurance,
-        createdAt: serverTimestamp(), createdBy: user ? user.uid : null
-      };
-      const ref = doc(collection(db, 'patients'));
-      setDoc(ref, data).catch((e) => {
-        console.warn('Bulk patient write queued locally; will retry once back online:', e);
-      });
-      created.push({ id: ref.id, ...data });
+      const existing = findExistingPatientByEmr(r.data.emr);
+      let patientId;
+      if (existing) {
+        // Same EMR Number as a patient already on file — recognized as the
+        // same patient, so no duplicate patient record is created here.
+        // Per the CSV note, a re-upload like this is treated as "drugs
+        // only": the existing patient's own fields are left untouched.
+        patientId = existing.id;
+        updatedCount++;
+      } else {
+        const data = {
+          name: r.data.name, emr: r.data.emr, diagnosis: r.data.diagnosis,
+          ward: r.data.ward, pedBedType: r.data.ward === 'PEDIATRIC/NICU WARD' ? r.data.pedBedType : '',
+          age: r.data.age, hospNo: r.data.hospNo, admissionDate: r.data.admissionDate,
+          allergies: r.data.allergies, insurance: r.data.insurance,
+          createdAt: serverTimestamp(), createdBy: user ? user.uid : null
+        };
+        const ref = doc(collection(db, 'patients'));
+        setDoc(ref, data).catch((e) => {
+          console.warn('Bulk patient write queued locally; will retry once back online:', e);
+        });
+        created.push({ id: ref.id, ...data });
+        patientId = ref.id;
+        newCount++;
+      }
+      if (r.data.drugsParsed && r.data.drugsParsed.length) {
+        drugCount += await addDrugsToChart(patientId, r.data.drugsParsed);
+      }
     }
     setAllPatients((prev) => prev ? [...prev, ...created] : created);
     setBulkSaving(false);
-    setBulkMsg('Uploaded ' + created.length + ' patient(s).');
+    setBulkMsg(
+      newCount + ' new patient(s) created, ' + updatedCount + ' existing patient(s) matched by EMR' +
+      (drugCount ? ', ' + drugCount + ' drug(s) added to their charts.' : '.')
+    );
     setBulkRows(null);
     setBulkFileName('');
   }
@@ -319,7 +375,10 @@ export default function Home() {
             <h3 style={{ marginTop: 0 }}>Bulk Upload Patients (CSV)</h3>
             <p style={{ fontSize: 12, color: '#555' }}>
               Upload a CSV of patients and they\u2019ll be created and sorted into their wards automatically \u2014
-              same fields as the New Patient form. Not sure of the format? Download the template first.
+              same fields as the New Patient form, plus an optional Drugs column that\u2019s added straight to
+              each patient\u2019s Drug Course Chart. Re-uploading with the same EMR Number and just the Drugs
+              column filled in adds drugs to that existing patient instead of creating a duplicate. Not sure
+              of the format? Download the template first.
             </p>
             <div style={{ marginBottom: 10 }}>
               <button className="btn btn-secondary" onClick={downloadCsvTemplate}>⬇ Download CSV Template</button>
@@ -340,6 +399,7 @@ export default function Home() {
                       <th style={{ border: '1px solid #000', padding: 3, fontSize: 12 }}>Name</th>
                       <th style={{ border: '1px solid #000', padding: 3, fontSize: 12 }}>EMR</th>
                       <th style={{ border: '1px solid #000', padding: 3, fontSize: 12 }}>Ward</th>
+                      <th style={{ border: '1px solid #000', padding: 3, fontSize: 12 }}>Drugs</th>
                       <th style={{ border: '1px solid #000', padding: 3, fontSize: 12 }}>Status</th>
                     </tr>
                   </thead>
@@ -350,6 +410,14 @@ export default function Home() {
                         <td style={{ border: '1px solid #000', padding: 3, fontSize: 12 }}>{r.data.name || '—'}</td>
                         <td style={{ border: '1px solid #000', padding: 3, fontSize: 12 }}>{r.data.emr || '—'}</td>
                         <td style={{ border: '1px solid #000', padding: 3, fontSize: 12 }}>{r.data.ward || '—'}</td>
+                        <td style={{ border: '1px solid #000', padding: 3, fontSize: 12 }}>
+                          {r.data.drugsParsed && r.data.drugsParsed.length
+                            ? r.data.drugsParsed.length + ' drug(s)'
+                            : '—'}
+                          {findExistingPatientByEmr(r.data.emr) && (
+                            <div style={{ color: '#2563eb' }}>existing patient — drugs only</div>
+                          )}
+                        </td>
                         <td style={{ border: '1px solid #000', padding: 3, fontSize: 12, color: r.errors.length ? '#b91c1c' : '#16a34a' }}>
                           {r.errors.length ? r.errors.join('; ') : 'OK'}
                         </td>

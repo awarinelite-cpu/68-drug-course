@@ -1,17 +1,20 @@
-import { WARD_OPTIONS, PED_BED_TYPES } from "./drugChartHelpers.js";
+import { WARD_OPTIONS, PED_BED_TYPES, parseBulkText } from "./drugChartHelpers.js";
 
 // --- CSV template ----------------------------------------------------------
 // Column order matches PatientForm.jsx field-for-field so a filled-in
 // template maps straight onto the same patient record `createPatient()`
-// writes to Firestore.
+// writes to Firestore. The trailing "Drugs" column is separate — it feeds
+// the patient's Drug Course Chart, not the patient record itself (see
+// parsePatientCsv below).
 export const CSV_HEADERS = [
   'Name', 'EMR Number', 'Diagnosis', 'Ward', 'Bed/Cot', 'Age',
-  'Hospital No', 'Date of Admission', 'Allergies', 'Insurance'
+  'Hospital No', 'Date of Admission', 'Allergies', 'Insurance', 'Drugs'
 ];
 
 const SAMPLE_ROWS = [
-  ['John Doe', 'EMR12345', 'Malaria', 'MALE MEDICAL WARD', '', '34', 'H-00123', '2026-09-01', 'None known', 'NHIS'],
-  ['Baby Grace', 'EMR12346', 'Neonatal jaundice', 'PEDIATRIC/NICU WARD', 'Cot', '3 days', 'H-00124', '2026-09-02', '', ''],
+  ['John Doe', 'EMR12345', 'Malaria', 'MALE MEDICAL WARD', '', '34', 'H-00123', '2026-09-01', 'None known', 'NHIS',
+    'Tabs Artemether/Lumefantrine 80/480mg bd x 3/7\nIV Paracetamol 1g tds'],
+  ['Baby Grace', 'EMR12346', 'Neonatal jaundice', 'PEDIATRIC/NICU WARD', 'Cot', '3 days', 'H-00124', '2026-09-02', '', '', ''],
 ];
 
 function csvEscape(value) {
@@ -29,6 +32,11 @@ export function generateCsvTemplate() {
   lines.push('# Acceptable Ward values (must match one of these, case-insensitive):');
   lines.push('# ' + WARD_OPTIONS.join(' | '));
   lines.push('# Bed/Cot only applies to PEDIATRIC/NICU WARD — use "Bed" or "Cot", leave blank otherwise.');
+  lines.push('# Drugs column: one drug order per line (same free-typed format as "Bulk Upload Drugs" on a');
+  lines.push('# patient\u2019s Drug Course Chart) — e.g. "Tabs Omeprazole 20mg bd x2/52" or "IV Ceftriaxone 1g 12hrly".');
+  lines.push('# To add drugs to a patient you already uploaded, re-upload with the SAME EMR Number and only the');
+  lines.push('# Drugs column filled in — matching EMR Number is recognized as the same patient, so no duplicate');
+  lines.push('# patient is created; the drugs are just added to that patient\u2019s existing Drug Course Chart.');
   return lines.join('\r\n');
 }
 
@@ -104,6 +112,7 @@ export function parsePatientCsv(text) {
     admissionDate: idx('date of admission'),
     allergies: idx('allergies'),
     insurance: idx('insurance'),
+    drugs: idx('drugs'),
   };
   const headerOk = col.name !== -1 && col.emr !== -1;
   if (!headerOk) return { headerOk: false, rows: [] };
@@ -138,12 +147,19 @@ export function parsePatientCsv(text) {
       errors.push('Date of Admission "' + admissionDateRaw + '" should be YYYY-MM-DD');
     }
 
+    // Drugs column: same free-typed "one order per line" format as the
+    // Drug Course Chart's own Bulk Upload Drugs feature — reuse its parser
+    // directly so both entry points understand the exact same syntax.
+    const drugsRaw = get(r, 'drugs');
+    const drugsParsed = drugsRaw ? parseBulkText(drugsRaw) : [];
+
     return {
       line: i + 2, // +1 for header row, +1 for 1-indexing
       data: {
         name, emr, diagnosis: get(r, 'diagnosis'), ward, pedBedType,
         age: get(r, 'age'), hospNo: get(r, 'hospNo'),
-        admissionDate: admissionDateRaw, allergies: get(r, 'allergies'), insurance: get(r, 'insurance')
+        admissionDate: admissionDateRaw, allergies: get(r, 'allergies'), insurance: get(r, 'insurance'),
+        drugsRaw, drugsParsed
       },
       errors
     };
