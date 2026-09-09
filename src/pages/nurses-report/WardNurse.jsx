@@ -7,12 +7,14 @@ import { useAuth } from "../../contexts/AuthContext.jsx";
 import { useGoBack } from "../../hooks/useGoBack.js";
 import {
   WARDS, SHIFT_STAT_FIELDS, SHIFTS, PATIENT_FIELDS, PATIENT_STATUS_OPTIONS,
+  PATIENT_STATUS_ARCHIVE_REASON,
   DEMOGRAPHIC_FIELDS, computeDemographicTotals, movementColorClass,
   reportDateId, occDelta, blankShift, defaultWardDoc, wardSelectorOptions,
   isWardDocUntouched
 } from "../../lib/nurses-report-common.js";
 import { patientWardAndBedTypeForReportKey } from "../../lib/wardNameMatch.js";
 import { wardHeadcount } from "../../lib/wardCensus.js";
+import { applyPatientStatus } from "../../lib/patientAdmissionStatus.js";
 import Topbar from "../../components/Topbar.jsx";
 import wardSelectBg from "../../assets/ward-select-bg.svg";
 
@@ -264,8 +266,41 @@ function useWardReport(wardKey, isAdmin, profile, user) {
   // { text: 'Filled from patient record.', error: false }. Purely for
   // showing the nurse a small note under the EMR field; never persisted.
   const [emrLookup, setEmrLookup] = useState({});
+  // Patients (from the master `patients` collection) currently on this
+  // report ward — powers the "Select Patient" dropdown on each write-up
+  // card, so a nurse can pick a patient instead of retyping their
+  // details. Refetched whenever the selected ward changes; empty when
+  // this report ward has no matching patient-chart ward (see
+  // patientWardAndBedTypeForReportKey) or the fetch fails, in which case
+  // the dropdown simply doesn't show and the nurse falls back to typing
+  // details in manually (or via the EMR lookup on blur).
+  const [wardPatientOptions, setWardPatientOptions] = useState([]);
   const patientCounter = useRef(0);
   const w = WARDS.find(x => x.key === wardKey);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const info = patientWardAndBedTypeForReportKey(wardKey);
+      if (!info) { setWardPatientOptions([]); return; }
+      try {
+        const q = query(collection(db, 'patients'), where('ward', '==', info.wardLabel));
+        const snap = await getDocsSafe(q);
+        const list = [];
+        snap.forEach((d) => {
+          const data = d.data();
+          if (data.pendingTransfer) return;
+          if (info.bedType && (data.pedBedType || '') !== info.bedType) return;
+          list.push({ id: d.id, name: data.name || '', emr: data.emr || '', age: data.age || '', admissionDate: data.admissionDate || '', diagnosis: data.diagnosis || '' });
+        });
+        list.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+        if (!cancelled) setWardPatientOptions(list);
+      } catch (e) {
+        if (!cancelled) setWardPatientOptions([]);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [wardKey]);
 
   useEffect(() => {
     let cancelled = false;
@@ -389,6 +424,33 @@ function useWardReport(wardKey, isAdmin, profile, user) {
     }
   }
 
+  // Fills a write-up card straight from the "Select Patient" dropdown —
+  // same blank-fields-only fill as lookupPatientByEmr above, but keyed
+  // off a chosen wardPatientOptions entry instead of a typed EMR number.
+  // Also remembers which real patient record this card came from
+  // (`sourcePatientId`), which submitReport() below needs to actually
+  // discharge/refer that patient when the card's status calls for it.
+  // Clearing the dropdown back to blank clears that link too.
+  function selectPatientFromWard(id, sourcePatientId) {
+    if (!sourcePatientId) { setWardDoc((d) => ({ ...d, patients: d.patients.map((p) => p.id === id ? { ...p, sourcePatientId: '' } : p) })); return; }
+    const record = wardPatientOptions.find((p) => p.id === sourcePatientId);
+    if (!record) return;
+    setWardDoc((d) => ({
+      ...d,
+      patients: d.patients.map((p) => {
+        if (p.id !== id) return p;
+        const next = { ...p, sourcePatientId };
+        if (!next.emr && record.emr) next.emr = record.emr;
+        if (!next.name && record.name) next.name = record.name;
+        if (!next.age && record.age) next.age = record.age;
+        if (!next.doa && record.admissionDate) next.doa = record.admissionDate;
+        if (!next.diagnosis && record.diagnosis) next.diagnosis = record.diagnosis;
+        return next;
+      })
+    }));
+    setEmrLookup((s) => ({ ...s, [id]: { text: 'Filled in from ' + (record.name || 'the patient') + '\u2019s record.', error: false } }));
+  }
+
   function openNightUpdate() {
     if (!editable) return;
     const opening = !nightUpdateOpen;
@@ -427,6 +489,32 @@ function useWardReport(wardKey, isAdmin, profile, user) {
     if (hasNightUpdate && !doc_.shifts.pm.nurseOnDuty && profile?.name) {
       doc_ = { ...doc_, shifts: { ...doc_.shifts, pm: { ...doc_.shifts.pm, nurseOnDuty: profile.name } } };
     }
+
+    // A write-up linked to a real patient record (picked via "Select
+    // Patient") whose status is DISCHARGE or REFER TO ANOTHER HOSPITAL
+    // gets that patient discharged/referred for real on submit — the
+    // exact same archive-and-reset flow as the Drug Course Chart's own
+    // Patient Status control (applyPatientStatus), just triggered from
+    // here instead. Skips anything already archived this way (so
+    // re-submitting doesn't double-archive) or with no linked record.
+    const toArchive = doc_.patients.filter((p) => p.sourcePatientId && !p.archivedFromReport && PATIENT_STATUS_ARCHIVE_REASON[p.status]);
+    if (toArchive.length && !navigator.onLine) {
+      setSaveStatus({ text: "Some patients here are marked Discharge/Refer to another hospital — archiving them needs an internet connection. Please try again once online, or clear their status to submit without archiving them.", error: true });
+      return;
+    }
+    const archiveErrors = [];
+    if (toArchive.length) {
+      const results = await Promise.all(toArchive.map((p) =>
+        applyPatientStatus({
+          patientId: p.sourcePatientId, reason: PATIENT_STATUS_ARCHIVE_REASON[p.status],
+          transferWard: '', fromWard: w?.label || '', transferredByName: profile?.name || 'Unknown'
+        }).then((r) => ({ id: p.id, ok: r.ok, message: r.message, name: p.name || p.emr || 'A patient' }))
+      ));
+      const okIds = new Set(results.filter((r) => r.ok).map((r) => r.id));
+      results.forEach((r) => { if (!r.ok) archiveErrors.push(r.name + ': ' + r.message); });
+      doc_ = { ...doc_, patients: doc_.patients.map((p) => okIds.has(p.id) ? { ...p, archivedFromReport: true } : p) };
+    }
+
     const finalDoc = { ...doc_, occ: census.occ, vac: census.vac, ...movementTotals, ...demographicTotals };
     const ref = doc(db, 'nurseReports', dateId, 'wards', wardKey);
     const payload = {
@@ -440,7 +528,9 @@ function useWardReport(wardKey, isAdmin, profile, user) {
     }
     try {
       await setDoc(ref, payload, { merge: true });
-      setSaveStatus({ text: 'Report submitted.', error: false });
+      setSaveStatus(archiveErrors.length
+        ? { text: 'Report submitted, but could not archive: ' + archiveErrors.join('; '), error: true }
+        : { text: 'Report submitted.', error: false });
       setWardDoc((d) => ({ ...d, ...doc_, submitted: true, locked: true, nightUpdateBy: payload.nightUpdateBy || d.nightUpdateBy }));
     } catch (e) {
       setSaveStatus({ text: "Couldn't submit: " + (e.code || e.message || 'unknown error'), error: true });
@@ -452,9 +542,10 @@ function useWardReport(wardKey, isAdmin, profile, user) {
 
   return {
     w, wardDoc, adminEditOverride, setAdminEditOverride, nightUpdateOpen, topStatus, saveStatus, emrLookup,
+    wardPatientOptions,
     census, movementTotals, demographicTotals, editable,
     updateWardDoc, updateShiftField, updateDuty, updateBeds, updateStartOcc,
-    addPatient, removePatient, updatePatientField, updatePatientStatus, lookupPatientByEmr,
+    addPatient, removePatient, updatePatientField, updatePatientStatus, lookupPatientByEmr, selectPatientFromWard,
     openNightUpdate, saveReport, submitReport, pillClass, pillText
   };
 }
@@ -478,9 +569,9 @@ function useWardReport(wardKey, isAdmin, profile, user) {
 function WardPanelRest({ h, showLabel, isAdmin, navigate, includeShiftTable = true, includePreviousOcc = true, includeHeader = true, includeDemographics = true, onSave, onSubmit, useMaternityDemographics = false, locationOptions }) {
   const {
     w, wardDoc, topStatus, saveStatus, editable, adminEditOverride, setAdminEditOverride,
-    census, movementTotals, demographicTotals, emrLookup,
+    census, movementTotals, demographicTotals, emrLookup, wardPatientOptions,
     updateWardDoc, updateShiftField, updateDuty, updateBeds, updateStartOcc,
-    addPatient, removePatient, updatePatientField, updatePatientStatus, lookupPatientByEmr,
+    addPatient, removePatient, updatePatientField, updatePatientStatus, lookupPatientByEmr, selectPatientFromWard,
     nightUpdateOpen, openNightUpdate, saveReport, submitReport, pillClass, pillText
   } = h;
 
@@ -548,6 +639,15 @@ function WardPanelRest({ h, showLabel, isAdmin, navigate, includeShiftTable = tr
                 {wardDoc.patients.map((p) => (
                   <div className="patient-card" key={p.id}>
                     <button type="button" className="remove-btn" onClick={() => removePatient(p.id)}>Remove</button>
+                    {wardPatientOptions && wardPatientOptions.length > 0 && (
+                      <div className="patient-field">
+                        <label>Select Patient:</label>
+                        <select className={"status-select" + (p.sourcePatientId ? ' set' : '')} value={p.sourcePatientId || ''} onChange={(e) => selectPatientFromWard(p.id, e.target.value)}>
+                          <option value="">{'\u2014 Select from ward \u2014'}</option>
+                          {wardPatientOptions.map((wp) => <option key={wp.id} value={wp.id}>{(wp.name || 'Unnamed') + (wp.emr ? ' (' + wp.emr + ')' : '')}</option>)}
+                        </select>
+                      </div>
+                    )}
                     {locationOptions && (
                       <div className="patient-field">
                         <label>Located:</label>
