@@ -143,6 +143,34 @@ export default function DrugCourseChart() {
 
   const [auditModalOpen, setAuditModalOpen] = useState(false);
 
+  // --- Unread-update badges for Care Instructions / Audit Log -------------
+  // Tracked per-device (localStorage) per chart, keyed off how many entries
+  // existed the last time this nurse opened each modal on this device.
+  const seenStorageKey = 'chartSeen_' + patientId + (isArchived ? '_' + admissionId : '');
+  const [careSeenCount, setCareSeenCount] = useState(() => {
+    try {
+      const raw = localStorage.getItem(seenStorageKey + '_care');
+      return raw ? parseInt(raw, 10) || 0 : 0;
+    } catch (e) { return 0; }
+  });
+  const [auditSeenCount, setAuditSeenCount] = useState(() => {
+    try {
+      const raw = localStorage.getItem(seenStorageKey + '_audit');
+      return raw ? parseInt(raw, 10) || 0 : 0;
+    } catch (e) { return 0; }
+  });
+  const careUnreadCount = Math.max(0, careInstructions.length - careSeenCount);
+  const auditUnreadCount = Math.max(0, auditLog.length - auditSeenCount);
+  function markCareSeen() {
+    setCareSeenCount(careInstructions.length);
+    try { localStorage.setItem(seenStorageKey + '_care', String(careInstructions.length)); } catch (e) { /* ignore */ }
+  }
+  function markAuditSeen() {
+    setAuditSeenCount(auditLog.length);
+    try { localStorage.setItem(seenStorageKey + '_audit', String(auditLog.length)); } catch (e) { /* ignore */ }
+  }
+  function openAuditModal() { markAuditSeen(); setAuditModalOpen(true); }
+
   const [diagModalOpen, setDiagModalOpen] = useState(false);
   const [diagEditing, setDiagEditing] = useState(false);
   const [diagEditText, setDiagEditText] = useState('');
@@ -580,7 +608,7 @@ export default function DrugCourseChart() {
   }
 
   // --- Care instructions --------------------------------------------------
-  function openCareModal() { setEditingCareIndex(-1); setCareModalOpen(true); }
+  function openCareModal() { setEditingCareIndex(-1); setCareModalOpen(true); markCareSeen(); }
   function closeCareModal() { setEditingCareIndex(-1); setCareModalOpen(false); }
 
   async function submitCareInstruction() {
@@ -850,11 +878,13 @@ export default function DrugCourseChart() {
         </div>
 
         <div className="no-print" style={{ margin: '-4px 0 14px' }}>
-          <button className="btn btn-secondary" onClick={openCareModal}>
+          <button className="btn btn-secondary" style={{ position: 'relative' }} onClick={openCareModal}>
             {careInstructions.length ? '\uD83D\uDCAC Care Instructions (' + careInstructions.length + ')' : '+ Care Instructions'}
+            {careUnreadCount > 0 && <span className="notif-badge">{careUnreadCount > 99 ? '99+' : careUnreadCount}</span>}
           </button>
-          <button className="btn btn-secondary" onClick={() => setAuditModalOpen(true)}>
+          <button className="btn btn-secondary" style={{ position: 'relative' }} onClick={openAuditModal}>
             {'\uD83D\uDD53 Audit Log' + (auditLog.length ? ' (' + auditLog.length + ')' : '')}
+            {auditUnreadCount > 0 && <span className="notif-badge">{auditUnreadCount > 99 ? '99+' : auditUnreadCount}</span>}
           </button>
         </div>
 
@@ -865,7 +895,7 @@ export default function DrugCourseChart() {
               <thead>
                 <tr>
                   {drugsEditMode && <th className="col-rowedit no-print"></th>}
-                  <th style={{ width: 34 }}>No.</th><th>Drug Name</th><th>Route</th><th>Frequency</th><th>Action</th><th>Duration</th>
+                  <th style={{ width: 34 }}>No.</th><th className="col-drugname">Drug Name</th><th>Route</th><th>Frequency</th><th>Action</th><th>Duration</th>
                   <th className="no-print">Due</th>
                   {drugsEditMode && <th className="no-print" style={{ width: 34 }}></th>}
                 </tr>
@@ -881,7 +911,7 @@ export default function DrugCourseChart() {
                       <tr key={i}>
                         <td className="col-rowedit no-print"><button className="row-lock-btn" title="Done editing this row" onClick={() => lockDrugRow(i)}>✓</button></td>
                         <td>{i + 1}</td>
-                        <td><input type="text" value={d.name || ''} onChange={(e) => updateDrug(i, { name: e.target.value })} /></td>
+                        <td className="col-drugname"><input type="text" value={d.name || ''} onChange={(e) => updateDrug(i, { name: e.target.value })} /></td>
                         <td>
                           <select value={d.route || ''} onChange={(e) => updateDrug(i, { route: e.target.value })}>
                             {ROUTE_OPTIONS.map(opt => <option key={opt} value={opt}>{opt || '—'}</option>)}
@@ -911,7 +941,7 @@ export default function DrugCourseChart() {
                     <tr key={i}>
                       {showPencil && <td className="col-rowedit no-print"><button className="row-edit-btn" title="Edit this row" onClick={() => unlockDrugRow(i)}>🖊️</button></td>}
                       <td>{i + 1}</td>
-                      <td>{d.name || '—'}</td>
+                      <td className="col-drugname">{d.name || '—'}</td>
                       <td>{d.route || '—'}</td>
                       <td>
                         {d.frequency || '—'}

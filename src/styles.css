@@ -731,6 +731,16 @@ table.drugs-table th { background:#f2f2f2; text-transform:uppercase; }
 table.drugs-table td input, table.drugs-table td select { width:100%; border:none; background:transparent; text-align:center; font-size: 16px; font-family:inherit; }
 table.drugs-table td.no-col { width:34px; font-weight:bold; }
 table.drugs-table td.remove-col { width:34px; }
+table.drugs-table th.col-drugname, table.drugs-table td.col-drugname { text-align:left; }
+table.drugs-table td.col-drugname input { text-align:left; }
+
+.notif-badge {
+  position:absolute; top:-8px; right:-8px;
+  min-width:18px; height:18px; padding:0 4px;
+  border-radius:9px; background:#dc2626; color:#fff;
+  font-size:11px; font-weight:bold; line-height:18px;
+  text-align:center; box-shadow:0 0 0 2px var(--surface, #fff);
+}
 .remove-drug-btn { background:var(--danger); color:var(--surface); border:none; border-radius:4px; padding:3px 7px; font-size: 16px; cursor:pointer; }
 
 table.chart td.view-cell { text-align:center; min-height:18px; }
