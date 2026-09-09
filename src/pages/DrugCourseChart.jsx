@@ -13,7 +13,7 @@ import {
   ROUTE_OPTIONS, FREQ_OPTIONS, ACTION_OPTIONS, STATUS_LABELS, WARD_OPTIONS, actionColor, defaultRow,
   dueLabelFor, withDrugCompletionChecked, computeRouteFromSno, parseBulkText,
   parseDoseSequence, administrationTimesFor, flaggedDrugRefs, flaggedDrugMessage, diffFields,
-  autoDurationForFrequency, buildSnoSegments, buildSnoText
+  autoDurationForFrequency, buildSnoSegments, buildSnoText, abbreviateReason
 } from "../lib/drugChartHelpers.js";
 
 const FIELD_IDS = ['f_admission', 'f_discharge', 'f_diagnosis'];
@@ -73,6 +73,21 @@ function DoseSequenceBadges({ drug, index, chartRows }) {
           </span>
         );
       })}
+    </div>
+  );
+}
+
+// Tap-to-view popup for a "not given" reason — same rounded-card, tap-
+// outside-to-close pattern as the app's other field popups (see
+// FieldPopupModal in EntryChart.jsx). Shows the nurse's full written
+// reason; the chart cell itself only ever shows the abbreviation.
+function SkipReasonPopup({ nums, reason, onClose }) {
+  return (
+    <div className="field-popup-overlay no-print" style={{ display: 'flex' }} onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="field-popup-box">
+        <div className="field-popup-header"><h3>{'Drug ' + nums.join(', ') + ' \u2014 Not Given'}</h3><button type="button" className="field-popup-close" aria-label="Close" onClick={onClose}>&times;</button></div>
+        <div className="field-popup-body"><p className="field-popup-text">{reason}</p></div>
+      </div>
     </div>
   );
 }
@@ -147,6 +162,7 @@ export default function DrugCourseChart() {
   const [snoPickerSkipped, setSnoPickerSkipped] = useState({}); // { [drugNum]: reasonText }
   const [snoPickerEditingNum, setSnoPickerEditingNum] = useState(-1);
   const [snoPickerEditText, setSnoPickerEditText] = useState('');
+  const [skipReasonPopup, setSkipReasonPopup] = useState(null); // { nums, reason } | null
 
   const [statusAction, setStatusAction] = useState('');
   const [transferWard, setTransferWard] = useState('');
@@ -975,7 +991,8 @@ export default function DrugCourseChart() {
                             {given.map((s, idx) => <span key={'g' + idx}>{s.text}</span>)}
                             {given.length > 0 && skip.length > 0 && <br />}
                             {skip.map((s, idx) => (
-                              <span key={'s' + idx} className="sno-skip-text">
+                              <span key={'s' + idx} className="sno-skip-text sno-skip-tap"
+                                onClick={() => setSkipReasonPopup({ nums: s.nums, reason: s.fullReason })}>
                                 {(idx > 0 ? '. ' : '') + s.text}
                               </span>
                             ))}
@@ -1136,7 +1153,7 @@ export default function DrugCourseChart() {
                       <button type="button" className="sno-picker-pencil-btn" title="Not given — write a reason" aria-label="Not given — write a reason" onClick={(e) => { e.preventDefault(); openSnoSkipEditor(num); }}>✏️</button>
                     </label>
                     {skipReason && !editingThis && (
-                      <div className="sno-picker-skip-note" onClick={() => openSnoSkipEditor(num)}>{num + ' ' + skipReason}</div>
+                      <div className="sno-picker-skip-note" onClick={() => openSnoSkipEditor(num)}>{num + ' ' + abbreviateReason(skipReason)}</div>
                     )}
                     {editingThis && (
                       <div className="sno-picker-skip-editor">
@@ -1157,6 +1174,10 @@ export default function DrugCourseChart() {
             </div>
           </div>
         </div>
+      )}
+
+      {skipReasonPopup && (
+        <SkipReasonPopup nums={skipReasonPopup.nums} reason={skipReasonPopup.reason} onClose={() => setSkipReasonPopup(null)} />
       )}
 
       {auditModalOpen && (

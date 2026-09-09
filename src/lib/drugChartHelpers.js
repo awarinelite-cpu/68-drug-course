@@ -328,14 +328,38 @@ export function flaggedDrugMessage(blocked) {
   ).join('\n');
 }
 
+// --- "Not given" reason: abbreviate for the chart, keep full text for tap-to-view ---
+// A nurse can type as much detail as they like ("No IV line, tried both
+// arms") — the chart cell only ever shows a short abbreviation of it (so
+// the row stays compact and two differently-worded-but-same reasons still
+// group together visually), with the full text available by tapping the
+// abbreviation (see skipReasonPopup in DrugCourseChart.jsx). Single-word
+// reasons abbreviate to their first 3 letters ("Dialysis" -> "DIA");
+// multi-word reasons abbreviate to one letter per word ("No line" -> "NL",
+// "Not available" -> "NA"), capped at 6 letters so it can't run long.
+export function abbreviateReason(text) {
+  const t = (text || '').trim();
+  if (!t) return '';
+  const words = t.split(/\s+/).filter(Boolean);
+  let abbr;
+  if (words.length === 1) {
+    abbr = words[0].replace(/[^a-zA-Z]/g, '').slice(0, 3).toUpperCase();
+  } else {
+    abbr = words.map(w => (w.match(/[a-zA-Z]/) || [''])[0]).join('').toUpperCase();
+  }
+  return (abbr || t.replace(/[^a-zA-Z]/g, '').slice(0, 3).toUpperCase()).slice(0, 6);
+}
+
 // --- Drug S/N cell display: given numbers + "not given" reasons ----------
 // A chart row can carry both drugs actually given (row.sno, unchanged
 // plain-number text — e.g. "1, 4") and drugs documented as not given
-// (row.skipped: [{num, reason}]). Drugs sharing the exact same reason are
-// grouped into one bracketed segment; the given numbers stay outside any
-// bracket. Returns an ordered list of { type: 'given'|'skip', text }
-// segments for the caller to render (skip segments get the orange/
-// smaller-font treatment; given stays plain).
+// (row.skipped: [{num, reason}]). Drugs whose reason means the same thing
+// are grouped into one bracketed segment — matched case/whitespace-
+// insensitively (so "No line" and "no  line" still group) — showing the
+// abbreviation, not the full sentence; the given numbers stay outside any
+// bracket. Returns an ordered list of { type: 'given'|'skip', text,
+// nums?, fullReason? } segments for the caller to render (skip segments
+// get the orange color treatment and, via fullReason, a tap-to-view popup).
 export function buildSnoSegments(sno, skipped) {
   const segments = [];
   const givenText = (sno || '').trim();
@@ -343,15 +367,17 @@ export function buildSnoSegments(sno, skipped) {
   const list = Array.isArray(skipped) ? skipped.filter(s => s && (s.reason || '').trim()) : [];
   const groups = [];
   list.forEach(({ num, reason }) => {
-    const r = reason.trim();
-    let g = groups.find(g => g.reason === r);
-    if (!g) { g = { reason: r, nums: [] }; groups.push(g); }
+    const full = reason.trim();
+    const key = full.toLowerCase().replace(/\s+/g, ' ');
+    let g = groups.find(g => g.key === key);
+    if (!g) { g = { key, reason: full, nums: [] }; groups.push(g); }
     g.nums.push(parseInt(num, 10));
   });
   groups.forEach(g => {
     const nums = g.nums.slice().sort((a, b) => a - b);
-    const label = nums.length > 1 ? ('(' + nums.join(',') + ') ' + g.reason) : (nums[0] + ' ' + g.reason);
-    segments.push({ type: 'skip', text: label });
+    const abbr = abbreviateReason(g.reason);
+    const label = nums.length > 1 ? ('(' + nums.join(',') + ') ' + abbr) : (nums[0] + ' ' + abbr);
+    segments.push({ type: 'skip', text: label, nums, fullReason: g.reason });
   });
   return segments;
 }

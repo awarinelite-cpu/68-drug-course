@@ -638,8 +638,11 @@ table.chart td input { width:100%; border:none; background:transparent; text-ali
    the rest of the table (matches the normal app font), colored to match
    the Withheld action color for a consistent "not administered" signal at
    a glance. Always rendered after the given-drug numbers (see the col-sno
-   view-cell render in DrugCourseChart.jsx), never interleaved with them. */
+   view-cell render in DrugCourseChart.jsx), never interleaved with them.
+   Tapping it (.sno-skip-tap) pops up the full reason the abbreviation
+   stands for. */
 .sno-skip-text { color:#d97706; }
+.sno-skip-tap { cursor:pointer; text-decoration:underline dotted; text-underline-offset:2px; }
 .unit-note { text-align:center; font-size: 16px; color:#666; margin-bottom:10px; }
 @media print {
   .sheet { box-shadow:none; margin:0; }
