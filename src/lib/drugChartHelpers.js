@@ -331,6 +331,11 @@ const DURATION_RE = /^x?(\d+)\s*\/\s*(7|52|12|24)$/i;
 // fraction, e.g. "24hrs", "48hrs", "72hrs", "1hr" — common for a loading
 // dose followed by a stated total course length ("stat, then 8hrly 24hrs").
 const DURATION_HOURS_RE = /^x?(\d+)\s*(hrs?|hours?)$/i;
+// The second half of a duration spelled out as two tokens rather than one
+// ("10 days", "2 weeks", "1 month") — matched against the token right
+// after a bare number so "500mg" (a dose, already consumed earlier) and
+// other numbers elsewhere in the line aren't mistaken for a duration.
+const DURATION_WORD_RE = /^(days?|d|weeks?|wks?|months?|mo)$/i;
 function isDosageToken(t) { return DOSAGE_RE.test(t) || COMPOUND_DOSAGE_RE.test(t); }
 
 // A dose written with a stray space before its unit ("120 mg" instead of
@@ -462,6 +467,17 @@ export function parseDrugLine(line) {
       duration = hrM[1] + 'hrs';
     }
     rest.splice(durIdx, 1);
+  } else {
+    // Duration spelled out as two tokens instead of one, e.g. "10 days",
+    // "2 weeks", "1 month" — find a bare number immediately followed by
+    // one of those unit words and pull the pair out together.
+    const wordIdx = rest.findIndex((t, idx) =>
+      idx > 0 && /^\d+$/.test(rest[idx - 1]) && DURATION_WORD_RE.test(t.replace(/[.,]$/, ''))
+    );
+    if (wordIdx !== -1) {
+      duration = rest[wordIdx - 1] + ' ' + rest[wordIdx].replace(/[.,]$/, '').toLowerCase();
+      rest.splice(wordIdx - 1, 2);
+    }
   }
 
   // "@" just introduces the clock times (e.g. "@ 0,12,24hrs") and carries no
