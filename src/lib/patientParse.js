@@ -1,7 +1,10 @@
 // Parses a raw block of text copied straight off a hospital EMR page (patient
 // header + doctor's/physio notes) into the fields on the "Register New
-// Patient" form, plus pulls out the "Currently on:" drug-order block so it
-// can be run through the existing bulk drug parser (parseBulkText).
+// Patient" form, plus pulls out every "Currently on:" / "Prescription"
+// drug-order block (not just the newest) so the full list can be run
+// through the existing bulk drug parser (parseBulkText) — older orders a
+// doctor has since annotated "(completed)"/"(discontinued)"/"(withheld)"
+// are kept and flagged rather than dropped in favor of only the latest note.
 //
 // This is heuristic, not a guarantee — EMR note formatting varies by
 // clinician and facility. Everything it produces is meant to be shown to the
@@ -177,29 +180,38 @@ export function parsePatientFields(text) {
 // Section headers that signal the "Currently on:" drug list has ended.
 const STOP_WORDS = ['glycemic chart', 'o/e', 'vitals', 'assessment', 'chest', 'cvs', 'abd', 'review of investigations', 'plan'];
 
-// Pulls the lines under the first "Currently on:" heading — the patient's
-// active medication orders — out of the pasted note, stopping at the next
-// section header. Returns a newline-joined block ready for parseBulkText().
+// Pulls the lines under every "Currently on:" heading — not just the first
+// one — out of the pasted note, each block stopping at the next section
+// header or the next "Currently on:" heading. A single paste can carry more
+// than one such block (an admission note plus a later ward-round note that
+// restates/updates the list), and older orders that a doctor has since
+// marked "(completed)"/"(discontinued)"/"(withheld)" still need to show up
+// so they can be flagged rather than silently dropped in favor of only the
+// newest block. Returns a newline-joined block ready for parseBulkText(),
+// which will run every line (from every block) through the per-line status
+// annotation detection in parseDrugLine.
 export function extractDrugSection(text) {
   const lines = (text || '').replace(/\r\n/g, '\n').split('\n');
-  const startIdx = lines.findIndex(l => /currently on\s*:/i.test(l));
-  if (startIdx !== -1) {
+  const blocks = [];
+  for (let i = 0; i < lines.length; i++) {
+    if (!/currently on\s*:/i.test(lines[i])) continue;
     const collected = [];
-    for (let i = startIdx + 1; i < lines.length && collected.length < 20; i++) {
-      const line = lines[i].trim();
+    for (let j = i + 1; j < lines.length && collected.length < 20; j++) {
+      const line = lines[j].trim();
       if (!line) continue;
       const lower = line.toLowerCase();
+      if (/currently on\s*:/i.test(line)) break; // next "Currently on:" block starts here
       if (STOP_WORDS.some(w => lower === w || lower.startsWith(w + ' ') || lower.startsWith(w + ':'))) break;
       collected.push(line);
     }
-    return collected.join('\n');
+    if (collected.length) blocks.push(collected.join('\n'));
   }
-  // No "Currently on:" note-style block — try the most recent "Prescription"
-  // entry from an Encounters-style timeline paste instead (falls back to
-  // paste order, conventionally newest-first, when timestamps don't parse).
-  const rx = parseEncounterEntries(text)
-    .map((e, idx) => ({ ...e, idx }))
-    .filter((e) => /^prescription$/i.test(e.type))
-    .sort((a, b) => (b.ts ?? -Infinity) - (a.ts ?? -Infinity) || a.idx - b.idx);
-  return rx.length ? rx[0].content : '';
+  if (blocks.length) return blocks.join('\n');
+
+  // No "Currently on:" note-style block — fall back to every "Prescription"
+  // entry from an Encounters-style timeline paste (not just the most recent
+  // one), so earlier orders that were later discontinued/completed/withheld
+  // still surface and can be flagged instead of being dropped.
+  const rx = parseEncounterEntries(text).filter((e) => /^prescription$/i.test(e.type));
+  return rx.map((e) => e.content).join('\n');
 }

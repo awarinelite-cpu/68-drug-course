@@ -270,7 +270,8 @@ const QTY_RE = /^(i|ii|iii|iv|v|\d+)$/i;
 // instead of being left to pollute the Frequency text.
 const STATUS_ANNOTATION_MAP = {
   completed: 'Completed', complete: 'Completed', done: 'Completed',
-  discontinued: 'Discontinued', stopped: 'Discontinued', dc: 'Discontinued', "dc'd": 'Discontinued', dcd: 'Discontinued'
+  discontinued: 'Discontinued', stopped: 'Discontinued', dc: 'Discontinued', "dc'd": 'Discontinued', dcd: 'Discontinued',
+  withheld: 'Withheld', held: 'Withheld', hold: 'Withheld'
 };
 
 // Fluid orders that alternate two bags in one regimen, e.g. "5% D/water
