@@ -358,8 +358,14 @@ export function buildSnoSegments(sno, skipped) {
 
 // Flat-text version of buildSnoSegments, for places that just need a single
 // string (audit-log diffing, the sno-picker button's own preview label).
+// Given-drug numbers and "not given" reasons are always kept as two
+// distinct blocks — given first, skipped last — never interleaved.
 export function buildSnoText(sno, skipped) {
-  return buildSnoSegments(sno, skipped).map(s => s.text).join('. ');
+  const segs = buildSnoSegments(sno, skipped);
+  const given = segs.filter(s => s.type === 'given').map(s => s.text).join(', ');
+  const skip = segs.filter(s => s.type === 'skip').map(s => s.text).join('. ');
+  if (given && skip) return given + ' | ' + skip;
+  return given || skip;
 }
 
 // --- Bulk Upload: paste "Drug Name Dosage Frequency Duration" lines and auto-parse ---

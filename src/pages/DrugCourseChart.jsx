@@ -968,11 +968,19 @@ export default function DrugCourseChart() {
                       {(() => {
                         const segs = buildSnoSegments(row.sno, row.skipped);
                         if (!segs.length) return '\u00A0';
-                        return segs.map((s, idx) => (
-                          <span key={idx} className={s.type === 'skip' ? 'sno-skip-text' : ''}>
-                            {(idx > 0 ? '. ' : '') + s.text}
-                          </span>
-                        ));
+                        const given = segs.filter(s => s.type === 'given');
+                        const skip = segs.filter(s => s.type === 'skip');
+                        return (
+                          <>
+                            {given.map((s, idx) => <span key={'g' + idx}>{s.text}</span>)}
+                            {given.length > 0 && skip.length > 0 && <br />}
+                            {skip.map((s, idx) => (
+                              <span key={'s' + idx} className="sno-skip-text">
+                                {(idx > 0 ? '. ' : '') + s.text}
+                              </span>
+                            ))}
+                          </>
+                        );
                       })()}
                     </td>
                     <td className="col-time view-cell">{row.time || '\u00A0'}</td>
