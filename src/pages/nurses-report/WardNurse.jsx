@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { doc, getDocs, collection, query, where, limit, setDoc, serverTimestamp } from "firebase/firestore";
+import { doc, getDocs, collection, query, where, orderBy, limit, setDoc, serverTimestamp } from "firebase/firestore";
 import { getDocSafe, getDocsSafe } from "../../lib/firestoreOffline.js";
 import { db } from "../../firebase.js";
 import { useAuth } from "../../contexts/AuthContext.jsx";
@@ -45,6 +45,89 @@ function computeCensus(wardDoc) {
     perShiftOcc[s.key] = occ;
   });
   return { beds, occ, vac: beds - occ, perShiftOcc };
+}
+
+// Typing "VITAL SIGNS:" (or "Vitals:", any case, with or without the extra
+// space) as the last line of a patient's Diagnosis/Notes triggers an
+// auto-pull of that patient's most recent reading from the Vital Signs
+// Chart (see updateDiagnosisField below). Tolerant of spacing/case so
+// "Vital signs:", "VITALS:", "Vital  Signs :" etc. all match.
+const VITALS_TRIGGER_RE = /^(vital\s*signs|vitals)\s*:\s*$/i;
+
+// A patient write-up card is "linked" to a real patient record either via
+// the Select Patient dropdown (sourcePatientId) or, more loosely, via a
+// successful EMR lookup (emrPatientId, set below) — either is enough to
+// know whose Vital Signs Chart to read from. Only sourcePatientId is ever
+// used for the discharge/referral archiving side effect in submitReport().
+function linkedPatientIdFor(p) {
+  return (p && (p.sourcePatientId || p.emrPatientId)) || '';
+}
+
+// Matches the Vitals Chart's own field keys (temp/pulse/resp/bp/spo2) and
+// mirrors how a nurse writes it on paper: "T-36.8⁰c P-98b/m R-20c/m BP-
+// 123/80mmHg SPO2- 99%." Missing values render as an em dash rather than
+// being silently dropped, so it's obvious a reading is incomplete.
+function formatVitalsLine(v) {
+  const val = (x) => (x === undefined || x === null || x === '') ? '\u2014' : x;
+  return `T-${val(v.temp)}\u2070c P-${val(v.pulse)}b/m R-${val(v.resp)}c/m BP- ${val(v.bp)}mmHg SPO2- ${val(v.spo2)}%.`;
+}
+
+async function fetchLatestVitals(patientId) {
+  const q = query(collection(db, 'patients', patientId, 'vitals'), orderBy('time', 'desc'), limit(1));
+  const snap = await getDocsSafe(q);
+  if (snap.empty) return null;
+  return snap.docs[0].data();
+}
+
+const VITALS_CHIPS = [
+  { key: 'temp', label: 'T', suffix: '\u2070c' },
+  { key: 'pulse', label: 'P', suffix: 'b/m' },
+  { key: 'resp', label: 'R', suffix: 'c/m' },
+  { key: 'bp', label: 'BP', suffix: 'mmHg' },
+  { key: 'spo2', label: 'SPO2', suffix: '%' }
+];
+
+// The row of tappable vitals shown under Diagnosis/Notes once a "VITAL
+// SIGNS:" trigger has pulled a reading in (see updateDiagnosisField).
+// Tapping one turns it into a small inline input; committing it (blur or
+// Enter) regenerates the note's vitals line in place via onChange.
+function VitalsChipRow({ snapshot, onChange }) {
+  const [editingKey, setEditingKey] = useState(null);
+  const [draft, setDraft] = useState('');
+
+  function startEdit(key) {
+    setEditingKey(key);
+    setDraft(snapshot[key] || '');
+  }
+  function commit(key) {
+    onChange(key, draft.trim());
+    setEditingKey(null);
+  }
+
+  return (
+    <div className="vitals-chip-row" style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 6 }}>
+      {VITALS_CHIPS.map((c) => editingKey === c.key ? (
+        <span key={c.key} className="vitals-chip vitals-chip-editing"
+          style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: '#eef2ff', border: '1px solid #6366f1', borderRadius: 999, padding: '3px 8px', fontSize: 13 }}>
+          {c.label}-
+          <input autoFocus type="text" value={draft} style={{ width: 54, border: 'none', background: 'transparent', font: 'inherit', outline: 'none' }}
+            onChange={(e) => setDraft(e.target.value)}
+            onBlur={() => commit(c.key)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') { e.preventDefault(); commit(c.key); }
+              if (e.key === 'Escape') setEditingKey(null);
+            }} />
+          {c.suffix}
+        </span>
+      ) : (
+        <button key={c.key} type="button" className="vitals-chip" title="Tap to edit"
+          style={{ background: '#eef2ff', border: '1px solid #c7d2fe', borderRadius: 999, padding: '3px 10px', fontSize: 13, color: '#3730a3', cursor: 'pointer' }}
+          onClick={() => startEdit(c.key)}>
+          {c.label}-{snapshot[c.key] || '\u2014'}{c.suffix}
+        </button>
+      ))}
+    </div>
+  );
 }
 
 function computeMovementTotals(wardDoc) {
@@ -390,6 +473,63 @@ function useWardReport(wardKey, isAdmin, profile, user) {
   function updatePatientField(id, key, value) { setWardDoc((d) => ({ ...d, patients: d.patients.map(p => p.id === id ? { ...p, [key]: value } : p) })); }
   function updatePatientStatus(id, value) { setWardDoc((d) => ({ ...d, patients: d.patients.map(p => p.id === id ? { ...p, status: value } : p) })); }
 
+  // Diagnosis/Notes edits go through here instead of updatePatientField so
+  // a trailing "VITAL SIGNS:" / "Vitals:" line (see VITALS_TRIGGER_RE) can
+  // auto-pull that patient's latest Vitals Chart reading right underneath
+  // it — same trigger text a nurse would already write by hand, just
+  // filled in instead of left blank. Does nothing (silently) if this
+  // write-up isn't linked to a real patient record yet, or if that
+  // patient has no vitals recorded.
+  async function updateDiagnosisField(id, value) {
+    updatePatientField(id, 'diagnosis', value);
+
+    const lines = value.split('\n');
+    const triggerLine = lines[lines.length - 1];
+    if (!VITALS_TRIGGER_RE.test(triggerLine.trim())) return;
+
+    const p = wardDoc.patients.find((x) => x.id === id);
+    const patientId = linkedPatientIdFor(p);
+    if (!patientId) return;
+
+    try {
+      const latest = await fetchLatestVitals(patientId);
+      if (!latest) return;
+      const snapshot = { temp: latest.temp || '', pulse: latest.pulse || '', resp: latest.resp || '', bp: latest.bp || '', spo2: latest.spo2 || '' };
+      const vitalsLine = formatVitalsLine(snapshot);
+      setWardDoc((d) => ({
+        ...d,
+        patients: d.patients.map((x) => {
+          if (x.id !== id) return x;
+          // The lookup is async — if the note moved on (more typed, the
+          // trigger edited away) while it was in flight, don't insert
+          // a reading that no longer matches where the cursor is.
+          if (!x.diagnosis || !x.diagnosis.endsWith(triggerLine)) return x;
+          return { ...x, diagnosis: x.diagnosis + '\n' + vitalsLine, vitalsSnapshot: snapshot, vitalsLine };
+        })
+      }));
+    } catch (e) {
+      // Non-fatal — the nurse can still type vitals in by hand.
+    }
+  }
+
+  // Fired when the nurse clicks one of the auto-filled vitals chips under
+  // the Diagnosis/Notes box and edits it — regenerates just that reading's
+  // line and swaps it into the note text in place (see vitalsLine, the
+  // exact substring last inserted, so the replace targets the right spot
+  // even though the rest of the note may have grown around it since).
+  function updateVitalsSnapshotField(id, field, value) {
+    setWardDoc((d) => ({
+      ...d,
+      patients: d.patients.map((p) => {
+        if (p.id !== id || !p.vitalsSnapshot) return p;
+        const nextSnapshot = { ...p.vitalsSnapshot, [field]: value };
+        const nextLine = formatVitalsLine(nextSnapshot);
+        const nextDiagnosis = p.vitalsLine && p.diagnosis ? p.diagnosis.replace(p.vitalsLine, nextLine) : p.diagnosis;
+        return { ...p, vitalsSnapshot: nextSnapshot, vitalsLine: nextLine, diagnosis: nextDiagnosis };
+      })
+    }));
+  }
+
   // Looks the typed EMR number up against the existing 'patients'
   // collection (the same master record used by the drug-course-chart
   // side of the app) and, if found, fills in Age/Name/Sex/DOA — but only
@@ -409,11 +549,12 @@ function useWardReport(wardKey, isAdmin, profile, user) {
         return;
       }
       const record = snap.docs[0].data();
+      const foundId = snap.docs[0].id;
       setWardDoc((d) => ({
         ...d,
         patients: d.patients.map((p) => {
           if (p.id !== id) return p;
-          const next = { ...p };
+          const next = { ...p, emrPatientId: foundId };
           if (!next.name && record.name) next.name = record.name;
           if (!next.age && record.age) next.age = record.age;
           if (!next.doa && record.admissionDate) next.doa = record.admissionDate;
@@ -548,7 +689,8 @@ function useWardReport(wardKey, isAdmin, profile, user) {
     wardPatientOptions,
     census, movementTotals, demographicTotals, editable,
     updateWardDoc, updateShiftField, updateDuty, updateBeds, updateStartOcc,
-    addPatient, removePatient, updatePatientField, updatePatientStatus, lookupPatientByEmr, selectPatientFromWard,
+    addPatient, removePatient, updatePatientField, updateDiagnosisField, updateVitalsSnapshotField,
+    updatePatientStatus, lookupPatientByEmr, selectPatientFromWard,
     openNightUpdate, saveReport, submitReport, pillClass, pillText
   };
 }
@@ -574,7 +716,8 @@ function WardPanelRest({ h, showLabel, isAdmin, navigate, includeShiftTable = tr
     w, wardDoc, topStatus, saveStatus, editable, adminEditOverride, setAdminEditOverride,
     census, movementTotals, demographicTotals, emrLookup, wardPatientOptions,
     updateWardDoc, updateShiftField, updateDuty, updateBeds, updateStartOcc,
-    addPatient, removePatient, updatePatientField, updatePatientStatus, lookupPatientByEmr, selectPatientFromWard,
+    addPatient, removePatient, updatePatientField, updateDiagnosisField, updateVitalsSnapshotField,
+    updatePatientStatus, lookupPatientByEmr, selectPatientFromWard,
     nightUpdateOpen, openNightUpdate, saveReport, submitReport, pillClass, pillText
   } = h;
 
@@ -670,9 +813,13 @@ function WardPanelRest({ h, showLabel, isAdmin, navigate, includeShiftTable = tr
                         <div className="patient-field" key={f.key} style={f.type === 'textarea' ? { gridColumn: '1 / -1' } : undefined}>
                           <label>{f.label}:</label>
                           {f.type === 'textarea'
-                            ? <textarea className={f.big ? 'big' : ''} value={p[f.key] || ''} onChange={(e) => updatePatientField(p.id, f.key, e.target.value)} />
+                            ? <textarea className={f.big ? 'big' : ''} value={p[f.key] || ''}
+                                onChange={(e) => f.key === 'diagnosis' ? updateDiagnosisField(p.id, e.target.value) : updatePatientField(p.id, f.key, e.target.value)} />
                             : <input type="text" value={p[f.key] || ''} onChange={(e) => updatePatientField(p.id, f.key, e.target.value)}
                                 onBlur={f.key === 'emr' ? (e) => lookupPatientByEmr(p.id, e.target.value) : undefined} />}
+                          {f.key === 'diagnosis' && p.vitalsSnapshot && (
+                            <VitalsChipRow snapshot={p.vitalsSnapshot} onChange={(field, value) => updateVitalsSnapshotField(p.id, field, value)} />
+                          )}
                           {f.key === 'emr' && emrLookup[p.id] && (
                             <div className="emr-lookup-note" style={{ color: emrLookup[p.id].error ? '#dc2626' : '#6b7280' }}>
                               {emrLookup[p.id].text}
