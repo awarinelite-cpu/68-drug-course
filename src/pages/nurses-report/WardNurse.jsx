@@ -491,15 +491,16 @@ function useWardReport(wardKey, isAdmin, profile, user) {
     }
 
     // A write-up linked to a real patient record (picked via "Select
-    // Patient") whose status is DISCHARGE or REFER TO ANOTHER HOSPITAL
-    // gets that patient discharged/referred for real on submit — the
-    // exact same archive-and-reset flow as the Drug Course Chart's own
-    // Patient Status control (applyPatientStatus), just triggered from
-    // here instead. Skips anything already archived this way (so
+    // Patient") whose status is DISCHARGE or TRANS OUT (TRANS OUT
+    // doubles as "referred to another hospital") gets that patient
+    // discharged/referred for real on submit — the exact same
+    // archive-and-reset flow as the Drug Course Chart's own Patient
+    // Status control (applyPatientStatus), just triggered from here
+    // instead. Skips anything already archived this way (so
     // re-submitting doesn't double-archive) or with no linked record.
     const toArchive = doc_.patients.filter((p) => p.sourcePatientId && !p.archivedFromReport && PATIENT_STATUS_ARCHIVE_REASON[p.status]);
     if (toArchive.length && !navigator.onLine) {
-      setSaveStatus({ text: "Some patients here are marked Discharge/Refer to another hospital — archiving them needs an internet connection. Please try again once online, or clear their status to submit without archiving them.", error: true });
+      setSaveStatus({ text: "Some patients here are marked Discharge/Trans Out — archiving them needs an internet connection. Please try again once online, or clear their status to submit without archiving them.", error: true });
       return;
     }
     const archiveErrors = [];

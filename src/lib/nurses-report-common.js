@@ -405,7 +405,6 @@ export const PATIENT_FIELDS = [
 // ward nurse's own view and the Overall Nurse's compiled report).
 export const PATIENT_STATUS_OPTIONS = [
   'DISCHARGE',
-  'REFER TO ANOTHER HOSPITAL',
   'TRANS OUT',
   'NEW PATIENT',
   'TRANS IN FROM A&E',
@@ -419,10 +418,11 @@ export const PATIENT_STATUS_OPTIONS = [
 // archives that patient's current admission the same way the Drug Course
 // Chart's own Patient Status control does — see applyPatientStatus in
 // patientAdmissionStatus.js. This is just another route into that same
-// discharge/referral flow, not a separate one.
+// discharge/referral flow, not a separate one. TRANS OUT doubles as
+// "referred to another hospital" here — there's no separate status for it.
 export const PATIENT_STATUS_ARCHIVE_REASON = {
   'DISCHARGE': 'discharged',
-  'REFER TO ANOTHER HOSPITAL': 'referred'
+  'TRANS OUT': 'referred'
 };
 
 function pad(n) { return String(n).padStart(2, '0'); }
