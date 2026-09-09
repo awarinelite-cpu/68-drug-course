@@ -89,6 +89,7 @@ function PatientBlockView({ p }) {
   return (
     <div className="patient-block">
       {p.status && <div className="status-stamp">{p.status}</div>}
+      {p.location && <div className="status-stamp">{p.location}</div>}
       {summaryFields.map(f => p[f.key] ? (
         <div className="patient-line" key={f.key}><h3>{f.label}: </h3>{p[f.key]}</div>
       ) : null)}
@@ -473,7 +474,7 @@ function useWardReport(wardKey, isAdmin, profile, user) {
 // the one Save/Submit bar shown (Mothers') saves both member wards'
 // data together, since Cots' own numeric figures (entered in the shared
 // table above) would otherwise have no button of their own to save.
-function WardPanelRest({ h, showLabel, isAdmin, navigate, includeShiftTable = true, includePreviousOcc = true, includeHeader = true, onSave, onSubmit, useMaternityDemographics = false }) {
+function WardPanelRest({ h, showLabel, isAdmin, navigate, includeShiftTable = true, includePreviousOcc = true, includeHeader = true, includeDemographics = true, onSave, onSubmit, useMaternityDemographics = false, locationOptions }) {
   const {
     w, wardDoc, topStatus, saveStatus, editable, adminEditOverride, setAdminEditOverride,
     census, movementTotals, demographicTotals, emrLookup,
@@ -528,14 +529,16 @@ function WardPanelRest({ h, showLabel, isAdmin, navigate, includeShiftTable = tr
             </div>
           )}
 
-          <div className="card-box">
-            <h2>Patient Demographics</h2>
-            <div className="table-wrap">
-              {useMaternityDemographics
-                ? <MaternityDemographicsTable wardDoc={wardDoc} editable={editable} onField={updateShiftField} />
-                : <DemographicsTable wardDoc={wardDoc} totals={demographicTotals} editable={editable} onField={updateShiftField} />}
+          {includeDemographics && (
+            <div className="card-box">
+              <h2>Patient Demographics</h2>
+              <div className="table-wrap">
+                {useMaternityDemographics
+                  ? <MaternityDemographicsTable wardDoc={wardDoc} editable={editable} onField={updateShiftField} />
+                  : <DemographicsTable wardDoc={wardDoc} totals={demographicTotals} editable={editable} onField={updateShiftField} />}
+              </div>
             </div>
-          </div>
+          )}
 
           <div className="card-box">
             <h2>Patients</h2>
@@ -544,6 +547,15 @@ function WardPanelRest({ h, showLabel, isAdmin, navigate, includeShiftTable = tr
                 {wardDoc.patients.map((p) => (
                   <div className="patient-card" key={p.id}>
                     <button type="button" className="remove-btn" onClick={() => removePatient(p.id)}>Remove</button>
+                    {locationOptions && (
+                      <div className="patient-field">
+                        <label>Located:</label>
+                        <select className={"status-select" + (p.location ? ' set' : '')} value={p.location || ''} onChange={(e) => updatePatientField(p.id, 'location', e.target.value)}>
+                          <option value="">{'\u2014 Select \u2014'}</option>
+                          {locationOptions.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                        </select>
+                      </div>
+                    )}
                     <div className="patient-field">
                       <label>Status:</label>
                       <select className={"status-select" + (p.status ? ' set' : '')} value={p.status || ''} onChange={(e) => updatePatientStatus(p.id, e.target.value)}>
@@ -693,24 +705,87 @@ function MergedShiftTable({ panels }) {
   );
 }
 
-// A mergedTable group's full report (currently just MATERNITY WARD): one
-// shared editable Shift Statistics table for both member wards
-// (Mothers/Cots) with both members' Previous Occ inline just above it,
-// and one Archive button covering the whole group. Nurses only write
-// patient-level reports for Mothers — babies in Cots don't get their
-// own write-ups — so only Mothers' Demographics/Patients/Night Update
-// section renders below the table. Its Save/Submit buttons save BOTH
-// member wards' data together (via onSave/onSubmit below), since Cots'
-// own numeric figures — entered directly in the shared table above —
-// would otherwise have no button of their own to save. Assumes exactly
-// two member wards, true for every mergedTable group defined today; a
-// third member would need a third useWardReport call added here
-// explicitly (hooks can't be called from a loop).
+// One shared, editable Patient Demographics table for a mergedTable
+// group with demographicsVariant: 'merged' (currently just PAED WARD) —
+// same Morning/Night/Total row shape as MergedShiftTable above, but for
+// the plain shared DEMOGRAPHIC_FIELDS columns (Male/Female/Children/
+// Soldiers/Civilians), since unlike Maternity there's no newborn-sex
+// reason to restructure them. `panels` is one entry per member ward,
+// each still writing to its own wardDoc/Firestore record via its own
+// onField handler.
+function MergedDemographicsTable({ panels }) {
+  const getVal = (p, shiftKey, key) => {
+    const v = (p.wardDoc.shifts[shiftKey] || {})[key];
+    return typeof v === 'number' ? v : 0;
+  };
+  const totals = {};
+  DEMOGRAPHIC_FIELDS.forEach((f) => {
+    totals[f.key] = panels.reduce((sum, p) => sum + SHIFTS.reduce((s, sh) => s + getVal(p, sh.key, f.key), 0), 0);
+  });
+  const colSpanAll = 1 + DEMOGRAPHIC_FIELDS.length;
+
+  return (
+    <table className="shift">
+      <thead>
+        <tr>
+          <th>Shift</th>
+          {DEMOGRAPHIC_FIELDS.map(f => <th key={f.key}>{f.label}</th>)}
+        </tr>
+      </thead>
+      <tbody>
+        {SHIFTS.map((s) => (
+          <Fragment key={s.key}>
+            <tr className="shift-section-row"><td colSpan={colSpanAll}>{s.label === 'Am' ? 'Morning' : 'Night'}</td></tr>
+            {panels.map((p) => (
+              <tr key={p.w.key}>
+                <td className="shift-name">{p.w.label}</td>
+                {DEMOGRAPHIC_FIELDS.map((f) => (
+                  <td key={f.key}>
+                    <input type="number" inputMode="numeric" disabled={!p.editable}
+                      value={getVal(p, s.key, f.key)} onChange={(e) => p.onField(s.key, f.key, e.target.value)} />
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </Fragment>
+        ))}
+        <tr className="total-row">
+          <td className="shift-name">Total</td>
+          {DEMOGRAPHIC_FIELDS.map(f => <td key={f.key}>{totals[f.key]}</td>)}
+        </tr>
+      </tbody>
+    </table>
+  );
+}
+
+// A mergedTable group's full report (Maternity, Paed): one shared
+// editable Shift Statistics table for both member wards with both
+// members' Previous Occ inline just above it, and one Archive button
+// covering the whole group — all still writing to the two members' own
+// separate Firestore docs underneath. Its Save/Submit buttons always
+// save BOTH member wards' data together (via onSave/onSubmit below),
+// since the second member's own numeric figures — entered directly in
+// the shared table above — would otherwise have no button of their own
+// to save. What happens below the table depends on
+// group.demographicsVariant:
+//   - 'maternity': only the first member (Mothers) gets a Demographics/
+//     Patients/Night Update section — nurses don't write reports for
+//     Maternity's Cots (newborns have no patient record).
+//   - 'merged': both members' demographic figures combine into one
+//     shared table (MergedDemographicsTable), and Patients/Night Update
+//     is one shared section too — every write-up saves under the first
+//     member's doc, tagged with a "Located" dropdown (from
+//     group.patientLocationOptions) so nurses can still mark which
+//     member ward each patient is actually in.
+// Assumes exactly two member wards, true for every mergedTable group
+// defined today; a third member would need a third useWardReport call
+// added here explicitly (hooks can't be called from a loop).
 function MergedWardReportPanel({ group, isAdmin, profile, user, navigate }) {
   const hA = useWardReport(group.wardKeys[0], isAdmin, profile, user);
   const hB = useWardReport(group.wardKeys[1], isAdmin, profile, user);
   const hooks = [hA, hB];
   const bothLoaded = hooks.every((h) => h.wardDoc);
+  const mergedDemographics = group.demographicsVariant === 'merged';
 
   async function saveBoth() { await Promise.all([hA.saveReport(), hB.saveReport()]); }
   async function submitBoth() { await Promise.all([hA.submitReport(), hB.submitReport()]); }
@@ -742,9 +817,19 @@ function MergedWardReportPanel({ group, isAdmin, profile, user, navigate }) {
           </div>
         </div>
       )}
+      {bothLoaded && mergedDemographics && (
+        <div className="card-box">
+          <h2>Patient Demographics</h2>
+          <div className="table-wrap">
+            <MergedDemographicsTable panels={hooks.map((h) => ({ w: h.w, wardDoc: h.wardDoc, editable: h.editable, onField: h.updateShiftField }))} />
+          </div>
+        </div>
+      )}
       <WardPanelRest h={hA} showLabel={false} isAdmin={isAdmin} navigate={navigate}
         includeShiftTable={false} includePreviousOcc={false} includeHeader={false}
-        onSave={saveBoth} onSubmit={submitBoth} useMaternityDemographics />
+        includeDemographics={!mergedDemographics} useMaternityDemographics={group.demographicsVariant === 'maternity'}
+        locationOptions={group.patientLocationOptions}
+        onSave={saveBoth} onSubmit={submitBoth} />
     </>
   );
 }

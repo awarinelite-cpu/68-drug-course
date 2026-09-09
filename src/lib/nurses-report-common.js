@@ -37,25 +37,41 @@ export const WARDS = [
 WARDS.forEach(w => { w.defaultLabel = w.label; });
 
 // The Ward Nurse role covers PAED BED and PAED COT together (one nurse,
-// two physically separate patient groups) — the ward-selection dropdown
-// on that page shows a single "PAED WARD" option for both, and they stay
-// two entirely separate reports underneath: own Firestore docs under
-// their own 'paedbed'/'paedcot' keys, own Shift Statistics table each,
-// and two separate rows (still PAED BED / PAED COT, and MOTHERS / COTS
-// for Maternity) on the Overall Nurse's "All Wards" statistics table —
-// that table always lists every ward from WARDS as its own row, no
+// `mergedTable: true` changes the Overall Nurse's "Ward Reports"
+// section: instead of each member ward getting its own separate Shift
+// Statistics table under a subheading, the group gets one single table
+// with a Morning section (first member's row, then second member's row)
+// and a Night section (same), and one combined Total row — matching the
+// paper Minute Book exactly. It also changes the Ward Nurse entry page
+// the same way: one shared editable Shift Statistics table, both
+// members' Previous Occ inline above it, and one shared Archive button
+// — all still writing to the two members' own separate Firestore docs
+// underneath. This never affects the "All Wards" statistics table,
+// which always lists every ward from WARDS as its own separate row, no
 // group is ever merged or totalled there.
 //
-// `mergedTable: true` (Maternity only) instead changes the Overall
-// Nurse's "Ward Reports" section: instead of each member ward getting
-// its own separate Shift Statistics table under a subheading (Paed's
-// behavior), the group gets one single table with a Morning section
-// (Mothers row, then Cots row) and a Night section (same), and one
-// combined Total row — matching the paper exactly. This is the only
-// place the two member wards' figures are ever combined.
+// `demographicsVariant` controls the Ward Nurse page's Patient
+// Demographics table for a mergedTable group:
+//   - 'maternity' (Maternity): a single table, from the first member
+//     only, with Male/Female nested under a Children group header
+//     (tracks newborn sex) instead of a flat Children count — see
+//     MaternityDemographicsTable. The second member gets no Patients/
+//     Demographics/Night Update section at all — nurses don't write
+//     reports for Maternity's Cots (newborns have no patient record).
+//   - 'merged' (Paed): one shared table combining both members' own
+//     demographic figures, same Morning/Night/Total row shape as the
+//     merged Shift Statistics table — see MergedDemographicsTable.
+//
+// `patientLocationOptions`, when set (Paed only), adds a "Located"
+// dropdown to every patient write-up card with these choices, since
+// Paed's Patients/Night Update section is shared across both members
+// (all write-ups saved under the first member's doc) but nurses still
+// need to mark whether a given patient is on a bed or in a cot.
+// Maternity doesn't need this — its second member has no write-ups to
+// tag in the first place.
 export const WARD_GROUPS = [
-  { key: 'paedward', label: 'PAED WARD', wardKeys: ['paedbed', 'paedcot'] },
-  { key: 'matward', label: 'MATERNITY WARD', wardKeys: ['matbed', 'matcot'], mergedTable: true }
+  { key: 'paedward', label: 'PAED WARD', wardKeys: ['paedbed', 'paedcot'], mergedTable: true, demographicsVariant: 'merged', patientLocationOptions: ['PAED BED', 'PAED COT'] },
+  { key: 'matward', label: 'MATERNITY WARD', wardKeys: ['matbed', 'matcot'], mergedTable: true, demographicsVariant: 'maternity' }
 ];
 
 // Builds the Ward Nurse page's ward-selection list: every ward not part
@@ -68,7 +84,10 @@ export function wardSelectorOptions() {
   WARDS.forEach(w => {
     if (!groupedKeys.has(w.key)) { out.push({ key: w.key, label: w.label, wardKeys: [w.key] }); return; }
     const group = WARD_GROUPS.find(g => g.wardKeys[0] === w.key);
-    if (group) out.push({ key: group.key, label: group.label, wardKeys: group.wardKeys, mergedTable: !!group.mergedTable });
+    if (group) out.push({
+      key: group.key, label: group.label, wardKeys: group.wardKeys, mergedTable: !!group.mergedTable,
+      demographicsVariant: group.demographicsVariant, patientLocationOptions: group.patientLocationOptions
+    });
   });
   return out;
 }
