@@ -34,8 +34,9 @@ export const INTERVAL_HOURS = { OD: 24, Mane: 24, Nocte: 24, HS: 24, BD: 12, TDS
 // "8hrly" and "Q8H" (likewise "12hrly"/"Q12H") are two labels a doctor
 // might pick for the exact same schedule — the frequency dropdown offers
 // both, but they must resolve to the same computed due time rather than
-// "8hrly" silently falling through INTERVAL_HOURS with no match.
-const FREQ_SYNONYMS = { '8hrly': 'Q8H', '12hrly': 'Q12H' };
+// "8hrly" silently falling through INTERVAL_HOURS with no match. Same
+// deal for "Daily" vs "OD".
+const FREQ_SYNONYMS = { '8hrly': 'Q8H', '12hrly': 'Q12H', 'Daily': 'OD' };
 export function normalizeFrequency(freq) {
   const key = (freq || '').trim();
   return FREQ_SYNONYMS[key] || key;
