@@ -192,17 +192,55 @@ function lastGlucoseReadingAt(rows, chartType) {
 // Reads every nurse's registered push token across all users (see
 // js/push.js's pushTokens subcollection). Shared by both scheduled checks
 // below so each does this Firestore read only once per its own cycle.
+// Includes uid/role alongside each token so callers can scope a given
+// patient's alert down to just the nurse(s) that patient is allocated to
+// (see allocatedUidsByPatient / tokensForPatient below) rather than
+// blasting every nurse in the building for every patient.
 async function getTokenEntries(usersSnap) {
-  const tokenEntries = []; // { token, ref }
+  const tokenEntries = []; // { token, ref, uid, role }
   await Promise.all(
     usersSnap.docs.map(async (u) => {
+      const role = (u.data() || {}).role || '';
       const tokensSnap = await db.collection('users').doc(u.id).collection('pushTokens').get();
       tokensSnap.forEach((t) => {
-        if (t.data().token) tokenEntries.push({ token: t.data().token, ref: t.ref });
+        if (t.data().token) tokenEntries.push({ token: t.data().token, ref: t.ref, uid: u.id, role });
       });
     })
   );
   return tokenEntries;
+}
+
+// Mirrors src/pages/Patient.jsx's "Allocate to Me" — allocations/{alloc_uid_patientId}
+// docs with { uid, patientId } — and src/pages/MyPatients.jsx which reads them
+// back. Returns patientId -> Set(uid) so a due-dose/glucose alert for a given
+// patient can be routed only to the nurse(s) that patient is actually
+// allocated to.
+async function loadAllocatedUidsByPatient() {
+  const snap = await db.collection('allocations').get();
+  const map = {}; // patientId -> Set(uid)
+  snap.forEach((d) => {
+    const data = d.data() || {};
+    if (!data.uid || !data.patientId) return;
+    (map[data.patientId] = map[data.patientId] || new Set()).add(data.uid);
+  });
+  return map;
+}
+
+// Picks which tokens a given patient's alert should go to: only devices
+// belonging to nurses that patient is currently allocated to. If NO nurse
+// has allocated themselves to that patient, there's no one to scope the
+// alert to — rather than silently dropping a real due-dose/glucose alert
+// (a patient safety gap), it falls back to admin/subadmin devices so an
+// unallocated patient's alert is still seen by someone who can act on it
+// or fix the allocation, and logs a warning so this is visible in the
+// Cloud Function logs too.
+function tokensForPatient(patientId, tokenEntries, allocatedUidsByPatient, patientLabel) {
+  const allocatedUids = allocatedUidsByPatient[patientId];
+  if (allocatedUids && allocatedUids.size > 0) {
+    return tokenEntries.filter((t) => allocatedUids.has(t.uid));
+  }
+  console.warn(`No nurse allocated to ${patientLabel || patientId} — falling back to admin/subadmin devices for this alert.`);
+  return tokenEntries.filter((t) => t.role === 'admin' || t.role === 'subadmin');
 }
 
 exports.checkDueDrugs = onSchedule(
@@ -221,10 +259,11 @@ exports.checkDueDrugs = onSchedule(
       return;
     }
 
-    const [patientsSnap, chartsSnap, usersSnap] = await Promise.all([
+    const [patientsSnap, chartsSnap, usersSnap, allocatedUidsByPatient] = await Promise.all([
       db.collection('patients').get(),
       db.collectionGroup('drugCourseChart').get(),
-      db.collection('users').get()
+      db.collection('users').get(),
+      loadAllocatedUidsByPatient()
     ]);
 
     const patientNames = {};
@@ -287,8 +326,7 @@ exports.checkDueDrugs = onSchedule(
       return;
     }
 
-    const tokens = tokenEntries.map((t) => t.token);
-    let tokensPruned = false; // token validity is the same across every send below, so only act on it once
+    let totalRecipientSends = 0;
 
     const sends = patientIds.map(async (patientId) => {
       const labels = dueByPatient[patientId];
@@ -296,8 +334,18 @@ exports.checkDueDrugs = onSchedule(
       const title = labels.length === 1 ? `Drug due — ${name}` : `${labels.length} drugs due — ${name}`;
       const body = labels.slice(0, 3).join(', ') + (labels.length > 3 ? `, +${labels.length - 3} more` : '');
 
+      // Scoped to this patient's allocated nurse(s) — see tokensForPatient
+      // above — instead of every nurse in the ward.
+      const recipientEntries = tokensForPatient(patientId, tokenEntries, allocatedUidsByPatient, name);
+      if (recipientEntries.length === 0) {
+        console.log(`No devices to alert for ${name} (no allocated nurse and no admin/subadmin device registered).`);
+        return;
+      }
+      const recipientTokens = recipientEntries.map((t) => t.token);
+      totalRecipientSends += recipientTokens.length;
+
       const resp = await messaging.sendEachForMulticast({
-        tokens,
+        tokens: recipientTokens,
         // Data-only on purpose — NOT a top-level `notification` field. When a
         // push carries a `notification` payload, the browser's FCM SDK
         // auto-displays it itself while the app is backgrounded/closed and
@@ -332,22 +380,23 @@ exports.checkDueDrugs = onSchedule(
         }
       });
 
-      if (!tokensPruned) {
-        tokensPruned = true;
-        resp.responses.forEach((r, idx) => {
-          if (r.success) return;
-          const code = r.error?.code || '';
-          // Token is stale (app uninstalled, permission revoked, etc.) — remove it
-          // so future cycles don't keep trying to send to it.
-          if (code.includes('registration-token-not-registered') || code.includes('invalid-argument')) {
-            chartUpdates.push(tokenEntries[idx].ref.delete());
-          }
-        });
-      }
+      // recipientEntries (not the full tokenEntries) is what resp's indices
+      // line up with, since each patient can be sent to a different, scoped
+      // subset of devices now. Deleting an already-deleted token doc is a
+      // harmless no-op, so no need to dedupe this across patients.
+      resp.responses.forEach((r, idx) => {
+        if (r.success) return;
+        const code = r.error?.code || '';
+        // Token is stale (app uninstalled, permission revoked, etc.) — remove it
+        // so future cycles don't keep trying to send to it.
+        if (code.includes('registration-token-not-registered') || code.includes('invalid-argument')) {
+          chartUpdates.push(recipientEntries[idx].ref.delete());
+        }
+      });
     });
 
     await Promise.all([...chartUpdates, ...sends]);
-    console.log(`Sent due-dose alerts for ${patientIds.length} patient(s) to ${tokens.length} device(s).`);
+    console.log(`Sent due-dose alerts for ${patientIds.length} patient(s), ${totalRecipientSends} send(s) total.`);
   }
 );
 
@@ -375,10 +424,11 @@ exports.checkDueGlucoseChecks = onSchedule(
       return;
     }
 
-    const [patientsSnap, chartsSnap, usersSnap] = await Promise.all([
+    const [patientsSnap, chartsSnap, usersSnap, allocatedUidsByPatient] = await Promise.all([
       db.collection('patients').get(),
       db.collectionGroup('bloodGlucose').get(),
-      db.collection('users').get()
+      db.collection('users').get(),
+      loadAllocatedUidsByPatient()
     ]);
 
     const patientNames = {};
@@ -429,14 +479,22 @@ exports.checkDueGlucoseChecks = onSchedule(
       return;
     }
 
-    const tokens = tokenEntries.map((t) => t.token);
-    let tokensPruned = false; // token validity is the same across every send below, so only act on it once
+    let totalRecipientSends = 0;
 
     const sends = duePatientIds.map(async (patientId) => {
       const name = patientNames[patientId] || 'a patient';
 
+      // Scoped to this patient's allocated nurse(s) — same as checkDueDrugs.
+      const recipientEntries = tokensForPatient(patientId, tokenEntries, allocatedUidsByPatient, name);
+      if (recipientEntries.length === 0) {
+        console.log(`No devices to alert for ${name} (no allocated nurse and no admin/subadmin device registered).`);
+        return;
+      }
+      const recipientTokens = recipientEntries.map((t) => t.token);
+      totalRecipientSends += recipientTokens.length;
+
       const resp = await messaging.sendEachForMulticast({
-        tokens,
+        tokens: recipientTokens,
         // Data-only — see the drug-due send above for why.
         data: {
           title: `Glucose check due — ${name}`,
@@ -450,20 +508,19 @@ exports.checkDueGlucoseChecks = onSchedule(
         }
       });
 
-      if (!tokensPruned) {
-        tokensPruned = true;
-        resp.responses.forEach((r, idx) => {
-          if (r.success) return;
-          const code = r.error?.code || '';
-          if (code.includes('registration-token-not-registered') || code.includes('invalid-argument')) {
-            chartUpdates.push(tokenEntries[idx].ref.delete());
-          }
-        });
-      }
+      // Indices line up with recipientEntries (this patient's scoped
+      // subset), not the full tokenEntries list — see checkDueDrugs above.
+      resp.responses.forEach((r, idx) => {
+        if (r.success) return;
+        const code = r.error?.code || '';
+        if (code.includes('registration-token-not-registered') || code.includes('invalid-argument')) {
+          chartUpdates.push(recipientEntries[idx].ref.delete());
+        }
+      });
     });
 
     await Promise.all([...chartUpdates, ...sends]);
-    console.log(`Sent glucose-check reminders for ${duePatientIds.length} patient(s) to ${tokens.length} device(s).`);
+    console.log(`Sent glucose-check reminders for ${duePatientIds.length} patient(s), ${totalRecipientSends} send(s) total.`);
   }
 );
 
