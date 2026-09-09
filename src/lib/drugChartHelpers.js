@@ -258,6 +258,27 @@ const BARE_PERCENT_RE = /^\d+(\.\d+)?%$/;
 const DURATION_RE = /^x?(\d+)\s*\/\s*(7|52|12)$/i;
 function isDosageToken(t) { return DOSAGE_RE.test(t) || COMPOUND_DOSAGE_RE.test(t); }
 
+// A dose given as a bare quantity rather than a strength, e.g. "Tothema i
+// bd x 7/7" (1 capsule/ampoule, no mg figure attached — common for
+// hematinics and combination tonics). Matched only when immediately
+// followed by a recognized frequency word, so a stray "i"/"1" elsewhere in
+// a line doesn't get mistaken for a dose.
+const QTY_RE = /^(i|ii|iii|iv|v|\d+)$/i;
+
+// Status annotations a doctor appends after a completed/stopped course,
+// e.g. "(completed)", "(discontinued)". Pulled into the Action column
+// instead of being left to pollute the Frequency text.
+const STATUS_ANNOTATION_MAP = {
+  completed: 'Completed', complete: 'Completed', done: 'Completed',
+  discontinued: 'Discontinued', stopped: 'Discontinued', dc: 'Discontinued', "dc'd": 'Discontinued', dcd: 'Discontinued'
+};
+
+// Fluid orders that alternate two bags in one regimen, e.g. "5% D/water
+// 500mls to alt with 500mls of D/Saline 8hrly" — both fluids belong
+// together as one drug-name/dosage description; only the trailing
+// frequency word should be split out.
+const ALT_RE = /\balt(?:ernating)?\b/i;
+
 export function parseDrugLine(line) {
   const raw = line.trim();
   if (!raw) return null;
@@ -273,6 +294,13 @@ export function parseDrugLine(line) {
     // drug orders default to oral/tablet when a route isn't stated.
     route = 'Oral';
   }
+
+  // Alternating-fluid orders ("...to alt with...") describe two bags as one
+  // combined regimen — splitting on the first strength/volume token (the
+  // normal flow below) would cut the name off mid-description. Keep the
+  // whole thing together and only pull a trailing frequency word off the end.
+  if (ALT_RE.test(raw)) return parseAlternatingFluidLine(tokens, route);
+
   let dosageIdx = tokens.findIndex(t => isDosageToken(t.replace(/,$/, '')));
   // A leading bare percentage (e.g. "5%", "0.9%") describes the fluid's
   // concentration and belongs in the name ("5% D/water 500mls"), not the
@@ -282,6 +310,19 @@ export function parseDrugLine(line) {
   if (dosageIdx === 0 && BARE_PERCENT_RE.test(tokens[0])) {
     const nextIdx = tokens.slice(1).findIndex(t => isDosageToken(t.replace(/,$/, '')));
     dosageIdx = nextIdx === -1 ? -1 : nextIdx + 1;
+  }
+  // No numeric+unit dose found at all — some orders (hematinics/tonics
+  // like "Tothema i bd x 7/7") are dosed by bare quantity instead of a
+  // strength. If a roman-numeral/plain-number token is immediately
+  // followed by a recognized frequency word, treat that as the dose split
+  // point rather than letting the whole line fall into the Name field.
+  if (dosageIdx === -1) {
+    const qIdx = tokens.findIndex((t, idx) => {
+      if (idx === 0 || !QTY_RE.test(t)) return false;
+      const nextKey = (tokens[idx + 1] || '').toLowerCase().replace(/\.$/, '');
+      return !!FREQ_ALIASES[nextKey];
+    });
+    if (qIdx !== -1) dosageIdx = qIdx;
   }
   let name, dosage, rest;
   if (dosageIdx === -1) {
@@ -317,6 +358,23 @@ export function parseDrugLine(line) {
   // information of its own once the times are parsed as the frequency.
   rest = rest.filter(t => t !== '@');
 
+  // A duration written with a space ("bd x 2/7") leaves a dangling "x"
+  // behind once DURATION_RE has already pulled "2/7" out on its own —
+  // that lone "x" carries no meaning of its own and would otherwise stick
+  // to the Frequency text (e.g. "bd x (completed)").
+  rest = rest.filter(t => t.toLowerCase() !== 'x');
+
+  // A trailing status note like "(completed)"/"(discontinued)" documents
+  // that the course is done rather than describing the frequency — pull it
+  // into the Action column instead of leaving it stuck in Frequency text.
+  let action = '';
+  rest = rest.filter((t) => {
+    const m = t.match(/^\(?([a-z']+)\)?$/i);
+    const key = m ? m[1].toLowerCase() : '';
+    if (STATUS_ANNOTATION_MAP[key]) { action = STATUS_ANNOTATION_MAP[key]; return false; }
+    return true;
+  });
+
   const freqRaw = rest.join(' ').replace(/,+/g, ',').trim();
   const freqKey = freqRaw.toLowerCase().replace(/[\s,]/g, '');
   let frequency = '';
@@ -327,7 +385,37 @@ export function parseDrugLine(line) {
   }
 
   const fullName = (name + (dosage ? ' ' + dosage : '') + (additive ? ' ' + additive : '')).trim();
-  return { name: fullName, route, frequency, action: '', duration, createdAt: new Date().toISOString() };
+  return { name: fullName, route, frequency, action, duration, createdAt: new Date().toISOString() };
+}
+
+// Alternating-fluid orders ("...to alt with...") keep both fluids together
+// as one drug name/dosage description (they're one combined regimen, not
+// two separate drugs) — only a trailing frequency word (and an optional
+// duration) get split out.
+function parseAlternatingFluidLine(tokens, route) {
+  let rest = tokens.slice();
+
+  let duration = '';
+  const durIdx = rest.findIndex(t => DURATION_RE.test(t));
+  if (durIdx !== -1) {
+    const m = rest[durIdx].match(DURATION_RE);
+    duration = m[1] + '/' + m[2];
+    rest.splice(durIdx, 1);
+  }
+  rest = rest.filter(t => t.toLowerCase() !== 'x');
+
+  let frequency = '';
+  if (rest.length) {
+    const last = rest[rest.length - 1].replace(/[.,]$/, '');
+    const lastKey = last.toLowerCase();
+    if (FREQ_ALIASES[lastKey]) {
+      frequency = last; // keep as written (e.g. "8hrly"), not the normalized code
+      rest = rest.slice(0, -1);
+    }
+  }
+
+  const name = rest.join(' ').trim();
+  return { name, route, frequency, action: '', duration, createdAt: new Date().toISOString() };
 }
 
 export function parseBulkText(text) {
