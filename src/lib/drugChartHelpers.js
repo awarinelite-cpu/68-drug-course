@@ -336,6 +336,10 @@ const DURATION_HOURS_RE = /^x?(\d+)\s*(hrs?|hours?)$/i;
 // after a bare number so "500mg" (a dose, already consumed earlier) and
 // other numbers elsewhere in the line aren't mistaken for a duration.
 const DURATION_WORD_RE = /^(days?|d|weeks?|wks?|months?|mo)$/i;
+// Same day/week/month duration, but written as a single compact token —
+// "2days", "x3days", "1month" — however it lands, no space between the
+// (optional leading "x", the) number, and the unit word.
+const DURATION_WORD_COMPACT_RE = /^x?(\d+)(days?|d|weeks?|wks?|months?|mo)$/i;
 function isDosageToken(t) { return DOSAGE_RE.test(t) || COMPOUND_DOSAGE_RE.test(t); }
 
 // A dose written with a stray space before its unit ("120 mg" instead of
@@ -457,25 +461,31 @@ export function parseDrugLine(line) {
   }
 
   let duration = '';
-  const durIdx = rest.findIndex(t => DURATION_RE.test(t) || DURATION_HOURS_RE.test(t));
+  const durIdx = rest.findIndex(t => DURATION_RE.test(t) || DURATION_HOURS_RE.test(t) || DURATION_WORD_COMPACT_RE.test(t));
   if (durIdx !== -1) {
-    const fracM = rest[durIdx].match(DURATION_RE);
+    const tok = rest[durIdx];
+    const fracM = tok.match(DURATION_RE);
+    const hrM = fracM ? null : tok.match(DURATION_HOURS_RE);
     if (fracM) {
       duration = fracM[1] + '/' + fracM[2];
-    } else {
-      const hrM = rest[durIdx].match(DURATION_HOURS_RE);
+    } else if (hrM) {
       duration = hrM[1] + 'hrs';
+    } else {
+      const wM = tok.match(DURATION_WORD_COMPACT_RE);
+      duration = wM[1] + ' ' + wM[2].toLowerCase();
     }
     rest.splice(durIdx, 1);
   } else {
     // Duration spelled out as two tokens instead of one, e.g. "10 days",
-    // "2 weeks", "1 month" — find a bare number immediately followed by
-    // one of those unit words and pull the pair out together.
+    // "x1 day", "2 weeks", "1 month" — find a bare number (optionally
+    // "x"-prefixed) immediately followed by one of those unit words and
+    // pull the pair out together.
     const wordIdx = rest.findIndex((t, idx) =>
-      idx > 0 && /^\d+$/.test(rest[idx - 1]) && DURATION_WORD_RE.test(t.replace(/[.,]$/, ''))
+      idx > 0 && /^x?\d+$/i.test(rest[idx - 1]) && DURATION_WORD_RE.test(t.replace(/[.,]$/, ''))
     );
     if (wordIdx !== -1) {
-      duration = rest[wordIdx - 1] + ' ' + rest[wordIdx].replace(/[.,]$/, '').toLowerCase();
+      const num = rest[wordIdx - 1].replace(/^x/i, '');
+      duration = num + ' ' + rest[wordIdx].replace(/[.,]$/, '').toLowerCase();
       rest.splice(wordIdx - 1, 2);
     }
   }
