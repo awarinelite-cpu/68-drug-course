@@ -187,15 +187,18 @@ function DemographicsTable({ wardDoc, totals, editable, onField }) {
 }
 
 // Maternity's own Patient Demographics table: no flat "Children" count —
-// instead a "Children" group header spans Male/Female sub-columns
-// tracking newborns' sex, since every patient on Mothers is an adult
-// woman (a plain Male/Female split wouldn't mean anything there) while
-// the babies' sex is the number actually worth tracking. Soldiers/
-// Civilians stay as plain columns alongside it, unchanged. Uses two
-// dedicated fields (childMale/childFemale) rather than the shared
-// DEMOGRAPHIC_FIELDS' male/female/child keys, so this never mixes into
-// other wards' adult male/female counts or the "All Wards" grand totals
-// — those still only read the shared DEMOGRAPHIC_FIELDS keys.
+// instead a "COT" group header spans Male/Female sub-columns tracking
+// newborns' sex, since every patient on Mothers is an adult woman (a plain
+// Male/Female split wouldn't mean anything there) while the babies' sex is
+// the number actually worth tracking. Soldiers/Civilians sit under their
+// own "MOTHERS" group header alongside it — mirroring the MOTHERS/COTS
+// row labels on the merged Shift Statistics table above (matbed/matcot in
+// WARDS), so both tables read the same way: COT columns = newborns,
+// MOTHERS columns = the adult patients. Uses two dedicated fields
+// (childMale/childFemale) rather than the shared DEMOGRAPHIC_FIELDS'
+// male/female/child keys, so this never mixes into other wards' adult
+// male/female counts or the "All Wards" grand totals — those still only
+// read the shared DEMOGRAPHIC_FIELDS keys.
 function MaternityDemographicsTable({ wardDoc, editable, onField }) {
   const getVal = (shiftKey, key) => {
     const v = (wardDoc.shifts[shiftKey] || {})[key];
@@ -208,11 +211,10 @@ function MaternityDemographicsTable({ wardDoc, editable, onField }) {
       <thead>
         <tr>
           <th rowSpan={2}>Shift</th>
-          <th colSpan={2}>Children</th>
-          <th rowSpan={2}>Soldiers</th>
-          <th rowSpan={2}>Civilians</th>
+          <th colSpan={2}>COT</th>
+          <th colSpan={2}>MOTHERS</th>
         </tr>
-        <tr><th>Male</th><th>Female</th></tr>
+        <tr><th>Male</th><th>Female</th><th>Soldiers</th><th>Civilians</th></tr>
       </thead>
       <tbody>
         {SHIFTS.map((s) => (
