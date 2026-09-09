@@ -174,6 +174,12 @@ a { text-decoration: none; color: inherit; }
   background-color: #EAF3FF;
   display: flex; align-items: center; justify-content: center;
 }
+.ward-select-page {
+  position: fixed; inset: 0; z-index: -1;
+  background-size: cover; background-position: top center; background-repeat: no-repeat;
+  background-color: #eaf6fd;
+  pointer-events: none;
+}
 .login-card {
   background: rgba(255,255,255,0.14); backdrop-filter: blur(2px); -webkit-backdrop-filter: blur(2px);
   box-shadow: 0 8px 32px rgba(15,35,80,0.35);

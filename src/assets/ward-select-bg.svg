@@ -1,0 +1,76 @@
+<svg viewBox="0 0 852 1598" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMax slice">
+  <defs>
+    <linearGradient id="wsBgGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#daf0fd"/>
+      <stop offset="45%" stop-color="#eef9fe"/>
+      <stop offset="100%" stop-color="#e7f5fd"/>
+    </linearGradient>
+    <linearGradient id="wsWaveBack" x1="0" y1="0" x2="1" y2="0.4">
+      <stop offset="0%" stop-color="#2ec9b6"/>
+      <stop offset="100%" stop-color="#1f9fcf"/>
+    </linearGradient>
+    <linearGradient id="wsWaveFront" x1="0" y1="0" x2="1" y2="0.5">
+      <stop offset="0%" stop-color="#1560c4"/>
+      <stop offset="55%" stop-color="#1288c2"/>
+      <stop offset="100%" stop-color="#20b39a"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="852" height="1598" fill="url(#wsBgGrad)"/>
+
+  <!-- thin sweeping accent lines, top-left -->
+  <path d="M-60,150 C140,55 330,205 560,95 C680,45 780,85 920,30"
+        stroke="#2fa8d1" stroke-width="4" fill="none" opacity="0.3"/>
+  <path d="M-60,235 C110,320 280,205 470,290"
+        stroke="#27c2a3" stroke-width="5" fill="none" opacity="0.28"/>
+
+  <!-- large heart with ECG trace, top-right -->
+  <g transform="translate(560,60) scale(9.5)" opacity="0.5">
+    <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"
+          fill="#bfe3fb"/>
+  </g>
+  <polyline points="600,190 645,190 665,150 685,235 705,175 722,190 780,190"
+            fill="none" stroke="#ffffff" stroke-width="7" stroke-linecap="round"
+            stroke-linejoin="round" opacity="0.85"/>
+
+  <!-- medical cross icons, left side -->
+  <g fill="#bfe3fb" opacity="0.55" transform="translate(30,470) rotate(-4)">
+    <path d="M40 0 h30 v40 h40 v30 h-40 v40 h-30 v-40 h-40 v-30 h40 z"/>
+  </g>
+  <g fill="#bfe3fb" opacity="0.5" transform="translate(95,585) rotate(10) scale(0.62)">
+    <path d="M40 0 h30 v40 h40 v30 h-40 v40 h-30 v-40 h-40 v-30 h40 z"/>
+  </g>
+
+  <!-- hospital bed silhouette, lower right -->
+  <g opacity="0.4" stroke="#8fc9ef" stroke-width="5" fill="none" stroke-linecap="round" stroke-linejoin="round"
+     transform="translate(470,1130)">
+    <!-- IV pole + bag -->
+    <line x1="40" y1="0" x2="40" y2="230"/>
+    <line x1="10" y1="10" x2="70" y2="10"/>
+    <path d="M25,25 h30 l-6,34 h-18 z" fill="#8fc9ef" stroke="none"/>
+    <!-- monitor -->
+    <rect x="160" y="30" width="90" height="65" rx="6"/>
+    <polyline points="172,65 188,65 196,48 206,80 216,58 228,65 240,65" stroke-width="4"/>
+    <line x1="205" y1="95" x2="205" y2="150"/>
+    <!-- bed frame -->
+    <path d="M0,230 h340 v70 h-340 z"/>
+    <path d="M0,230 v-70 q0,-14 14,-14 h60 q14,0 14,14 v70"/>
+    <line x1="0" y1="300" x2="0" y2="330"/>
+    <line x1="340" y1="300" x2="340" y2="330"/>
+    <circle cx="12" cy="335" r="10" fill="#8fc9ef" stroke="none"/>
+    <circle cx="328" cy="335" r="10" fill="#8fc9ef" stroke="none"/>
+    <path d="M60,230 q110,-45 280,0" />
+  </g>
+
+  <!-- bottom wave band -->
+  <path d="M0,1430 C180,1370 300,1500 480,1440 C620,1395 720,1470 852,1420 L852,1598 L0,1598 Z"
+        fill="url(#wsWaveBack)" opacity="0.55"/>
+  <path d="M0,1500 C160,1560 320,1460 500,1510 C650,1552 730,1480 852,1500 L852,1598 L0,1598 Z"
+        fill="url(#wsWaveFront)"/>
+
+  <!-- ECG line + heart outline sitting on the wave -->
+  <polyline points="0,1552 55,1552 72,1520 90,1580 108,1540 125,1552 165,1552"
+            fill="none" stroke="#ffffff" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" opacity="0.9"/>
+  <path d="M215,1560 c-14,-13 -26,-24 -26,-37 c0,-10 8,-18 18,-18 c6,0 12,3 13,9 c1,-6 7,-9 13,-9 c10,0 18,8 18,18 c0,13 -12,24 -26,37 z"
+        fill="none" stroke="#ffffff" stroke-width="5" stroke-linejoin="round" opacity="0.9"/>
+</svg>

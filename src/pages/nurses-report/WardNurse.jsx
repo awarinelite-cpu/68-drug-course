@@ -14,6 +14,7 @@ import {
 import { patientWardAndBedTypeForReportKey } from "../../lib/wardNameMatch.js";
 import { wardHeadcount } from "../../lib/wardCensus.js";
 import Topbar from "../../components/Topbar.jsx";
+import wardSelectBg from "../../assets/ward-select-bg.svg";
 
 const movementFields = SHIFT_STAT_FIELDS;
 const byKey = k => movementFields.find(f => f.key === k);
@@ -849,6 +850,7 @@ export default function WardNurse() {
       <Topbar brand="Ward Nurse">
         <button className="btn btn-secondary" style={{ padding: '6px 12px' }} onClick={goBack}>Back</button>
       </Topbar>
+      <div className="ward-select-page" style={{ backgroundImage: `url(${wardSelectBg})` }} />
       <div className="container">
         <div className="card-box">
           <div className="ward-select-row">
