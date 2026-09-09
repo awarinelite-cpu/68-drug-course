@@ -6,7 +6,7 @@ import { db } from "../firebase.js";
 import { useAuth } from "../contexts/AuthContext.jsx";
 import { useGoBack } from "../hooks/useGoBack.js";
 import { avatarMarkup } from "../lib/avatar.js";
-import { pushIsEnabled, enablePushForThisDevice, disablePushForThisDevice } from "../lib/push.js";
+import { pushIsEnabled, enablePushForThisDevice, disablePushForThisDevice, isNativePlatform } from "../lib/push.js";
 import { WARD_OPTIONS } from "../lib/drugChartHelpers.js";
 import Topbar from "../components/Topbar.jsx";
 
@@ -51,6 +51,16 @@ export default function Profile() {
   useEffect(() => { refreshPushState(); }, []);
 
   function refreshPushState() {
+    // In a Capacitor-wrapped native app, push goes through the
+    // PushNotifications plugin (see enablePushNative in push.js), not the
+    // browser's window.Notification API — which genuinely doesn't exist in
+    // that WebView. Checking for it first would wrongly report "unsupported"
+    // on every native install, even though native push is exactly what
+    // that build is for.
+    if (isNativePlatform()) {
+      setPushState(pushIsEnabled() ? 'on' : 'off');
+      return;
+    }
     if (!('Notification' in window)) { setPushState('unsupported'); return; }
     if (Notification.permission === 'denied') { setPushState('blocked'); return; }
     setPushState(pushIsEnabled() ? 'on' : 'off');

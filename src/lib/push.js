@@ -56,7 +56,7 @@ function tokenDocId(token) {
 // Capacitor injects window.Capacitor at runtime in a wrapped native app, but
 // this file also runs unmodified in a plain browser tab, where
 // window.Capacitor doesn't exist at all.
-function isNativePlatform() {
+export function isNativePlatform() {
   return typeof window !== "undefined" &&
     !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
 }
