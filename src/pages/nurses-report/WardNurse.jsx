@@ -812,28 +812,29 @@ function MergedShiftTable({ panels }) {
 // One shared, editable Patient Demographics table for a mergedTable
 // group with demographicsVariant: 'merged' (currently just PAED WARD) —
 // same Morning/Night/Total row shape as MergedShiftTable above, but for
-// the plain shared DEMOGRAPHIC_FIELDS columns (Male/Female/Children/
-// Soldiers/Civilians), since unlike Maternity there's no newborn-sex
-// reason to restructure them. `panels` is one entry per member ward,
-// each still writing to its own wardDoc/Firestore record via its own
-// onField handler.
+// the shared DEMOGRAPHIC_FIELDS columns minus Children (every patient on
+// Paed is already a child, so a separate Children subcount there is
+// redundant/confusing) — just Male/Female/Soldiers/Civilians. `panels` is
+// one entry per member ward, each still writing to its own wardDoc/
+// Firestore record via its own onField handler.
 function MergedDemographicsTable({ panels }) {
+  const fields = DEMOGRAPHIC_FIELDS.filter(f => f.key !== 'child');
   const getVal = (p, shiftKey, key) => {
     const v = (p.wardDoc.shifts[shiftKey] || {})[key];
     return typeof v === 'number' ? v : 0;
   };
   const totals = {};
-  DEMOGRAPHIC_FIELDS.forEach((f) => {
+  fields.forEach((f) => {
     totals[f.key] = panels.reduce((sum, p) => sum + SHIFTS.reduce((s, sh) => s + getVal(p, sh.key, f.key), 0), 0);
   });
-  const colSpanAll = 1 + DEMOGRAPHIC_FIELDS.length;
+  const colSpanAll = 1 + fields.length;
 
   return (
     <table className="shift">
       <thead>
         <tr>
           <th>Shift</th>
-          {DEMOGRAPHIC_FIELDS.map(f => <th key={f.key}>{f.label}</th>)}
+          {fields.map(f => <th key={f.key}>{f.label}</th>)}
         </tr>
       </thead>
       <tbody>
@@ -843,7 +844,7 @@ function MergedDemographicsTable({ panels }) {
             {panels.map((p) => (
               <tr key={p.w.key}>
                 <td className="shift-name">{p.w.label}</td>
-                {DEMOGRAPHIC_FIELDS.map((f) => (
+                {fields.map((f) => (
                   <td key={f.key}>
                     <input type="number" inputMode="numeric" disabled={!p.editable}
                       value={getVal(p, s.key, f.key)} onChange={(e) => p.onField(s.key, f.key, e.target.value)} />
@@ -855,7 +856,7 @@ function MergedDemographicsTable({ panels }) {
         ))}
         <tr className="total-row">
           <td className="shift-name">Total</td>
-          {DEMOGRAPHIC_FIELDS.map(f => <td key={f.key}>{totals[f.key]}</td>)}
+          {fields.map(f => <td key={f.key}>{totals[f.key]}</td>)}
         </tr>
       </tbody>
     </table>
