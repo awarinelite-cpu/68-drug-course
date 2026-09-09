@@ -404,7 +404,14 @@ function useWardReport(wardKey, isAdmin, profile, user) {
 // `includePreviousOcc` is false for a mergedTable group's members —
 // MergedWardReportPanel renders both members' Previous Occ inline atop
 // the shared table instead of as a separate card down here.
-function WardPanelRest({ h, showLabel, isAdmin, navigate, includeShiftTable = true, includePreviousOcc = true }) {
+// `includeHeader` is false for a mergedTable group's non-lead member
+// (Cots) — MergedWardReportPanel doesn't render this component for that
+// member at all. `onSave`/`onSubmit`, when passed, replace the default
+// per-ward save/submit handlers — MergedWardReportPanel uses these so
+// the one Save/Submit bar shown (Mothers') saves both member wards'
+// data together, since Cots' own numeric figures (entered in the shared
+// table above) would otherwise have no button of their own to save.
+function WardPanelRest({ h, showLabel, isAdmin, navigate, includeShiftTable = true, includePreviousOcc = true, includeHeader = true, onSave, onSubmit }) {
   const {
     w, wardDoc, topStatus, saveStatus, editable, adminEditOverride, setAdminEditOverride,
     census, movementTotals, demographicTotals, emrLookup,
@@ -415,19 +422,21 @@ function WardPanelRest({ h, showLabel, isAdmin, navigate, includeShiftTable = tr
 
   return (
     <>
-      <div className="card-box">
-        <div className="ward-select-row">
-          {showLabel && <h2 style={{ margin: 0 }}>{w?.label}</h2>}
-          {wardDoc && <span className={"status-pill " + pillClass}>{pillText}</span>}
-          {w && (
-            <button className="btn btn-secondary" style={{ padding: '6px 12px' }} type="button"
-              onClick={() => navigate('/nurses-report/archive-list?type=ward&ward=' + encodeURIComponent(w.key) + '&label=' + encodeURIComponent(w.label))}>
-              {'\uD83D\uDCC1 Archive'}
-            </button>
-          )}
+      {includeHeader && (
+        <div className="card-box">
+          <div className="ward-select-row">
+            {showLabel && <h2 style={{ margin: 0 }}>{w?.label}</h2>}
+            {wardDoc && <span className={"status-pill " + pillClass}>{pillText}</span>}
+            {w && (
+              <button className="btn btn-secondary" style={{ padding: '6px 12px' }} type="button"
+                onClick={() => navigate('/nurses-report/archive-list?type=ward&ward=' + encodeURIComponent(w.key) + '&label=' + encodeURIComponent(w.label))}>
+                {'\uD83D\uDCC1 Archive'}
+              </button>
+            )}
+          </div>
+          <div className="save-status" style={{ color: topStatus.error ? '#dc2626' : '#6b7280' }}>{topStatus.text}</div>
         </div>
-        <div className="save-status" style={{ color: topStatus.error ? '#dc2626' : '#6b7280' }}>{topStatus.text}</div>
-      </div>
+      )}
 
       {wardDoc && (
         <>
@@ -525,8 +534,8 @@ function WardPanelRest({ h, showLabel, isAdmin, navigate, includeShiftTable = tr
           <div className="card-box">
             {editable && (
               <div className="submit-bar">
-                <button className="btn btn-secondary" style={{ flex: 1, padding: 12 }} onClick={saveReport}>Save</button>
-                <button className="btn btn-primary" style={{ flex: 1, padding: 12 }} onClick={submitReport}>Submit Report</button>
+                <button className="btn btn-secondary" style={{ flex: 1, padding: 12 }} onClick={onSave || saveReport}>Save</button>
+                <button className="btn btn-primary" style={{ flex: 1, padding: 12 }} onClick={onSubmit || submitReport}>Submit Report</button>
               </div>
             )}
             <div className="save-status" style={{ color: saveStatus.error ? '#dc2626' : '#6b7280' }}>{saveStatus.text}</div>
@@ -620,30 +629,40 @@ function MergedShiftTable({ panels }) {
   );
 }
 
-// A mergedTable group's full report (currently just MATERNITY WARD):
-// one shared editable Shift Statistics table for both member wards
-// A mergedTable group's full report (currently just MATERNITY WARD):
-// one shared editable Shift Statistics table for both member wards
+// A mergedTable group's full report (currently just MATERNITY WARD): one
+// shared editable Shift Statistics table for both member wards
 // (Mothers/Cots) with both members' Previous Occ inline just above it,
-// then each member's own Demographics, Patients, Night Update and
-// Save/Submit below, labeled separately — those still save to two
-// entirely separate Firestore docs, same as two side-by-side
-// WardReportPanels would. Assumes exactly two member wards, true for
-// every mergedTable group defined today; a third member would need a
-// third useWardReport call added here explicitly (hooks can't be
-// called from a loop).
+// and one Archive button covering the whole group. Nurses only write
+// patient-level reports for Mothers — babies in Cots don't get their
+// own write-ups — so only Mothers' Demographics/Patients/Night Update
+// section renders below the table. Its Save/Submit buttons save BOTH
+// member wards' data together (via onSave/onSubmit below), since Cots'
+// own numeric figures — entered directly in the shared table above —
+// would otherwise have no button of their own to save. Assumes exactly
+// two member wards, true for every mergedTable group defined today; a
+// third member would need a third useWardReport call added here
+// explicitly (hooks can't be called from a loop).
 function MergedWardReportPanel({ group, isAdmin, profile, user, navigate }) {
   const hA = useWardReport(group.wardKeys[0], isAdmin, profile, user);
   const hB = useWardReport(group.wardKeys[1], isAdmin, profile, user);
   const hooks = [hA, hB];
   const bothLoaded = hooks.every((h) => h.wardDoc);
 
+  async function saveBoth() { await Promise.all([hA.saveReport(), hB.saveReport()]); }
+  async function submitBoth() { await Promise.all([hA.submitReport(), hB.submitReport()]); }
+
   return (
     <>
       {bothLoaded && (
         <div className="card-box">
-          <h2>{group.label} — Shift Statistics</h2>
-          <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginBottom: 12 }}>
+          <div className="ward-select-row">
+            <h2 style={{ margin: 0 }}>{group.label} — Shift Statistics</h2>
+            <button className="btn btn-secondary" style={{ padding: '6px 12px' }} type="button"
+              onClick={() => navigate('/nurses-report/archive-list?type=ward&ward=' + encodeURIComponent(hA.w.key) + '&label=' + encodeURIComponent(group.label))}>
+              {'\uD83D\uDCC1 Archive'}
+            </button>
+          </div>
+          <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginTop: 12, marginBottom: 12 }}>
             {hooks.map((h) => (
               <div className="patient-field" style={{ maxWidth: 140 }} key={h.w.key}>
                 <label>{'Previous Occ (' + h.w.label + ')'}</label>
@@ -659,9 +678,9 @@ function MergedWardReportPanel({ group, isAdmin, profile, user, navigate }) {
           </div>
         </div>
       )}
-      {hooks.map((h, i) => (
-        <WardPanelRest key={group.wardKeys[i]} h={h} showLabel isAdmin={isAdmin} navigate={navigate} includeShiftTable={false} includePreviousOcc={false} />
-      ))}
+      <WardPanelRest h={hA} showLabel={false} isAdmin={isAdmin} navigate={navigate}
+        includeShiftTable={false} includePreviousOcc={false} includeHeader={false}
+        onSave={saveBoth} onSubmit={submitBoth} />
     </>
   );
 }
