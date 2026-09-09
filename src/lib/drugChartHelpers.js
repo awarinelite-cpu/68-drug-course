@@ -258,6 +258,18 @@ const BARE_PERCENT_RE = /^\d+(\.\d+)?%$/;
 const DURATION_RE = /^x?(\d+)\s*\/\s*(7|52|12)$/i;
 function isDosageToken(t) { return DOSAGE_RE.test(t) || COMPOUND_DOSAGE_RE.test(t); }
 
+// A dose written with a stray space before its unit ("120 mg" instead of
+// "120mg") — merged back into a single token so it's indistinguishable
+// from a normal dose to the rest of the parser.
+const UNIT_WORD_RE = /^(mg|g|mcg|ug|mls?|l|cc|iu|units?|mmol)$/i;
+
+// Lines that ride along in a pasted drug/order list but aren't medication
+// orders at all — a referral or consult request. Treating these as a drug
+// would create a bogus "Oral" row with no dose or frequency; recognized
+// here so parseBulkText can skip them instead (log the referral itself as
+// a Care Instruction/Verbal Order rather than a drug).
+const NON_DRUG_LINE_RE = /^(consult(?:ation)?s?\s+(?:to|with)\b|refer(?:ral)?\s+to\b|review\s+by\b)/i;
+
 // A dose given as a bare quantity rather than a strength, e.g. "Tothema i
 // bd x 7/7" (1 capsule/ampoule, no mg figure attached — common for
 // hematinics and combination tonics). Matched only when immediately
@@ -283,6 +295,7 @@ const ALT_RE = /\balt(?:ernating)?\b/i;
 export function parseDrugLine(line) {
   const raw = line.trim();
   if (!raw) return null;
+  if (NON_DRUG_LINE_RE.test(raw)) return null;
   let tokens = raw.split(/\s+/);
 
   let route = '';
@@ -311,6 +324,22 @@ export function parseDrugLine(line) {
   if (dosageIdx === 0 && BARE_PERCENT_RE.test(tokens[0])) {
     const nextIdx = tokens.slice(1).findIndex(t => isDosageToken(t.replace(/,$/, '')));
     dosageIdx = nextIdx === -1 ? -1 : nextIdx + 1;
+  }
+  // A dose split across two tokens by a stray space (e.g. "Artesunate 120
+  // mg" instead of "120mg") — merge the bare number and its unit word into
+  // a single token in place so it parses exactly like a normal dose.
+  if (dosageIdx === -1) {
+    const bareIdx = tokens.findIndex((t, idx) =>
+      /^\d+(\.\d+)?$/.test(t) && UNIT_WORD_RE.test((tokens[idx + 1] || '').replace(/[,.]$/, ''))
+    );
+    if (bareIdx !== -1) {
+      tokens = [
+        ...tokens.slice(0, bareIdx),
+        tokens[bareIdx] + tokens[bareIdx + 1].toLowerCase().replace(/[,.]$/, ''),
+        ...tokens.slice(bareIdx + 2)
+      ];
+      dosageIdx = bareIdx;
+    }
   }
   // No numeric+unit dose found at all — some orders (hematinics/tonics
   // like "Tothema i bd x 7/7") are dosed by bare quantity instead of a
@@ -405,8 +434,27 @@ function parseAlternatingFluidLine(tokens, route) {
   }
   rest = rest.filter(t => t.toLowerCase() !== 'x');
 
+  // An additive tacked on at the end, e.g. "...1L 8 hrly + Vit BCO" — split
+  // it off before hunting for the trailing frequency so it doesn't get
+  // mistaken for part of the frequency search, then fold it back into name.
+  let additive = '';
+  const plusIdx = rest.findIndex(t => t === '+');
+  if (plusIdx !== -1) {
+    additive = rest.slice(plusIdx).join(' ');
+    rest = rest.slice(0, plusIdx);
+  }
+
+  // The trailing frequency may be written as one token ("8hrly") or two
+  // ("8 hrly") — try the two-token form first since it's a superset check.
   let frequency = '';
-  if (rest.length) {
+  if (rest.length >= 2) {
+    const twoKey = (rest[rest.length - 2] + rest[rest.length - 1]).replace(/[.,]$/, '').toLowerCase();
+    if (FREQ_ALIASES[twoKey]) {
+      frequency = rest[rest.length - 2] + ' ' + rest[rest.length - 1].replace(/[.,]$/, ''); // keep as written, not normalized
+      rest = rest.slice(0, -2);
+    }
+  }
+  if (!frequency && rest.length) {
     const last = rest[rest.length - 1].replace(/[.,]$/, '');
     const lastKey = last.toLowerCase();
     if (FREQ_ALIASES[lastKey]) {
@@ -415,7 +463,7 @@ function parseAlternatingFluidLine(tokens, route) {
     }
   }
 
-  const name = rest.join(' ').trim();
+  const name = (rest.join(' ') + (additive ? ' ' + additive : '')).trim();
   return { name, route, frequency, action: '', duration, createdAt: new Date().toISOString() };
 }
 
