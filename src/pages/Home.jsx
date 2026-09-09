@@ -16,7 +16,7 @@ import { wardHeadcount } from "../lib/wardCensus.js";
 import { reportWardKeysForPatientWard, patientWardAndBedTypeForReportKey } from "../lib/wardNameMatch.js";
 import { WARDS } from "../lib/nurses-report-common.js";
 
-const EMPTY_FORM = { name: '', emr: '', diagnosis: '', ward: '', pedBedType: '', age: '', hospNo: '', admissionDate: '', allergies: '' };
+const EMPTY_FORM = { name: '', emr: '', diagnosis: '', ward: '', pedBedType: '', age: '', hospNo: '', admissionDate: '', allergies: '', insurance: '' };
 
 // Wards are stored/compared in ALL CAPS (matches WARD_OPTIONS); this is
 // purely for display so headings don't shout at the reader.
@@ -87,7 +87,8 @@ export default function Home() {
       age: fields.age || f.age,
       hospNo: fields.hospNo || f.hospNo,
       admissionDate: fields.admissionDate || f.admissionDate,
-      allergies: fields.allergies || f.allergies
+      allergies: fields.allergies || f.allergies,
+      insurance: fields.insurance || f.insurance
     }));
     const drugBlock = extractDrugSection(emrPasteText);
     const drugs = drugBlock ? parseBulkText(drugBlock) : [];
@@ -115,6 +116,7 @@ export default function Home() {
       pedBedType: newForm.ward.trim() === 'PEDIATRIC/NICU WARD' ? (newForm.pedBedType || '') : '',
       age: newForm.age.trim(),
       hospNo: newForm.hospNo.trim(), admissionDate: newForm.admissionDate.trim(), allergies: newForm.allergies.trim(),
+      insurance: newForm.insurance.trim(),
       createdAt: serverTimestamp(), createdBy: user ? user.uid : null
     };
 
@@ -207,7 +209,7 @@ export default function Home() {
         name: r.data.name, emr: r.data.emr, diagnosis: r.data.diagnosis,
         ward: r.data.ward, pedBedType: r.data.ward === 'PEDIATRIC/NICU WARD' ? r.data.pedBedType : '',
         age: r.data.age, hospNo: r.data.hospNo, admissionDate: r.data.admissionDate,
-        allergies: r.data.allergies,
+        allergies: r.data.allergies, insurance: r.data.insurance,
         createdAt: serverTimestamp(), createdBy: user ? user.uid : null
       };
       const ref = doc(collection(db, 'patients'));

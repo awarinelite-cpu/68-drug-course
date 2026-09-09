@@ -10,7 +10,7 @@ export default function PatientBanner({ patient, extra, ward }) {
           <div>
             <div className="pname">{patient ? (patient.name || "Unnamed") : "Loading…"}</div>
             <div className="pmeta">
-              {patient ? "EMR: " + (patient.emr || "N/A") + "   |   Diagnosis: " + (patient.diagnosis || "Not specified") : ""}
+              {patient ? "EMR: " + (patient.emr || "N/A") + "   |   Diagnosis: " + (patient.diagnosis || "Not specified") + (patient.insurance ? "   |   " + patient.insurance : "") : ""}
             </div>
             {ward && <div className="pward">Ward: {ward}</div>}
           </div>

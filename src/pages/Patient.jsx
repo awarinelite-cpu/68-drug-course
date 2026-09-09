@@ -126,7 +126,8 @@ export default function Patient() {
       diagnosis: patient.diagnosis || '', ward: patient.ward || '',
       pedBedType: patient.pedBedType || '',
       age: patient.age || '', hospNo: patient.hospNo || '',
-      admissionDate: patient.admissionDate || '', allergies: patient.allergies || ''
+      admissionDate: patient.admissionDate || '', allergies: patient.allergies || '',
+      insurance: patient.insurance || ''
     });
     setEditMsg('');
     setShowEditForm(true);
@@ -144,6 +145,7 @@ export default function Patient() {
       pedBedType: editForm.ward.trim() === 'PEDIATRIC/NICU WARD' ? (editForm.pedBedType || '') : '',
       age: editForm.age.trim(),
       hospNo: editForm.hospNo.trim(), admissionDate: editForm.admissionDate.trim(), allergies: editForm.allergies.trim(),
+      insurance: editForm.insurance.trim(),
       updatedAt: serverTimestamp()
     };
     // Not awaited — same offline-hang reason as toggleAllocation above.

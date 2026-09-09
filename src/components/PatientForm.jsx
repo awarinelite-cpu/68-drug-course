@@ -28,6 +28,7 @@ export default function PatientForm({ form, setForm }) {
       <div className="field"><label>Hospital No</label><input type="text" value={form.hospNo} onChange={set('hospNo')} /></div>
       <div className="field"><label>Date of Admission</label><input type="date" value={form.admissionDate} onChange={set('admissionDate')} /></div>
       <div className="field"><label>Allergies</label><input type="text" placeholder="None known / list allergies" value={form.allergies} onChange={set('allergies')} /></div>
+      <div className="field"><label>Insurance</label><input type="text" placeholder="e.g. NHIS, Private, HMO name" value={form.insurance || ''} onChange={set('insurance')} /></div>
     </>
   );
 }

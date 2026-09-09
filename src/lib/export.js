@@ -236,7 +236,8 @@ function addPatientHeader(pdf, record) {
   const rows = [
     ['Name', p.name || '-', 'EMR', p.emr || '-'],
     ['Hospital No', p.hospNo || '-', 'Age', p.age || '-'],
-    ['Ward', p.ward || '-', 'Date of Admission', p.admissionDate || '-']
+    ['Ward', p.ward || '-', 'Date of Admission', p.admissionDate || '-'],
+    ['Insurance', p.insurance || '-', '', '']
   ];
   autoTable(pdf, {
     startY: 66, theme: 'plain', styles: { fontSize: 9, cellPadding: 2 },

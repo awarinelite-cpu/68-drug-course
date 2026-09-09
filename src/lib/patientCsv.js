@@ -6,12 +6,12 @@ import { WARD_OPTIONS, PED_BED_TYPES } from "./drugChartHelpers.js";
 // writes to Firestore.
 export const CSV_HEADERS = [
   'Name', 'EMR Number', 'Diagnosis', 'Ward', 'Bed/Cot', 'Age',
-  'Hospital No', 'Date of Admission', 'Allergies'
+  'Hospital No', 'Date of Admission', 'Allergies', 'Insurance'
 ];
 
 const SAMPLE_ROWS = [
-  ['John Doe', 'EMR12345', 'Malaria', 'MALE MEDICAL WARD', '', '34', 'H-00123', '2026-09-01', 'None known'],
-  ['Baby Grace', 'EMR12346', 'Neonatal jaundice', 'PEDIATRIC/NICU WARD', 'Cot', '3 days', 'H-00124', '2026-09-02', ''],
+  ['John Doe', 'EMR12345', 'Malaria', 'MALE MEDICAL WARD', '', '34', 'H-00123', '2026-09-01', 'None known', 'NHIS'],
+  ['Baby Grace', 'EMR12346', 'Neonatal jaundice', 'PEDIATRIC/NICU WARD', 'Cot', '3 days', 'H-00124', '2026-09-02', '', ''],
 ];
 
 function csvEscape(value) {
@@ -103,6 +103,7 @@ export function parsePatientCsv(text) {
     hospNo: idx('hospital no'),
     admissionDate: idx('date of admission'),
     allergies: idx('allergies'),
+    insurance: idx('insurance'),
   };
   const headerOk = col.name !== -1 && col.emr !== -1;
   if (!headerOk) return { headerOk: false, rows: [] };
@@ -142,7 +143,7 @@ export function parsePatientCsv(text) {
       data: {
         name, emr, diagnosis: get(r, 'diagnosis'), ward, pedBedType,
         age: get(r, 'age'), hospNo: get(r, 'hospNo'),
-        admissionDate: admissionDateRaw, allergies: get(r, 'allergies')
+        admissionDate: admissionDateRaw, allergies: get(r, 'allergies'), insurance: get(r, 'insurance')
       },
       errors
     };

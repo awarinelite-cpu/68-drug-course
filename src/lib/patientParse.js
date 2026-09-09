@@ -95,14 +95,17 @@ export function parseEncounterEntries(text) {
 }
 
 // Diagnosis phrasings seen in free-text doctor's notes, checked in order.
-// Label forms ("Diagnosis: X" / "Assessment: X") are checked first since
-// they're the least ambiguous when present.
+// Label forms ("Diagnosis: X" / "Assessment: X" / the common "Ass" shorthand
+// with a dash instead of a colon, e.g. "Ass – CKD" or "Ass---Improving")
+// are checked first since they're the least ambiguous when present. The
+// captured text itself is taken verbatim — short abbreviations like "CKD",
+// "COPD", "OCD" are valid diagnoses on their own and need no expansion.
 const DIAGNOSIS_PATTERNS = [
   /^(?:Medical\s+)?Diagnosis\s*:\s*(.+?)(?:[.\n]|$)/im,
-  /^Assessment\s*:\s*(.+?)(?:[.\n]|$)/im,
+  /^Ass(?:essment)?\s*(?:[-\u2010-\u2015]+|:)\s*(.+?)(?:[.\n]|$)/im,
   /\bmanaged as a (?:known )?case of\s+(.+?)(?:[.\n]|$)/i,
   /\b(?:known )?case of\s+(.+?)(?:[.\n]|$)/i,
-  /^Assessment\s*\n\s*\??\s*(.+?)(?:[.\n]|$)/im,
+  /^Ass(?:essment)?\s*\n\s*\??\s*(.+?)(?:[.\n]|$)/im,
   /^\?\s*([A-Z].+?)(?:[.\n]|$)/m
 ];
 
@@ -126,9 +129,33 @@ export function extractLatestDiagnosis(text) {
 }
 
 
+// Pulls insurance/registration-type info off the EMR patient-header block,
+// e.g.:
+//   REG. TYPE: NHIS
+//   HMO/Company : Defence Health Maintenance Limited (DHML)
+//   NHIS NO.: 06NA/59/5278
+// Returns a single display-ready string ("NHIS – Defence Health
+// Maintenance Limited (DHML), NHIS No: 06NA/59/5278") or '' if none of
+// these labels are present. Values are read independently so a paste
+// missing the HMO/NHIS-No lines (or using only one of them) still yields
+// whatever was actually found instead of failing closed.
+export function extractInsurance(text) {
+  const norm = (text || '').replace(/\r\n/g, '\n');
+  const regType = grabLabel(norm, ['REG\\.?\\s*TYPE']);
+  const hmo = grabLabel(norm, ['HMO\\s*/\\s*Company', 'HMO']);
+  const nhisNo = grabLabel(norm, ['NHIS\\s*NO\\.?']);
+  if (!regType && !hmo && !nhisNo) return '';
+  let out = regType || (nhisNo ? 'NHIS' : '') || '';
+  const extras = [];
+  if (hmo) extras.push(hmo);
+  if (nhisNo) extras.push('NHIS No: ' + nhisNo);
+  if (extras.length) out = (out ? out + ' \u2013 ' : '') + extras.join(', ');
+  return out.trim();
+}
+
 export function parsePatientFields(text) {
   const norm = (text || '').replace(/\r\n/g, '\n');
-  const out = { name: '', emr: '', diagnosis: '', ward: '', age: '', hospNo: '', admissionDate: '', allergies: '' };
+  const out = { name: '', emr: '', diagnosis: '', ward: '', age: '', hospNo: '', admissionDate: '', allergies: '', insurance: '' };
 
   // --- Name ----------------------------------------------------------------
   // 1) A name line immediately followed by a lone ID-number line — the
@@ -174,12 +201,15 @@ export function parsePatientFields(text) {
   // in that dated/multi-entry format to begin with (e.g. a single
   // structured assessment form with one "Diagnosis:" line).
   out.diagnosis = extractLatestDiagnosis(norm);
-  if (!out.diagnosis) out.diagnosis = grabLabel(norm, ['Medical Diagnosis', 'Diagnosis', 'Assessment']);
+  if (!out.diagnosis) out.diagnosis = grabLabel(norm, ['Medical Diagnosis', 'Diagnosis', 'Ass(?:essment)?']);
 
   // --- Allergies -----------------------------------------------------------
   let allergies = grabLabel(norm, ['Allergies']);
   if (allergies === '0' || /^none$/i.test(allergies)) allergies = 'None known';
   out.allergies = allergies;
+
+  // --- Insurance / NHIS ------------------------------------------------------
+  out.insurance = extractInsurance(norm);
 
   // --- Date of Admission -----------------------------------------------------
   const admLabel = grabLabel(norm, ['Date of Admission']);
