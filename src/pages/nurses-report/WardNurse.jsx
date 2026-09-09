@@ -182,6 +182,68 @@ function DemographicsTable({ wardDoc, totals, editable, onField }) {
   );
 }
 
+// Maternity's own Patient Demographics table: no flat "Children" count —
+// instead a "Children" group header spans Male/Female sub-columns
+// tracking newborns' sex, since every patient on Mothers is an adult
+// woman (a plain Male/Female split wouldn't mean anything there) while
+// the babies' sex is the number actually worth tracking. Soldiers/
+// Civilians stay as plain columns alongside it, unchanged. Uses two
+// dedicated fields (childMale/childFemale) rather than the shared
+// DEMOGRAPHIC_FIELDS' male/female/child keys, so this never mixes into
+// other wards' adult male/female counts or the "All Wards" grand totals
+// — those still only read the shared DEMOGRAPHIC_FIELDS keys.
+function MaternityDemographicsTable({ wardDoc, editable, onField }) {
+  const getVal = (shiftKey, key) => {
+    const v = (wardDoc.shifts[shiftKey] || {})[key];
+    return typeof v === 'number' ? v : 0;
+  };
+  const totalFor = (key) => SHIFTS.reduce((sum, s) => sum + getVal(s.key, key), 0);
+
+  return (
+    <table className="shift">
+      <thead>
+        <tr>
+          <th rowSpan={2}>Shift</th>
+          <th colSpan={2}>Children</th>
+          <th rowSpan={2}>Soldiers</th>
+          <th rowSpan={2}>Civilians</th>
+        </tr>
+        <tr><th>Male</th><th>Female</th></tr>
+      </thead>
+      <tbody>
+        {SHIFTS.map((s) => (
+          <tr key={s.key}>
+            <td className="shift-name">{s.label}</td>
+            <td>
+              <input type="number" inputMode="numeric" disabled={!editable}
+                value={getVal(s.key, 'childMale')} onChange={(e) => onField(s.key, 'childMale', e.target.value)} />
+            </td>
+            <td>
+              <input type="number" inputMode="numeric" disabled={!editable}
+                value={getVal(s.key, 'childFemale')} onChange={(e) => onField(s.key, 'childFemale', e.target.value)} />
+            </td>
+            <td>
+              <input type="number" inputMode="numeric" disabled={!editable}
+                value={getVal(s.key, 'soldier')} onChange={(e) => onField(s.key, 'soldier', e.target.value)} />
+            </td>
+            <td>
+              <input type="number" inputMode="numeric" disabled={!editable}
+                value={getVal(s.key, 'civilian')} onChange={(e) => onField(s.key, 'civilian', e.target.value)} />
+            </td>
+          </tr>
+        ))}
+        <tr className="total-row">
+          <td className="shift-name">Total</td>
+          <td>{totalFor('childMale')}</td>
+          <td>{totalFor('childFemale')}</td>
+          <td>{totalFor('soldier')}</td>
+          <td>{totalFor('civilian')}</td>
+        </tr>
+      </tbody>
+    </table>
+  );
+}
+
 // All of one ward's report state/logic — loading, editing, saving,
 // submitting — with no rendering. Extracted out of WardReportPanel so
 // MergedWardReportPanel below can run two of these (one per member
@@ -411,7 +473,7 @@ function useWardReport(wardKey, isAdmin, profile, user) {
 // the one Save/Submit bar shown (Mothers') saves both member wards'
 // data together, since Cots' own numeric figures (entered in the shared
 // table above) would otherwise have no button of their own to save.
-function WardPanelRest({ h, showLabel, isAdmin, navigate, includeShiftTable = true, includePreviousOcc = true, includeHeader = true, onSave, onSubmit }) {
+function WardPanelRest({ h, showLabel, isAdmin, navigate, includeShiftTable = true, includePreviousOcc = true, includeHeader = true, onSave, onSubmit, useMaternityDemographics = false }) {
   const {
     w, wardDoc, topStatus, saveStatus, editable, adminEditOverride, setAdminEditOverride,
     census, movementTotals, demographicTotals, emrLookup,
@@ -469,7 +531,9 @@ function WardPanelRest({ h, showLabel, isAdmin, navigate, includeShiftTable = tr
           <div className="card-box">
             <h2>Patient Demographics</h2>
             <div className="table-wrap">
-              <DemographicsTable wardDoc={wardDoc} totals={demographicTotals} editable={editable} onField={updateShiftField} />
+              {useMaternityDemographics
+                ? <MaternityDemographicsTable wardDoc={wardDoc} editable={editable} onField={updateShiftField} />
+                : <DemographicsTable wardDoc={wardDoc} totals={demographicTotals} editable={editable} onField={updateShiftField} />}
             </div>
           </div>
 
@@ -680,7 +744,7 @@ function MergedWardReportPanel({ group, isAdmin, profile, user, navigate }) {
       )}
       <WardPanelRest h={hA} showLabel={false} isAdmin={isAdmin} navigate={navigate}
         includeShiftTable={false} includePreviousOcc={false} includeHeader={false}
-        onSave={saveBoth} onSubmit={submitBoth} />
+        onSave={saveBoth} onSubmit={submitBoth} useMaternityDemographics />
     </>
   );
 }
