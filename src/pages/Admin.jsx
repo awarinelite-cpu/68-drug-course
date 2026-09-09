@@ -11,7 +11,7 @@ import { downloadFullBackup } from "../lib/export.js";
 import { avatarMarkup } from "../lib/avatar.js";
 import {
   SOUND_OPTIONS, APPEARANCE_OPTIONS, REPEAT_OPTIONS, ALL_FREQUENCIES, GLUCOSE_INTERVAL_OPTIONS,
-  loadAlarmSettings, saveAlarmSettings as persistAlarmSettings
+  OVERDUE_REPEAT_OPTIONS, loadAlarmSettings, saveAlarmSettings as persistAlarmSettings
 } from "../lib/alarm-settings.js";
 import Topbar from "../components/Topbar.jsx";
 
@@ -379,6 +379,16 @@ export default function Admin() {
                   <label>Quiet Until</label>
                   <input type="time" value={alarm.quietHours.end} onChange={(e) => setAlarm({ ...alarm, quietHours: { ...alarm.quietHours, end: e.target.value } })} />
                 </div>
+              </div>
+              <div className="field">
+                <label>Repeat While Overdue</label>
+                <select value={String(alarm.overdueRepeatMinutes)} onChange={(e) => setAlarm({ ...alarm, overdueRepeatMinutes: Number(e.target.value) })}>
+                  {OVERDUE_REPEAT_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                </select>
+                <p style={{ fontSize: 12, color: '#666', margin: '2px 0 0' }}>
+                  If a dose stays overdue (not yet given), nurses keep getting pushed a reminder at this interval
+                  until it's given — instead of only the one alert when it first became due.
+                </p>
               </div>
               <div className="field">
                 <label>Alarm Schedule — Which Frequencies Alert</label>

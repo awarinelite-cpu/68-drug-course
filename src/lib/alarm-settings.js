@@ -50,13 +50,31 @@ export const GLUCOSE_INTERVAL_OPTIONS = [
   { value: 24, label: "Every 24 hours" }
 ];
 
+// How often the SERVER re-sends a push for a dose that's still overdue
+// (due time passed, but no new administration row logged yet). This is
+// separate from "Repeat Behavior" above, which only controls whether an
+// *already-delivered* alert keeps sounding/vibrating in an open foreground
+// tab for up to 60s — it has no effect on whether the background Cloud
+// Function (functions/index.js checkDueDrugs) sends another push later.
+// Without this, a dose that goes due and isn't given only ever triggers one
+// push, ever, for that dose.
+export const OVERDUE_REPEAT_OPTIONS = [
+  { value: 5, label: "Every 5 minutes" },
+  { value: 10, label: "Every 10 minutes" },
+  { value: 15, label: "Every 15 minutes" },
+  { value: 20, label: "Every 20 minutes" },
+  { value: 30, label: "Every 30 minutes" },
+  { value: 60, label: "Every 60 minutes" }
+];
+
 export const DEFAULT_ALARM_SETTINGS = {
   sound: "beep",
   appearance: "banner_sound",
   repeat: "repeat",
   quietHours: { enabled: false, start: "22:00", end: "06:00" },
   frequencies: ALL_FREQUENCIES.slice(),
-  glucose: { enabled: true, intervalHours: 4 }
+  glucose: { enabled: true, intervalHours: 4 },
+  overdueRepeatMinutes: 15
 };
 
 // Merges Firestore data over the defaults field-by-field, so a doc that
@@ -68,6 +86,10 @@ function mergeWithDefaults(data) {
   const glucoseIntervalHours = validIntervals.includes(Number(d.glucose && d.glucose.intervalHours))
     ? Number(d.glucose.intervalHours)
     : DEFAULT_ALARM_SETTINGS.glucose.intervalHours;
+  const validRepeatMinutes = OVERDUE_REPEAT_OPTIONS.map((o) => o.value);
+  const overdueRepeatMinutes = validRepeatMinutes.includes(Number(d.overdueRepeatMinutes))
+    ? Number(d.overdueRepeatMinutes)
+    : DEFAULT_ALARM_SETTINGS.overdueRepeatMinutes;
   return {
     sound: d.sound || DEFAULT_ALARM_SETTINGS.sound,
     appearance: d.appearance || DEFAULT_ALARM_SETTINGS.appearance,
@@ -83,7 +105,8 @@ function mergeWithDefaults(data) {
     glucose: {
       enabled: d.glucose ? !!d.glucose.enabled : DEFAULT_ALARM_SETTINGS.glucose.enabled,
       intervalHours: glucoseIntervalHours
-    }
+    },
+    overdueRepeatMinutes
   };
 }
 

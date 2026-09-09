@@ -94,20 +94,26 @@ async function loadAlarmSettings() {
     const qh = d.quietHours || {};
     const glucose = d.glucose || {};
     const validGlucoseIntervals = [1, 2, 3, 4, 6, 8, 12, 24];
+    const validRepeatMinutes = [5, 10, 15, 20, 30, 60];
     return {
       frequencies,
       quietHours: { enabled: !!qh.enabled, start: qh.start || '22:00', end: qh.end || '06:00' },
       glucose: {
         enabled: d.glucose ? !!glucose.enabled : true, // default on if admin hasn't touched this setting yet
         intervalHours: validGlucoseIntervals.includes(Number(glucose.intervalHours)) ? Number(glucose.intervalHours) : 4
-      }
+      },
+      // Mirrors OVERDUE_REPEAT_OPTIONS in src/lib/alarm-settings.js — how
+      // often a still-overdue (not-yet-given) dose gets re-pushed, since
+      // otherwise a dose only ever triggers one alert for its whole life.
+      overdueRepeatMinutes: validRepeatMinutes.includes(Number(d.overdueRepeatMinutes)) ? Number(d.overdueRepeatMinutes) : 15
     };
   } catch (e) {
     console.error('Failed to load alarm settings, defaulting to all frequencies / no quiet hours:', e);
     return {
       frequencies: DEFAULT_FREQUENCIES,
       quietHours: { enabled: false, start: '22:00', end: '06:00' },
-      glucose: { enabled: true, intervalHours: 4 }
+      glucose: { enabled: true, intervalHours: 4 },
+      overdueRepeatMinutes: 15
     };
   }
 }
@@ -250,12 +256,24 @@ exports.checkDueDrugs = onSchedule(
         if (!dueAt || dueAt > now) return;
 
         const dueSlotKey = dueAt.toISOString();
-        if (drug.lastAlertedFor === dueSlotKey) return; // already alerted for this exact dose
+        if (drug.lastAlertedFor === dueSlotKey) {
+          // Already sent at least one alert for this exact dose. If it's
+          // STILL overdue (no new administration row has come in — that
+          // would've moved dueSlotKey forward via lastGivenFor/computeDueAt),
+          // keep re-alerting every overdueRepeatMinutes rather than going
+          // silent for the rest of the shift. This is the fix for doses that
+          // go overdue and never get a second alarm.
+          const lastAlertedAt = drug.lastAlertedAt ? new Date(drug.lastAlertedAt) : null;
+          const elapsedMs = lastAlertedAt ? now.getTime() - lastAlertedAt.getTime() : Infinity;
+          if (elapsedMs < alarmSettings.overdueRepeatMinutes * 60 * 1000) return;
+        }
 
+        const isRepeat = drug.lastAlertedFor === dueSlotKey; // set before we overwrite it below
         drug.lastAlertedFor = dueSlotKey;
+        drug.lastAlertedAt = now.toISOString();
         changed = true;
 
-        const label = `${drug.name || 'Unnamed drug'} (${drug.frequency})`;
+        const label = `${drug.name || 'Unnamed drug'} (${drug.frequency})${isRepeat ? ' — still overdue' : ''}`;
         (dueByPatient[patientId] = dueByPatient[patientId] || []).push(label);
       });
 
