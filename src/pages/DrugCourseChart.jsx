@@ -12,7 +12,8 @@ import Topbar from "../components/Topbar.jsx";
 import {
   ROUTE_OPTIONS, FREQ_OPTIONS, ACTION_OPTIONS, STATUS_LABELS, WARD_OPTIONS, actionColor, defaultRow,
   dueLabelFor, withDrugCompletionChecked, computeRouteFromSno, parseBulkText,
-  parseDoseSequence, administrationTimesFor, flaggedDrugRefs, flaggedDrugMessage, diffFields
+  parseDoseSequence, administrationTimesFor, flaggedDrugRefs, flaggedDrugMessage, diffFields,
+  autoDurationForFrequency
 } from "../lib/drugChartHelpers.js";
 
 const FIELD_IDS = ['f_admission', 'f_discharge', 'f_diagnosis'];
@@ -32,8 +33,8 @@ function rowsFromDoc(dataRows) {
 function FreqCell({ drug, onChange, openFreqModal }) {
   const isCustom = !!drug.frequency && !FREQ_OPTIONS.includes(drug.frequency);
   function handlePick(val) {
-    if (val === 'Other') openFreqModal(isCustom ? drug.frequency : '', (text) => onChange(text));
-    else onChange(val);
+    if (val === 'Other') openFreqModal(isCustom ? drug.frequency : '', (text) => onChange(text, autoDurationForFrequency(text)));
+    else onChange(val, autoDurationForFrequency(val));
   }
   return (
     <>
@@ -819,7 +820,7 @@ export default function DrugCourseChart() {
                             {ROUTE_OPTIONS.map(opt => <option key={opt} value={opt}>{opt || '—'}</option>)}
                           </select>
                         </td>
-                        <td><FreqCell drug={d} onChange={(text) => updateDrug(i, { frequency: text })} openFreqModal={openFreqModal} /></td>
+                        <td><FreqCell drug={d} onChange={(text, forcedDuration) => updateDrug(i, forcedDuration ? { frequency: text, duration: forcedDuration } : { frequency: text })} openFreqModal={openFreqModal} /></td>
                         <td>
                           <select value={d.action || ''} onChange={(e) => updateDrug(i, { action: e.target.value })}
                             style={d.action ? { background: actionColor(d.action), color: '#fff', fontWeight: 'bold' } : {}}>
@@ -1152,7 +1153,7 @@ export default function DrugCourseChart() {
                               </select>
                             </td>
                             <td style={{ border: '1px solid #000', padding: 3 }}>
-                              <FreqCell drug={d} onChange={(text) => updateBulkRow(i, { frequency: text })} openFreqModal={openFreqModal} />
+                              <FreqCell drug={d} onChange={(text, forcedDuration) => updateBulkRow(i, forcedDuration ? { frequency: text, duration: forcedDuration } : { frequency: text })} openFreqModal={openFreqModal} />
                             </td>
                             <td style={{ border: '1px solid #000', padding: 3 }}><input type="text" style={{ width: '100%', border: 'none', fontSize: 12 }} value={d.duration} onChange={(e) => updateBulkRow(i, { duration: e.target.value })} /></td>
                             <td style={{ border: '1px solid #000', padding: 3, textAlign: 'center' }}><button className="remove-drug-btn" onClick={() => removeBulkRow(i)}>x</button></td>

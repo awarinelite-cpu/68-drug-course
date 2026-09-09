@@ -41,6 +41,14 @@ export function normalizeFrequency(freq) {
   return FREQ_SYNONYMS[key] || key;
 }
 
+// The "0,12,24hr" fixed dose-sequence always spans 24 hours (dose at hour
+// 0, 12, and 24) — so its Duration is always "24hrs", not something a
+// nurse should have to type separately. Returns the forced duration text,
+// or null if the frequency isn't this pattern.
+export function autoDurationForFrequency(freq) {
+  return (freq || '').trim() === '0,12,24hr' ? '24hrs' : null;
+}
+
 function toLocalDate(dateStr, timeStr) {
   if (!dateStr || !timeStr) return null;
   const d = new Date(dateStr + 'T' + timeStr + ':00');
@@ -494,6 +502,8 @@ export function parseDrugLine(line) {
     frequency = freqRaw;
   }
 
+  duration = autoDurationForFrequency(frequency) || duration;
+
   const fullName = (name + (dosage ? ' ' + dosage : '') + (additive ? ' ' + additive : '')).trim();
   return { name: fullName, route, frequency, action, duration, createdAt: new Date().toISOString() };
 }
@@ -542,6 +552,8 @@ function parseAlternatingFluidLine(tokens, route) {
       rest = rest.slice(0, -1);
     }
   }
+
+  duration = autoDurationForFrequency(frequency) || duration;
 
   const name = (rest.join(' ') + (additive ? ' ' + additive : '')).trim();
   return { name, route, frequency, action: '', duration, createdAt: new Date().toISOString() };
