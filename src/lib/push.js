@@ -450,17 +450,74 @@ function showForegroundBanner(title, body, link) {
   banner.style.cssText =
     "position:fixed; top:12px; left:50%; transform:translateX(-50%); z-index:6000; " +
     "background:#111827; color:#fff; padding:12px 16px; border-radius:10px; " +
-    "box-shadow:0 4px 16px rgba(0,0,0,.3); max-width:92vw; cursor:pointer; font-size:13px;";
+    "box-shadow:0 4px 16px rgba(0,0,0,.3); max-width:92vw; cursor:pointer; font-size:13px; " +
+    "touch-action:pan-y; user-select:none; transition:transform .25s ease, opacity .25s ease;";
   banner.innerHTML =
     '<div style="font-weight:bold; margin-bottom:2px;">' + (title || "Drug due") + "</div>" +
     "<div>" + (body || "") + "</div>" +
-    '<div style="margin-top:6px; font-size:11px; opacity:.75;">Tap to dismiss</div>';
+    '<div style="margin-top:6px; font-size:11px; opacity:.75;">Swipe to dismiss \u2022 tap to open chart</div>';
 
   const cleanup = () => { stopAlarm(); banner.remove(); };
-  banner.addEventListener("click", () => {
-    if (link) window.location.href = link;
-    cleanup();
+
+  const SWIPE_THRESHOLD = 60; // px of horizontal drag that counts as a dismiss swipe
+  const TAP_THRESHOLD = 8;    // px of movement still considered a tap, not a drag
+  let startX = 0;
+  let dx = 0;
+  let dragging = false;
+  let pointerId = null;
+
+  function setDragTransform(x) {
+    banner.style.transition = "none";
+    banner.style.transform = `translateX(calc(-50% + ${x}px))`;
+    banner.style.opacity = String(Math.max(0.25, 1 - Math.abs(x) / 220));
+  }
+
+  function snapBack() {
+    banner.style.transition = "transform .25s ease, opacity .25s ease";
+    banner.style.transform = "translateX(-50%)";
+    banner.style.opacity = "1";
+  }
+
+  function dismissWithSwipe(direction) {
+    banner.style.transition = "transform .2s ease, opacity .2s ease";
+    banner.style.transform = `translateX(calc(-50% + ${direction * 400}px))`;
+    banner.style.opacity = "0";
+    setTimeout(cleanup, 200);
+  }
+
+  banner.addEventListener("pointerdown", (e) => {
+    dragging = true;
+    pointerId = e.pointerId;
+    startX = e.clientX;
+    dx = 0;
+    banner.setPointerCapture?.(pointerId);
   });
+
+  banner.addEventListener("pointermove", (e) => {
+    if (!dragging || e.pointerId !== pointerId) return;
+    dx = e.clientX - startX;
+    setDragTransform(dx);
+  });
+
+  function endDrag(e) {
+    if (!dragging || e.pointerId !== pointerId) return;
+    dragging = false;
+    if (Math.abs(dx) >= SWIPE_THRESHOLD) {
+      // Swiped left or right far enough — dismiss/stop the alarm only.
+      dismissWithSwipe(dx > 0 ? 1 : -1);
+    } else if (Math.abs(dx) <= TAP_THRESHOLD) {
+      // Treated as a tap — open the patient's drug course chart.
+      if (link) window.location.href = link;
+      cleanup();
+    } else {
+      // Dragged, but not far enough to count as a dismiss — snap back.
+      snapBack();
+    }
+  }
+
+  banner.addEventListener("pointerup", endDrag);
+  banner.addEventListener("pointercancel", endDrag);
+
   document.body.appendChild(banner);
   setTimeout(cleanup, MAX_ALARM_MS);
 }
