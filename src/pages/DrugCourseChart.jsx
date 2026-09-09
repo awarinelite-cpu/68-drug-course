@@ -445,7 +445,7 @@ export default function DrugCourseChart() {
   }
   function applySnoPicker() {
     const i = snoPickerRow;
-    const sno = snoPickerSelected.map(n => n + (drugs[n - 1]?.name ? ' - ' + drugs[n - 1].name : '')).join(', ');
+    const sno = snoPickerSelected.join(', ');
     updateChartRow(i, { sno, route: computeRouteFromSno(sno, drugs) });
     closeSnoPicker();
   }
