@@ -250,8 +250,13 @@ const FREQ_ALIASES = {
   weekly: 'Weekly',
   '01224hr': '0,12,24hr', '01224hrs': '0,12,24hr'
 };
-const DOSAGE_RE = /^\d+(\.\d+)?(mg|g|mcg|ug|ml|l|cc|iu|units?|%|mmol)$/i;
+const DOSAGE_RE = /^\d+(\.\d+)?(mg|g|mcg|ug|mls?|l|cc|iu|units?|%|mmol)$/i;
+// Compound doses for combination drugs, e.g. Artemether/Lumefantrine
+// "80/480mg" — two numbers sharing one trailing unit.
+const COMPOUND_DOSAGE_RE = /^\d+(\.\d+)?\/\d+(\.\d+)?(mg|g|mcg|ug|mls?|l|cc|iu|units?|%|mmol)$/i;
+const BARE_PERCENT_RE = /^\d+(\.\d+)?%$/;
 const DURATION_RE = /^x?(\d+)\s*\/\s*(7|52|12)$/i;
+function isDosageToken(t) { return DOSAGE_RE.test(t) || COMPOUND_DOSAGE_RE.test(t); }
 
 export function parseDrugLine(line) {
   const raw = line.trim();
@@ -268,7 +273,16 @@ export function parseDrugLine(line) {
     // drug orders default to oral/tablet when a route isn't stated.
     route = 'Oral';
   }
-  let dosageIdx = tokens.findIndex(t => DOSAGE_RE.test(t.replace(/,$/, '')));
+  let dosageIdx = tokens.findIndex(t => isDosageToken(t.replace(/,$/, '')));
+  // A leading bare percentage (e.g. "5%", "0.9%") describes the fluid's
+  // concentration and belongs in the name ("5% D/water 500mls"), not the
+  // dose itself — the real dose (a volume like "500mls") comes later in
+  // the line. Without this, "IV 5% D/water 500mls..." would treat "5%" as
+  // the whole dose and truncate the name down to nothing.
+  if (dosageIdx === 0 && BARE_PERCENT_RE.test(tokens[0])) {
+    const nextIdx = tokens.slice(1).findIndex(t => isDosageToken(t.replace(/,$/, '')));
+    dosageIdx = nextIdx === -1 ? -1 : nextIdx + 1;
+  }
   let name, dosage, rest;
   if (dosageIdx === -1) {
     name = tokens.join(' ');
