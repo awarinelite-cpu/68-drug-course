@@ -69,7 +69,36 @@ export function administrationTimesFor(chartRows, drugIndex) {
 // the exact "0,12,24hr" option in the list.
 export function parseDoseSequence(freqText) {
   if (!freqText) return null;
-  const compact = freqText.replace(/\s+/g, '');
+  const text = freqText.trim();
+
+  // "STAT, then Xhrly for a total of Yhrs" — a loading dose followed by
+  // repeat dosing at a fixed interval up to a stated total duration, e.g.
+  // "stat, then 8hrly 24hrs" means doses at hour 0, 8, 16 and 24.
+  const statThen = text.match(
+    /^stat\b[,\s]*then\b.*?(\d+)\s*(?:hrly|hourly|hr|hrs|hours?)\b.*?(\d+)\s*(?:hr|hrs|hours?)\b/i
+  );
+  if (statThen) {
+    const interval = parseInt(statThen[1], 10);
+    const total = parseInt(statThen[2], 10);
+    if (interval > 0 && total >= interval) {
+      const nums = [];
+      for (let h = 0; h <= total; h += interval) nums.push(h);
+      if (nums.length >= 2) return nums;
+    }
+  }
+
+  // A list of hour-offsets, each individually suffixed "hr"/"hrs"/"hours",
+  // however they're separated by punctuation/filler words — e.g.
+  // "at 0hrs, 12hrs and 24hrs" or "0hrs / 12hrs / 24hrs".
+  const hourMatches = [...text.matchAll(/(\d+)\s*(?:hrs?|hours?)\b/gi)];
+  if (hourMatches.length >= 2) {
+    const nums = [...new Set(hourMatches.map(m => parseInt(m[1], 10)))].sort((a, b) => a - b);
+    if (nums.length >= 2) return nums;
+  }
+
+  // Bare comma-separated numbers with at most one trailing hr/hrs/hours
+  // suffix — the exact "0,12,24hr" dropdown option, or typed the same way.
+  const compact = text.replace(/\s+/g, '');
   const m = compact.match(/^(\d+(?:,\d+)+)(hrs?|hours?|h)?$/i);
   if (!m) return null;
   const nums = [...new Set(m[1].split(',').map(n => parseInt(n, 10)))].sort((a, b) => a - b);
