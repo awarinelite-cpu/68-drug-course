@@ -150,6 +150,25 @@ export function parseDurationDays(text) {
   return null;
 }
 
+// --- Hour-based durations (e.g. "24hrs", "48hrs", "1hr") -----------------
+// Some courses are timed in hours rather than days, most often a loading
+// dose followed by repeat dosing up to a stated cutoff (e.g. "STAT then
+// 8hrly 24hrs" runs for 24 hours total). Also accepts the "x/24" fraction
+// form, matching the existing 7/12/52 day/month/week fraction notation
+// (24 being the hours-in-a-day denominator, so "1/24" = 1 hour).
+// Returned separately from parseDurationDays (rather than folded into it as
+// a fraction of a day) so callers can apply hour-precision completion math
+// instead of losing sub-day precision to whole-day rounding.
+export function parseDurationHours(text) {
+  if (!text) return null;
+  const t = text.trim().toLowerCase();
+  let m = t.match(/^(\d+)\s*\/\s*24$/);
+  if (m) return parseInt(m[1], 10);
+  m = t.match(/^(\d+)\s*(hrs?|hours?|h)$/);
+  if (m) return parseInt(m[1], 10);
+  return null;
+}
+
 // If a drug has no recorded start date yet, fall back to the earliest date
 // it was actually administered on the chart below (matched by Drug S/N).
 function inferStartDateForDrug(chartRows, index) {
@@ -170,6 +189,7 @@ function inferStartDateForDrug(chartRows, index) {
 // a NEW drugs array if anything changed, or the same reference if not (so
 // callers can skip a re-render/save when nothing changed).
 export function withDrugCompletionChecked(drugs, chartRows) {
+  const now = new Date();
   const today = new Date(); today.setHours(0, 0, 0, 0);
   let changed = false;
   const next = drugs.map((d, i) => {
@@ -190,8 +210,9 @@ export function withDrugCompletionChecked(drugs, chartRows) {
       return d;
     }
 
-    const days = parseDurationDays(d.duration);
-    if (days == null) return d;
+    const hours = parseDurationHours(d.duration);
+    const days = hours == null ? parseDurationDays(d.duration) : null;
+    if (hours == null && days == null) return d;
     if (locked) return d;
 
     let start = d.startDate || inferStartDateForDrug(chartRows, i);
@@ -200,10 +221,13 @@ export function withDrugCompletionChecked(drugs, chartRows) {
     const startDate = new Date(start + 'T00:00:00');
     if (isNaN(startDate)) return d;
     const endDate = new Date(startDate);
-    endDate.setDate(endDate.getDate() + days);
+    if (hours != null) endDate.setHours(endDate.getHours() + hours);
+    else endDate.setDate(endDate.getDate() + days);
 
     const needsStartDate = !d.startDate;
-    const needsComplete = today >= endDate && d.action !== 'Completed';
+    // Hour-based durations need to-the-hour precision (the current moment),
+    // day-based ones keep the existing midnight-to-midnight comparison.
+    const needsComplete = (hours != null ? now : today) >= endDate && d.action !== 'Completed';
     if (!needsStartDate && !needsComplete) return d;
 
     changed = true;
@@ -284,7 +308,11 @@ const DOSAGE_RE = /^\d+(\.\d+)?(mg|g|mcg|ug|mls?|l|cc|iu|units?|%|mmol)$/i;
 // "80/480mg" — two numbers sharing one trailing unit.
 const COMPOUND_DOSAGE_RE = /^\d+(\.\d+)?\/\d+(\.\d+)?(mg|g|mcg|ug|mls?|l|cc|iu|units?|%|mmol)$/i;
 const BARE_PERCENT_RE = /^\d+(\.\d+)?%$/;
-const DURATION_RE = /^x?(\d+)\s*\/\s*(7|52|12)$/i;
+const DURATION_RE = /^x?(\d+)\s*\/\s*(7|52|12|24)$/i;
+// A duration given as a plain hour count rather than a day/week/month
+// fraction, e.g. "24hrs", "48hrs", "72hrs", "1hr" — common for a loading
+// dose followed by a stated total course length ("stat, then 8hrly 24hrs").
+const DURATION_HOURS_RE = /^x?(\d+)\s*(hrs?|hours?)$/i;
 function isDosageToken(t) { return DOSAGE_RE.test(t) || COMPOUND_DOSAGE_RE.test(t); }
 
 // A dose written with a stray space before its unit ("120 mg" instead of
@@ -406,10 +434,15 @@ export function parseDrugLine(line) {
   }
 
   let duration = '';
-  const durIdx = rest.findIndex(t => DURATION_RE.test(t));
+  const durIdx = rest.findIndex(t => DURATION_RE.test(t) || DURATION_HOURS_RE.test(t));
   if (durIdx !== -1) {
-    const m = rest[durIdx].match(DURATION_RE);
-    duration = m[1] + '/' + m[2];
+    const fracM = rest[durIdx].match(DURATION_RE);
+    if (fracM) {
+      duration = fracM[1] + '/' + fracM[2];
+    } else {
+      const hrM = rest[durIdx].match(DURATION_HOURS_RE);
+      duration = hrM[1] + 'hrs';
+    }
     rest.splice(durIdx, 1);
   }
 
@@ -437,7 +470,15 @@ export function parseDrugLine(line) {
   const freqRaw = rest.join(' ').replace(/,+/g, ',').trim();
   const freqKey = freqRaw.toLowerCase().replace(/[\s,]/g, '');
   let frequency = '';
-  if (freqKey && FREQ_ALIASES[freqKey]) {
+  // "stat, then 8hrly" / "stat then Q8H" (however the hour word is styled,
+  // and once its trailing "24hrs" total has already been pulled into
+  // duration above) — normalize to the canonical "STAT then QXH" dropdown
+  // option so it matches the frequency picker instead of sticking as
+  // free text.
+  const statThenM = freqRaw.match(/^stat[,\s]*then\s+q?(\d+)\s*(?:hrly|hourly|h)\b/i);
+  if (statThenM) {
+    frequency = 'STAT then Q' + statThenM[1] + 'H';
+  } else if (freqKey && FREQ_ALIASES[freqKey]) {
     frequency = FREQ_ALIASES[freqKey];
   } else if (freqRaw) {
     frequency = freqRaw;
