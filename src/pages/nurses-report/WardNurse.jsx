@@ -580,20 +580,8 @@ function WardPanelRest({ h, showLabel, isAdmin, navigate, includeShiftTable = tr
 
   return (
     <>
-      {includeHeader && (
-        <div className="card-box">
-          <div className="ward-select-row">
-            {showLabel && <h2 style={{ margin: 0 }}>{w?.label}</h2>}
-            {wardDoc && <span className={"status-pill " + pillClass}>{pillText}</span>}
-            {w && (
-              <button className="btn btn-secondary" style={{ padding: '6px 12px' }} type="button"
-                onClick={() => navigate('/nurses-report/archive-list?type=ward&ward=' + encodeURIComponent(w.key) + '&label=' + encodeURIComponent(w.label))}>
-                {'\uD83D\uDCC1 Archive'}
-              </button>
-            )}
-          </div>
-          <div className="save-status" style={{ color: topStatus.error ? '#dc2626' : '#6b7280' }}>{topStatus.text}</div>
-        </div>
+      {includeHeader && topStatus.text && (
+        <div className="save-status" style={{ color: topStatus.error ? '#dc2626' : '#6b7280', margin: '4px 0 0' }}>{topStatus.text}</div>
       )}
 
       {wardDoc && (
@@ -607,7 +595,17 @@ function WardPanelRest({ h, showLabel, isAdmin, navigate, includeShiftTable = tr
 
           {includePreviousOcc && (
             <div className="card-box">
-              <h2>Previous Occ</h2>
+              <div className="ward-select-row">
+                <h2 style={{ margin: 0 }}>{showLabel && w?.label ? w.label : 'Previous Occ'}</h2>
+                <span className={"status-pill " + pillClass}>{pillText}</span>
+                {includeHeader && w && (
+                  <button className="btn btn-secondary" style={{ padding: '6px 12px' }} type="button"
+                    onClick={() => navigate('/nurses-report/archive-list?type=ward&ward=' + encodeURIComponent(w.key) + '&label=' + encodeURIComponent(w.label))}>
+                    {'\uD83D\uDCC1 Archive'}
+                  </button>
+                )}
+              </div>
+              {showLabel && w?.label && <div style={{ fontSize: 13, color: '#6b7280', margin: '6px 0 0' }}>Previous Occ</div>}
               <div className="patient-field" style={{ maxWidth: 140 }}>
                 <input type="number" inputMode="numeric" disabled={!editable} value={wardDoc.startOcc} onChange={(e) => updateStartOcc(e.target.value)} />
               </div>
