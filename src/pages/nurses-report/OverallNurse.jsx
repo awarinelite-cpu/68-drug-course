@@ -567,7 +567,22 @@ export default function OverallNurse() {
       // A merged table always shows every member row (paper always has
       // both Mothers and Cots), even if one hasn't been submitted yet —
       // the non-grouped case keeps the original submitted-only filter.
-      const members = group.mergedTable ? allMembers : allMembers.filter(m => m.data.submitted);
+      let members = group.mergedTable ? allMembers : allMembers.filter(m => m.data.submitted);
+      // A patientLocationOptions group (Paed) saves every write-up under
+      // the lead member's (first member's) own doc, tagged with a
+      // "Located" field — split them back out per member here by that
+      // tag so e.g. a patient marked PAED COT shows under PAED COT
+      // below, not under PAED BED just because that's whose doc it's
+      // physically stored in. Untagged patients (written before this
+      // feature existed, or left blank) default to the lead member.
+      if (group.patientLocationOptions) {
+        const leadPatients = Array.isArray(allMembers[0].data.patients) ? allMembers[0].data.patients : [];
+        const leadLabel = allMembers[0].w.label;
+        members = members.map((m) => ({
+          ...m,
+          data: { ...m.data, patients: leadPatients.filter(p => (p.location || leadLabel) === m.w.label) }
+        }));
+      }
       reportGroups.push({ key: group.key, label: group.label, members, mergedTable: !!group.mergedTable });
       return;
     }
