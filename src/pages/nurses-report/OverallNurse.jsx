@@ -858,7 +858,7 @@ export default function OverallNurse() {
               <thead>
                 <tr>
                   <th>Ward</th>
-                  {DEMOGRAPHIC_FIELDS.map(f => <th key={f.key}>{f.label}</th>)}
+                  {DEMOGRAPHIC_FIELDS.filter(f => f.key !== 'child').map(f => <th key={f.key}>{f.label}</th>)}
                 </tr>
               </thead>
               <tbody>
@@ -867,13 +867,13 @@ export default function OverallNurse() {
                   return (
                     <tr key={w.key}>
                       <td className="ward-name">{w.label}</td>
-                      {DEMOGRAPHIC_FIELDS.map((f) => <td key={f.key}>{typeof data[f.key] === 'number' ? data[f.key] : 0}</td>)}
+                      {DEMOGRAPHIC_FIELDS.filter(f => f.key !== 'child').map((f) => <td key={f.key}>{typeof data[f.key] === 'number' ? data[f.key] : 0}</td>)}
                     </tr>
                   );
                 })}
                 <tr className="totals-row">
                   <td className="ward-name">TOTAL</td>
-                  {DEMOGRAPHIC_FIELDS.map(f => <td key={f.key}>{demoTotals[f.key]}</td>)}
+                  {DEMOGRAPHIC_FIELDS.filter(f => f.key !== 'child').map(f => <td key={f.key}>{demoTotals[f.key]}</td>)}
                 </tr>
               </tbody>
             </table>

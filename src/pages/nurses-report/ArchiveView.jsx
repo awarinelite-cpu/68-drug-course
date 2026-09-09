@@ -158,10 +158,11 @@ function WardShiftTableEdit({ w, data, onChange }) {
   );
 }
 
-function DemographicsTableView({ data }) {
+function DemographicsTableView({ data, w }) {
+  const fields = w && w.key && w.key.startsWith('paed') ? DEMOGRAPHIC_FIELDS.filter(f => f.key !== 'child') : DEMOGRAPHIC_FIELDS;
   const shifts = data.shifts || {};
   const totals = {};
-  DEMOGRAPHIC_FIELDS.forEach(f => {
+  fields.forEach(f => {
     let sum = 0;
     SHIFTS.forEach(s => { const v = (shifts[s.key] || {})[f.key]; sum += typeof v === 'number' ? v : 0; });
     totals[f.key] = sum;
@@ -169,7 +170,7 @@ function DemographicsTableView({ data }) {
   return (
     <table className="shift">
       <thead>
-        <tr><th>Shift</th>{DEMOGRAPHIC_FIELDS.map(f => <th key={f.key}>{f.label}</th>)}</tr>
+        <tr><th>Shift</th>{fields.map(f => <th key={f.key}>{f.label}</th>)}</tr>
       </thead>
       <tbody>
         {SHIFTS.map((s) => {
@@ -177,20 +178,21 @@ function DemographicsTableView({ data }) {
           return (
             <tr key={s.key}>
               <td className="shift-name">{s.label}</td>
-              {DEMOGRAPHIC_FIELDS.map(f => <td key={f.key}>{typeof sData[f.key] === 'number' ? sData[f.key] : 0}</td>)}
+              {fields.map(f => <td key={f.key}>{typeof sData[f.key] === 'number' ? sData[f.key] : 0}</td>)}
             </tr>
           );
         })}
         <tr className="total-row">
           <td className="shift-name">Total</td>
-          {DEMOGRAPHIC_FIELDS.map(f => <td key={f.key}>{totals[f.key]}</td>)}
+          {fields.map(f => <td key={f.key}>{totals[f.key]}</td>)}
         </tr>
       </tbody>
     </table>
   );
 }
 
-function DemographicsTableEdit({ data, onChange }) {
+function DemographicsTableEdit({ data, onChange, w }) {
+  const fields = w && w.key && w.key.startsWith('paed') ? DEMOGRAPHIC_FIELDS.filter(f => f.key !== 'child') : DEMOGRAPHIC_FIELDS;
   const shifts = data.shifts || {};
   function setField(shiftKey, fieldKey, raw) {
     const n = parseFloat(raw);
@@ -199,13 +201,13 @@ function DemographicsTableEdit({ data, onChange }) {
   return (
     <table className="shift">
       <thead>
-        <tr><th>Shift</th>{DEMOGRAPHIC_FIELDS.map(f => <th key={f.key}>{f.label}</th>)}</tr>
+        <tr><th>Shift</th>{fields.map(f => <th key={f.key}>{f.label}</th>)}</tr>
       </thead>
       <tbody>
         {SHIFTS.map((s) => (
           <tr key={s.key}>
             <td className="shift-name">{s.label}</td>
-            {DEMOGRAPHIC_FIELDS.map((f) => (
+            {fields.map((f) => (
               <td key={f.key}>
                 <input type="number" inputMode="numeric" value={(shifts[s.key] || {})[f.key] || 0}
                   onChange={(e) => setField(s.key, f.key, e.target.value)} />
@@ -250,7 +252,7 @@ function WardReportBlockView({ w, data }) {
       <h2 className="ward-report-heading">{w.label}</h2>
       <div className="table-wrap"><WardShiftTableView w={w} data={data} /></div>
       <h3 className="patient-note-label" style={{ marginTop: 14 }}>Patient Demographics</h3>
-      <div className="table-wrap"><DemographicsTableView data={data} /></div>
+      <div className="table-wrap"><DemographicsTableView data={data} w={w} /></div>
       {patients.length === 0
         ? <div className="no-patients" style={{ marginTop: 10 }}>No patient write-ups submitted for this ward.</div>
         : patients.map((p, i) => <PatientBlockView p={p} key={p.id || i} />)}
@@ -289,7 +291,7 @@ function WardReportBlockEdit({ w, data, onChange }) {
       </div>
       <div className="table-wrap"><WardShiftTableEdit w={w} data={data} onChange={onChange} /></div>
       <h3 className="patient-note-label" style={{ marginTop: 14 }}>Patient Demographics</h3>
-      <div className="table-wrap"><DemographicsTableEdit data={data} onChange={onChange} /></div>
+      <div className="table-wrap"><DemographicsTableEdit data={data} onChange={onChange} w={w} /></div>
       {patients.map((p, i) => (
         <PatientCardEdit key={p.id || i} p={p} onChange={(next) => updatePatient(i, next)} onRemove={() => removePatient(i)} />
       ))}
@@ -403,12 +405,13 @@ function StatsTableEdit({ wardsMeta, wardsMap, onChange }) {
 }
 
 function DemoStatsTableView({ wardsMeta, wardsMap }) {
+  const fields = DEMOGRAPHIC_FIELDS.filter(f => f.key !== 'child');
   const totals = {};
-  DEMOGRAPHIC_FIELDS.forEach(f => totals[f.key] = 0);
+  fields.forEach(f => totals[f.key] = 0);
   return (
     <table className="report">
       <thead>
-        <tr><th>Ward</th>{DEMOGRAPHIC_FIELDS.map(f => <th key={f.key}>{f.label}</th>)}</tr>
+        <tr><th>Ward</th>{fields.map(f => <th key={f.key}>{f.label}</th>)}</tr>
       </thead>
       <tbody>
         {wardsMeta.map((w) => {
@@ -416,7 +419,7 @@ function DemoStatsTableView({ wardsMeta, wardsMap }) {
           return (
             <tr key={w.key}>
               <td className="ward-name">{w.label}</td>
-              {DEMOGRAPHIC_FIELDS.map((f) => {
+              {fields.map((f) => {
                 const v = typeof data[f.key] === 'number' ? data[f.key] : 0;
                 totals[f.key] += v;
                 return <td key={f.key}>{v}</td>;
@@ -426,7 +429,7 @@ function DemoStatsTableView({ wardsMeta, wardsMap }) {
         })}
         <tr className="totals-row">
           <td className="ward-name">TOTAL</td>
-          {DEMOGRAPHIC_FIELDS.map(f => <td key={f.key}>{totals[f.key]}</td>)}
+          {fields.map(f => <td key={f.key}>{totals[f.key]}</td>)}
         </tr>
       </tbody>
     </table>
@@ -434,16 +437,17 @@ function DemoStatsTableView({ wardsMeta, wardsMap }) {
 }
 
 function DemoStatsTableEdit({ wardsMeta, wardsMap, onChange }) {
+  const fields = DEMOGRAPHIC_FIELDS.filter(f => f.key !== 'child');
   const totals = {};
-  DEMOGRAPHIC_FIELDS.forEach(f => totals[f.key] = 0);
-  wardsMeta.forEach(w => DEMOGRAPHIC_FIELDS.forEach(f => {
+  fields.forEach(f => totals[f.key] = 0);
+  wardsMeta.forEach(w => fields.forEach(f => {
     const data = wardsMap[w.key] || {};
     totals[f.key] += typeof data[f.key] === 'number' ? data[f.key] : 0;
   }));
   return (
     <table className="report">
       <thead>
-        <tr><th>Ward</th>{DEMOGRAPHIC_FIELDS.map(f => <th key={f.key}>{f.label}</th>)}</tr>
+        <tr><th>Ward</th>{fields.map(f => <th key={f.key}>{f.label}</th>)}</tr>
       </thead>
       <tbody>
         {wardsMeta.map((w) => {
@@ -451,7 +455,7 @@ function DemoStatsTableEdit({ wardsMeta, wardsMap, onChange }) {
           return (
             <tr key={w.key}>
               <td className="ward-name">{w.label}</td>
-              {DEMOGRAPHIC_FIELDS.map((f) => (
+              {fields.map((f) => (
                 <td key={f.key}>
                   <input type="number" inputMode="numeric" value={typeof data[f.key] === 'number' ? data[f.key] : 0}
                     onChange={(e) => { const n = parseFloat(e.target.value); onChange(w.key, { ...data, [f.key]: isNaN(n) ? 0 : n }); }} />
@@ -462,7 +466,7 @@ function DemoStatsTableEdit({ wardsMeta, wardsMap, onChange }) {
         })}
         <tr className="totals-row">
           <td className="ward-name">TOTAL</td>
-          {DEMOGRAPHIC_FIELDS.map(f => <td key={f.key}>{totals[f.key]}</td>)}
+          {fields.map(f => <td key={f.key}>{totals[f.key]}</td>)}
         </tr>
       </tbody>
     </table>
