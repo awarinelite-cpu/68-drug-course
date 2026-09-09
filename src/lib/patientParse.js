@@ -50,7 +50,7 @@ export function parsePatientFields(text) {
   if (!out.name) out.name = grabLabel(norm, ['Name']);
   // 3) EMR patient-header line: "SURNAME, GIVENMale/Female, born X years ago".
   if (!out.name) {
-    const hm = norm.match(/^([A-Z][A-Za-z'.-]+),\s*([A-Z][A-Za-z'.-]+)(Male|Female)\s*,?\s*born\s+([\d.]+)\s+years?\s+ago/im);
+    const hm = norm.match(/^([A-Z][A-Za-z'.-]+),\s*([A-Z][A-Za-z'.-]+)\s*(Male|Female)\s*,?\s*born\s+([\d.]+)\s+years?\s+ago/im);
     if (hm) {
       out.name = hm[2][0] + hm[2].slice(1).toLowerCase() + ' ' + hm[1][0] + hm[1].slice(1).toLowerCase();
       out.age = out.age || String(Math.floor(parseFloat(hm[4])));
