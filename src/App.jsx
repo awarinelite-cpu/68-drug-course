@@ -1,3 +1,4 @@
+import { lazy, Suspense, useEffect } from "react";
 import { Routes, Route } from "react-router-dom";
 import { AuthProvider } from "./contexts/AuthContext.jsx";
 import { NavProvider } from "./contexts/NavContext.jsx";
@@ -6,31 +7,41 @@ import RequireAuth from "./components/RequireAuth.jsx";
 import NavDrawer from "./components/NavDrawer.jsx";
 import OfflineBanner from "./components/OfflineBanner.jsx";
 import OfflineCacheStatus from "./components/OfflineCacheStatus.jsx";
+import PageLoading from "./components/PageLoading.jsx";
 import { useServiceWorker } from "./hooks/useServiceWorker.js";
 import { useForegroundAlerts } from "./hooks/useForegroundAlerts.js";
 import { useHardwareBackButton } from "./hooks/useHardwareBackButton.js";
+import { prefetchRoutes } from "./lib/prefetchRoutes.js";
 
+// Login stays eager: it's the first thing an unauthenticated user sees,
+// so there's no benefit to splitting it out and it avoids a loading
+// flicker on the very first screen.
 import Login from "./pages/Login.jsx";
-import Home from "./pages/Home.jsx";
-import Patient from "./pages/Patient.jsx";
-import MyPatients from "./pages/MyPatients.jsx";
-import Profile from "./pages/Profile.jsx";
-import Admin from "./pages/Admin.jsx";
-import Overview from "./pages/Overview.jsx";
-import Admission from "./pages/Admission.jsx";
-import DrugCourseChart from "./pages/DrugCourseChart.jsx";
-import Vitals from "./pages/Vitals.jsx";
-import BloodGlucose from "./pages/BloodGlucose.jsx";
-import IntakeOutput from "./pages/IntakeOutput.jsx";
-import Seizure from "./pages/Seizure.jsx";
-import Calculators from "./pages/Calculators.jsx";
-import LabReference from "./pages/LabReference.jsx";
-import RoleSelect from "./pages/nurses-report/RoleSelect.jsx";
-import Analytics from "./pages/nurses-report/Analytics.jsx";
-import WardNurse from "./pages/nurses-report/WardNurse.jsx";
-import OverallNurse from "./pages/nurses-report/OverallNurse.jsx";
-import ArchiveList from "./pages/nurses-report/ArchiveList.jsx";
-import ArchiveView from "./pages/nurses-report/ArchiveView.jsx";
+
+// Everything else is lazy-loaded: Vite splits each into its own chunk,
+// so the initial bundle only contains the app shell. prefetchRoutes()
+// (called below, on idle) then quietly fetches these chunks in the
+// background so navigating to them later is instant.
+const Home = lazy(() => import("./pages/Home.jsx"));
+const Patient = lazy(() => import("./pages/Patient.jsx"));
+const MyPatients = lazy(() => import("./pages/MyPatients.jsx"));
+const Profile = lazy(() => import("./pages/Profile.jsx"));
+const Admin = lazy(() => import("./pages/Admin.jsx"));
+const Overview = lazy(() => import("./pages/Overview.jsx"));
+const Admission = lazy(() => import("./pages/Admission.jsx"));
+const DrugCourseChart = lazy(() => import("./pages/DrugCourseChart.jsx"));
+const Vitals = lazy(() => import("./pages/Vitals.jsx"));
+const BloodGlucose = lazy(() => import("./pages/BloodGlucose.jsx"));
+const IntakeOutput = lazy(() => import("./pages/IntakeOutput.jsx"));
+const Seizure = lazy(() => import("./pages/Seizure.jsx"));
+const Calculators = lazy(() => import("./pages/Calculators.jsx"));
+const LabReference = lazy(() => import("./pages/LabReference.jsx"));
+const RoleSelect = lazy(() => import("./pages/nurses-report/RoleSelect.jsx"));
+const Analytics = lazy(() => import("./pages/nurses-report/Analytics.jsx"));
+const WardNurse = lazy(() => import("./pages/nurses-report/WardNurse.jsx"));
+const OverallNurse = lazy(() => import("./pages/nurses-report/OverallNurse.jsx"));
+const ArchiveList = lazy(() => import("./pages/nurses-report/ArchiveList.jsx"));
+const ArchiveView = lazy(() => import("./pages/nurses-report/ArchiveView.jsx"));
 
 function AuthedShell({ children }) {
   return (
@@ -46,12 +57,21 @@ export default function App() {
   useForegroundAlerts();
   useHardwareBackButton();
 
+  // Once the shell has mounted and the current page is showing, quietly
+  // fetch the rest of the route chunks in the background (only when the
+  // main thread is idle, so it never competes with the initial render).
+  // By the time the user taps into another page, it's already cached.
+  useEffect(() => {
+    prefetchRoutes();
+  }, []);
+
   return (
     <ThemeProvider>
     <AuthProvider>
       <NavProvider>
         <OfflineBanner />
         <OfflineCacheStatus />
+        <Suspense fallback={<PageLoading />}>
         <Routes>
           <Route path="/login" element={<Login />} />
           <Route path="/" element={<AuthedShell><Home /></AuthedShell>} />
@@ -76,6 +96,7 @@ export default function App() {
           <Route path="/nurses-report/archive-view" element={<AuthedShell><ArchiveView /></AuthedShell>} />
           <Route path="*" element={<AuthedShell><Home /></AuthedShell>} />
         </Routes>
+        </Suspense>
       </NavProvider>
     </AuthProvider>
     </ThemeProvider>
