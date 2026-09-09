@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">68 NARHY Ward Charts</string>
+    <string name="title_activity_main">68 NARHY Ward Charts</string>
+    <string name="package_name">com.narhy.wardcharts</string>
+    <string name="custom_url_scheme">com.narhy.wardcharts</string>
+</resources>

@@ -1,0 +1,10 @@
+{
+  "appId": "com.narhy.wardcharts",
+  "appName": "68 NARHY Ward Charts",
+  "webDir": "dist",
+  "plugins": {
+    "PushNotifications": {
+      "presentationOptions": ["badge", "sound", "alert"]
+    }
+  }
+}

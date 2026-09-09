@@ -3,3 +3,17 @@ dist
 .DS_Store
 *.local
 .env
+
+# ── Capacitor native Android project ────────────────────────────────────
+# android/ IS committed (Capacitor convention — see MedIndex-/Elite-Notebook-
+# for the same pattern), just not its build outputs, dependency caches, local
+# machine config, or the web bundle it gets on every `npx cap sync` (already
+# tracked once, as source, under src/public — no need to duplicate it here).
+android/app/build
+android/.gradle
+android/local.properties
+android/captures
+android/*.iml
+android/.idea
+android/app/google-services.json
+android/app/src/main/assets/public
