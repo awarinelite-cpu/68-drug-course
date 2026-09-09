@@ -184,14 +184,19 @@ async function enablePushNative(uid, note) {
     new Promise((resolve, reject) => {
       let regListener, errListener;
       const cleanup = () => { regListener?.remove(); errListener?.remove(); };
-      PushNotifications.addListener("registration", (token) => {
+      // addListener() is documented to return Promise<PluginListenerHandle>,
+      // but a stale/mismatched native bridge build (web assets out of sync
+      // with the installed @capacitor/core version) has been seen to hand
+      // back the handle directly instead — Promise.resolve() normalizes
+      // either shape into something safe to chain .then() off of.
+      Promise.resolve(PushNotifications.addListener("registration", (token) => {
         cleanup();
         resolve(token.value);
-      }).then((l) => { regListener = l; });
-      PushNotifications.addListener("registrationError", (err) => {
+      })).then((l) => { regListener = l; });
+      Promise.resolve(PushNotifications.addListener("registrationError", (err) => {
         cleanup();
         reject(new Error(err?.error || "Native push registration failed."));
-      }).then((l) => { errListener = l; });
+      })).then((l) => { errListener = l; });
       PushNotifications.register();
     }),
     15000,
