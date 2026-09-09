@@ -37,6 +37,88 @@ export function toISODate(raw) {
   return '';
 }
 
+// --- "Encounters" timeline format --------------------------------------
+// Some EMR pages (the "Encounters" tab) paste as a reverse-chronological
+// log of dated entries instead of a single structured note, e.g.:
+//
+//   MERCY AYORINDE / A & E CLINIC
+//   Notes
+//   25-08-2026
+//   ...free text, may include an "Assessment"/"PLAN" sub-section...
+//   25-AUG-2026 [ 03:03 PM ]
+//    Comment:(0)      Chat      Attachment:(0)      -
+//
+// Each entry ends with a "DD-MMM-YYYY [ HH:MM AM/PM ]" footer line, and
+// (when present) is preceded by an "Author / Department" line and a
+// bare entry-type line (Notes, Lab Result, Lab Request, Transfusion
+// Order, Prescription, etc). This section parses that structure so the
+// diagnosis/drug-plan extractors below can find the most *recent* entry
+// of a given type rather than just the first one in the pasted text.
+
+const ENTRY_TYPE_RE = /^(Notes|Lab Result|Lab Request|Transfusion Order|Prescription|Vital Signs|Tx Plan|Investigations?|Others)$/i;
+const AUTHOR_RE = /^[A-Z][A-Za-z.'-]*(?:\s+[A-Z0-9][A-Za-z.'-]*)*\s*\/\s*[A-Z0-9 &.]+$/;
+const FOOTER_DATETIME_RE = /^(\d{1,2})-([A-Za-z]{3,9})-(\d{4})\s*\[\s*(\d{1,2}):(\d{2})\s*(AM|PM)\s*\]$/i;
+
+function parseFooterTimestamp(line) {
+  const m = line.match(FOOTER_DATETIME_RE);
+  if (!m) return null;
+  const mo = MONTHS[m[2].slice(0, 3).toLowerCase()];
+  if (!mo) return null;
+  let hour = parseInt(m[4], 10) % 12;
+  if (m[6].toUpperCase() === 'PM') hour += 12;
+  return new Date(parseInt(m[3], 10), mo - 1, parseInt(m[1], 10), hour, parseInt(m[5], 10)).getTime();
+}
+
+// Splits a pasted "Encounters" log into { type, content, ts } entries.
+// `ts` is a millisecond timestamp parsed from the entry's own footer line
+// (null if unparseable), used so callers can sort by true recency instead
+// of relying on the paste already being newest-first.
+export function parseEncounterEntries(text) {
+  const lines = (text || '').replace(/\r\n/g, '\n').split('\n').map((l) => l.trim());
+  const entries = [];
+  for (let i = 1; i < lines.length; i++) {
+    if (!ENTRY_TYPE_RE.test(lines[i]) || !AUTHOR_RE.test(lines[i - 1])) continue;
+    let end = lines.length;
+    let ts = null;
+    for (let j = i + 1; j < lines.length; j++) {
+      const footTs = parseFooterTimestamp(lines[j]);
+      if (footTs !== null) { end = j; ts = footTs; break; }
+    }
+    const content = lines.slice(i + 1, end).filter(Boolean).join('\n');
+    entries.push({ type: lines[i], content, ts });
+    i = end; // resume scanning after this entry's footer
+  }
+  return entries;
+}
+
+// Diagnosis phrasings seen in free-text doctor's notes, checked in order.
+const DIAGNOSIS_PATTERNS = [
+  /\bmanaged as a (?:known )?case of\s+(.+?)(?:[.\n]|$)/i,
+  /\b(?:known )?case of\s+(.+?)(?:[.\n]|$)/i,
+  /^Assessment\s*\n\s*\??\s*(.+?)(?:[.\n]|$)/im,
+  /^\?\s*([A-Z].+?)(?:[.\n]|$)/m
+];
+
+// Scans "Notes" entries from an Encounters-style paste for the most recent
+// mention of a working diagnosis (e.g. "managed as a case of Anaemia in a
+// known Schizophrenic px"). Entries are ranked by their own parsed
+// timestamp where available, falling back to paste order (EMR encounter
+// logs are conventionally newest-first) when timestamps can't be parsed.
+export function extractLatestDiagnosis(text) {
+  const notes = parseEncounterEntries(text)
+    .map((e, idx) => ({ ...e, idx }))
+    .filter((e) => /^notes$/i.test(e.type))
+    .sort((a, b) => (b.ts ?? -Infinity) - (a.ts ?? -Infinity) || a.idx - b.idx);
+  for (const entry of notes) {
+    for (const pat of DIAGNOSIS_PATTERNS) {
+      const m = entry.content.match(pat);
+      if (m && m[1] && m[1].trim()) return m[1].trim().replace(/\s+/g, ' ');
+    }
+  }
+  return '';
+}
+
+
 export function parsePatientFields(text) {
   const norm = (text || '').replace(/\r\n/g, '\n');
   const out = { name: '', emr: '', diagnosis: '', ward: '', age: '', hospNo: '', admissionDate: '', allergies: '' };
@@ -78,6 +160,7 @@ export function parsePatientFields(text) {
 
   // --- Diagnosis -----------------------------------------------------------
   out.diagnosis = grabLabel(norm, ['Medical Diagnosis', 'Diagnosis', 'Assessment']);
+  if (!out.diagnosis) out.diagnosis = extractLatestDiagnosis(norm);
 
   // --- Allergies -----------------------------------------------------------
   let allergies = grabLabel(norm, ['Allergies']);
@@ -100,14 +183,23 @@ const STOP_WORDS = ['glycemic chart', 'o/e', 'vitals', 'assessment', 'chest', 'c
 export function extractDrugSection(text) {
   const lines = (text || '').replace(/\r\n/g, '\n').split('\n');
   const startIdx = lines.findIndex(l => /currently on\s*:/i.test(l));
-  if (startIdx === -1) return '';
-  const collected = [];
-  for (let i = startIdx + 1; i < lines.length && collected.length < 20; i++) {
-    const line = lines[i].trim();
-    if (!line) continue;
-    const lower = line.toLowerCase();
-    if (STOP_WORDS.some(w => lower === w || lower.startsWith(w + ' ') || lower.startsWith(w + ':'))) break;
-    collected.push(line);
+  if (startIdx !== -1) {
+    const collected = [];
+    for (let i = startIdx + 1; i < lines.length && collected.length < 20; i++) {
+      const line = lines[i].trim();
+      if (!line) continue;
+      const lower = line.toLowerCase();
+      if (STOP_WORDS.some(w => lower === w || lower.startsWith(w + ' ') || lower.startsWith(w + ':'))) break;
+      collected.push(line);
+    }
+    return collected.join('\n');
   }
-  return collected.join('\n');
+  // No "Currently on:" note-style block — try the most recent "Prescription"
+  // entry from an Encounters-style timeline paste instead (falls back to
+  // paste order, conventionally newest-first, when timestamps don't parse).
+  const rx = parseEncounterEntries(text)
+    .map((e, idx) => ({ ...e, idx }))
+    .filter((e) => /^prescription$/i.test(e.type))
+    .sort((a, b) => (b.ts ?? -Infinity) - (a.ts ?? -Infinity) || a.idx - b.idx);
+  return rx.length ? rx[0].content : '';
 }
