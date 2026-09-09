@@ -230,9 +230,11 @@ export default function Patient() {
                 <>
                   <button className="btn btn-secondary edit-patient-btn" title="Edit patient information" onClick={openEditPatient}>✎</button>
                   <button className={"btn " + (allocatedToMe ? 'btn-success' : 'btn-secondary')}
-                    style={{ padding: '4px 10px', fontSize: 12, marginLeft: 6 }}
+                    style={{ padding: '4px 10px', fontSize: 12, marginLeft: 6, whiteSpace: 'normal', lineHeight: 1.25, textAlign: 'center' }}
                     disabled={allocBusy} onClick={toggleAllocation}>
-                    {allocBusy ? '…' : (allocatedToMe ? '✓ Allocated — tap to remove' : 'Allocate to Me')}
+                    {allocBusy ? '…' : (allocatedToMe
+                      ? <>✓ Allocated<br /><span style={{ fontSize: 10, fontWeight: 400 }}>tap to remove</span></>
+                      : 'Allocate to Me')}
                   </button>
                   <button className="btn btn-purple" style={{ padding: '4px 10px', fontSize: 12, marginLeft: 6 }} onClick={openOverview}>Overview</button>
                   <button className="btn btn-secondary" style={{ padding: '4px 10px', fontSize: 12, marginLeft: 6 }} onClick={() => setShowStatusForm((v) => !v)}>Status</button>

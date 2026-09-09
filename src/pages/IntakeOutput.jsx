@@ -126,7 +126,7 @@ const columns = [
     // intake group: leaving it on SELECT means nothing gets recorded for
     // intake on this entry, even if Nature of Fluid / Intake Vol. were filled in.
     key: 'intakeType', label: 'Route of Intake', type: 'select',
-    options: ['Oral', 'NG/PEG', 'OTHERS'], placeholder: 'SELECT',
+    options: ['Oral', 'NG/PEG', 'IV', 'OTHERS'], placeholder: 'SELECT',
     otherOption: 'OTHERS', otherPlaceholder: 'Specify the route',
     group: 'intake', groupGate: true,
     groupLabel: 'Intake', groupColor: 'rgba(46, 204, 113, 0.12)'
