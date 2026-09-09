@@ -95,7 +95,11 @@ export function parseEncounterEntries(text) {
 }
 
 // Diagnosis phrasings seen in free-text doctor's notes, checked in order.
+// Label forms ("Diagnosis: X" / "Assessment: X") are checked first since
+// they're the least ambiguous when present.
 const DIAGNOSIS_PATTERNS = [
+  /^(?:Medical\s+)?Diagnosis\s*:\s*(.+?)(?:[.\n]|$)/im,
+  /^Assessment\s*:\s*(.+?)(?:[.\n]|$)/im,
   /\bmanaged as a (?:known )?case of\s+(.+?)(?:[.\n]|$)/i,
   /\b(?:known )?case of\s+(.+?)(?:[.\n]|$)/i,
   /^Assessment\s*\n\s*\??\s*(.+?)(?:[.\n]|$)/im,
@@ -162,8 +166,15 @@ export function parsePatientFields(text) {
   }
 
   // --- Diagnosis -----------------------------------------------------------
-  out.diagnosis = grabLabel(norm, ['Medical Diagnosis', 'Diagnosis', 'Assessment']);
-  if (!out.diagnosis) out.diagnosis = extractLatestDiagnosis(norm);
+  // Try the recency-aware picker first: on an Encounters-style paste with
+  // several dated Notes entries, this ranks by each entry's own parsed
+  // timestamp so an older entry's diagnosis line (which may well appear
+  // earlier in the raw text than the newest entry's) can't win by accident.
+  // Only fall back to a flat whole-text label scan for pastes that aren't
+  // in that dated/multi-entry format to begin with (e.g. a single
+  // structured assessment form with one "Diagnosis:" line).
+  out.diagnosis = extractLatestDiagnosis(norm);
+  if (!out.diagnosis) out.diagnosis = grabLabel(norm, ['Medical Diagnosis', 'Diagnosis', 'Assessment']);
 
   // --- Allergies -----------------------------------------------------------
   let allergies = grabLabel(norm, ['Allergies']);
