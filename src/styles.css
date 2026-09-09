@@ -618,11 +618,27 @@ table.chart td input { width:100%; border:none; background:transparent; text-ali
 .sno-picker-btn { display:flex; align-items:center; justify-content:space-between; gap:6px; width:100%; border:none; background:transparent; font-size:16px; font-family:inherit; text-align:left; cursor:pointer; color:inherit; padding:0; }
 .sno-picker-text { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .sno-picker-caret { color:var(--text-secondary); flex-shrink:0; }
-.sno-picker-option { display:flex; align-items:center; gap:8px; padding:8px 2px; border-bottom:1px solid var(--border); }
-.sno-picker-option:last-child { border-bottom:none; }
+.sno-picker-row { padding:8px 2px; border-bottom:1px solid var(--border); }
+.sno-picker-row:last-child { border-bottom:none; }
+.sno-picker-option { display:flex; align-items:center; gap:8px; }
 .sno-picker-option input[type="checkbox"] { width:18px; height:18px; flex-shrink:0; }
 .sno-picker-option-text { flex:1; font-size:15px; }
 .sno-picker-due-tag { font-size:11px; font-weight:bold; color:#dc2626; background:var(--danger-bg); padding:2px 7px; border-radius:999px; flex-shrink:0; }
+/* Pencil icon on each drug in the "Select Drug(s) Given" picker — lets a
+   nurse mark a drug as not given and write why (no line, patient off the
+   ward, dialysis, etc.) instead of checking it off. Sits where the picker's
+   due-tag/checkbox row ends, same spot as the reference screenshot's red
+   markers. */
+.sno-picker-pencil-btn { background:none; border:none; cursor:pointer; font-size:15px; padding:2px 4px; line-height:1; flex-shrink:0; opacity:0.75; }
+.sno-picker-pencil-btn:hover, .sno-picker-pencil-btn:active { opacity:1; }
+.sno-picker-skip-note { margin-top:4px; margin-left:26px; font-size:12px; color:#d97706; cursor:pointer; }
+.sno-picker-skip-editor { margin-top:6px; margin-left:26px; }
+.sno-picker-skip-editor textarea { width:100%; box-sizing:border-box; font-size:13px; font-family:inherit; padding:6px; resize:vertical; }
+/* "Not given" reason text on the Drug S/N chart column — deliberately
+   smaller than the app's normal 16px table font so a written-out reason
+   doesn't blow out the row height, colored to match the Withheld action
+   color for a consistent "not administered" signal at a glance. */
+.sno-skip-text { color:#d97706; font-size:11px; }
 .unit-note { text-align:center; font-size: 16px; color:#666; margin-bottom:10px; }
 @media print {
   .sheet { box-shadow:none; margin:0; }

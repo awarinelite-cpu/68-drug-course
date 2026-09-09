@@ -21,7 +21,7 @@ const ACTION_COLORS = { Ongoing: '#2563eb', Completed: '#16a34a', Discontinued: 
 export function actionColor(action) { return ACTION_COLORS[action] || '#9ca3af'; }
 
 export function defaultRow() {
-  return { date: '', sno: '', time: '', dose: 'AP', route: '', nurse: '', remark: '' };
+  return { date: '', sno: '', time: '', dose: 'AP', route: '', nurse: '', remark: '', skipped: [] };
 }
 
 // --- Next dose due time --------------------------------------------------
@@ -63,7 +63,8 @@ function lastGivenFor(chartRows, drugIndex) {
 // All recorded administration times for a drug (matched by Drug S/N on the
 // chart below), oldest first. Used both for "last given" (dose-due calc)
 // and for counting how many doses of a fixed-sequence/STAT drug have been
-// given so far.
+// given so far. Deliberately excludes "not given" (skipped) entries — those
+// must never count as a dose given (dose-sequence ticks, auto-complete).
 export function administrationTimesFor(chartRows, drugIndex) {
   const times = [];
   chartRows.forEach(row => {
@@ -74,6 +75,33 @@ export function administrationTimesFor(chartRows, drugIndex) {
   });
   times.sort((a, b) => a - b);
   return times;
+}
+
+// All recorded "not given" (reason-documented) times for a drug, matched by
+// the row's `skipped` list (see the sno picker's pencil-icon flow) rather
+// than its Drug S/N text — a skip is deliberately kept out of the sno text
+// so it never gets mistaken for a given dose by administrationTimesFor.
+export function skipTimesFor(chartRows, drugIndex) {
+  const times = [];
+  chartRows.forEach(row => {
+    const skipped = Array.isArray(row.skipped) ? row.skipped : [];
+    if (!skipped.some(s => s && parseInt(s.num, 10) === drugIndex + 1)) return;
+    const dt = toLocalDate(row.date, row.time);
+    if (dt) times.push(dt);
+  });
+  times.sort((a, b) => a - b);
+  return times;
+}
+
+// The most recent thing that happened for a drug — either an actual dose
+// given, or a documented reason it wasn't. Used to advance the due clock
+// (a skip counts, same as a given dose) while still letting callers tell
+// the two apart (e.g. to flag the Due column orange after a skip).
+export function lastDrugEventFor(chartRows, drugIndex) {
+  const given = administrationTimesFor(chartRows, drugIndex).map(time => ({ time, skipped: false }));
+  const skipped = skipTimesFor(chartRows, drugIndex).map(time => ({ time, skipped: true }));
+  const all = [...given, ...skipped].sort((a, b) => a.time - b.time);
+  return all.length ? all[all.length - 1] : null;
 }
 
 // --- Fixed dose-sequence frequencies (e.g. "0,12,24hr") ---------------
@@ -128,8 +156,11 @@ export function computeDueAt(d, i, chartRows) {
   if (!intervalHours) return null; // STAT / PRN / custom text — not covered
   if (d.action && d.action !== 'Ongoing') return null;
 
-  const lastGiven = lastGivenFor(chartRows, i);
-  if (lastGiven) return new Date(lastGiven.getTime() + intervalHours * 3600 * 1000);
+  // A documented "not given" reason advances the due clock the same as an
+  // actual dose (see lastDrugEventFor) — the alert shouldn't keep firing
+  // for a dose the nurse already explicitly accounted for.
+  const lastEvent = lastDrugEventFor(chartRows, i);
+  if (lastEvent) return new Date(lastEvent.time.getTime() + intervalHours * 3600 * 1000);
   if (d.startDate) return toLocalDate(d.startDate, '00:00');
   if (d.createdAt) { const dt = new Date(d.createdAt); return isNaN(dt) ? null : dt; }
   return null;
@@ -137,12 +168,17 @@ export function computeDueAt(d, i, chartRows) {
 
 export function dueLabelFor(d, i, chartRows, now) {
   const dueAt = computeDueAt(d, i, chartRows);
-  if (!dueAt) return { text: '—', overdue: false };
+  if (!dueAt) return { text: '—', overdue: false, skippedPending: false };
+  // While the drug isn't due again yet, flag that the last time it came due
+  // it was documented as "not given" rather than administered — a heads-up
+  // for the next nurse on shift, distinct from the ordinary overdue-red.
+  const lastEvent = lastDrugEventFor(chartRows, i);
+  const skippedPending = !!(lastEvent && lastEvent.skipped) && dueAt > now;
   const sameDay = dueAt.toDateString() === now.toDateString();
   const hhmm = dueAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   const dayPart = sameDay ? '' : (dueAt.toDateString() === new Date(now.getTime() + 86400000).toDateString() ? 'Tmrw ' : dueAt.toLocaleDateString([], { weekday: 'short' }) + ' ');
-  if (dueAt <= now) return { text: 'Overdue ' + dayPart + hhmm, overdue: true };
-  return { text: dayPart + hhmm, overdue: false };
+  if (dueAt <= now) return { text: 'Overdue ' + dayPart + hhmm, overdue: true, skippedPending: false };
+  return { text: dayPart + hhmm, overdue: false, skippedPending };
 }
 
 // --- Auto-complete a drug once its Duration has elapsed ---
@@ -290,6 +326,40 @@ export function flaggedDrugMessage(blocked) {
   return blocked.map(b =>
     'Drug ' + b.num + (b.name ? ' (' + b.name + ')' : '') + ' has been marked "' + b.action + '" and cannot be added as served medication.'
   ).join('\n');
+}
+
+// --- Drug S/N cell display: given numbers + "not given" reasons ----------
+// A chart row can carry both drugs actually given (row.sno, unchanged
+// plain-number text — e.g. "1, 4") and drugs documented as not given
+// (row.skipped: [{num, reason}]). Drugs sharing the exact same reason are
+// grouped into one bracketed segment; the given numbers stay outside any
+// bracket. Returns an ordered list of { type: 'given'|'skip', text }
+// segments for the caller to render (skip segments get the orange/
+// smaller-font treatment; given stays plain).
+export function buildSnoSegments(sno, skipped) {
+  const segments = [];
+  const givenText = (sno || '').trim();
+  if (givenText) segments.push({ type: 'given', text: givenText });
+  const list = Array.isArray(skipped) ? skipped.filter(s => s && (s.reason || '').trim()) : [];
+  const groups = [];
+  list.forEach(({ num, reason }) => {
+    const r = reason.trim();
+    let g = groups.find(g => g.reason === r);
+    if (!g) { g = { reason: r, nums: [] }; groups.push(g); }
+    g.nums.push(parseInt(num, 10));
+  });
+  groups.forEach(g => {
+    const nums = g.nums.slice().sort((a, b) => a - b);
+    const label = nums.length > 1 ? ('(' + nums.join(',') + ') ' + g.reason) : (nums[0] + ' ' + g.reason);
+    segments.push({ type: 'skip', text: label });
+  });
+  return segments;
+}
+
+// Flat-text version of buildSnoSegments, for places that just need a single
+// string (audit-log diffing, the sno-picker button's own preview label).
+export function buildSnoText(sno, skipped) {
+  return buildSnoSegments(sno, skipped).map(s => s.text).join('. ');
 }
 
 // --- Bulk Upload: paste "Drug Name Dosage Frequency Duration" lines and auto-parse ---

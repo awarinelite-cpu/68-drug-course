@@ -145,7 +145,16 @@ function lastGivenFor(drugIndex, chartRows) {
   let latest = null;
   for (const row of chartRows || []) {
     const nums = (row.sno || '').match(/\d+/g) || [];
-    if (!nums.some((n) => parseInt(n, 10) === drugIndex + 1)) continue;
+    const givenMatch = nums.some((n) => parseInt(n, 10) === drugIndex + 1);
+    // A drug that was documented as "not given" (reason written via the
+    // Select Drug(s) Given picker's pencil icon) still advances the due
+    // clock the same as an actual dose — it just isn't counted as given
+    // anywhere else (dose-sequence ticks, auto-complete). Without this, the
+    // scheduler would keep re-firing the overdue alert for a dose the nurse
+    // already explicitly accounted for.
+    const skippedMatch = Array.isArray(row.skipped) &&
+      row.skipped.some((s) => s && parseInt(s.num, 10) === drugIndex + 1);
+    if (!givenMatch && !skippedMatch) continue;
     const dt = toWardDate(row.date, row.time);
     if (dt && (!latest || dt > latest)) latest = dt;
   }

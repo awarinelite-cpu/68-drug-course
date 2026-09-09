@@ -13,7 +13,7 @@ import {
   ROUTE_OPTIONS, FREQ_OPTIONS, ACTION_OPTIONS, STATUS_LABELS, WARD_OPTIONS, actionColor, defaultRow,
   dueLabelFor, withDrugCompletionChecked, computeRouteFromSno, parseBulkText,
   parseDoseSequence, administrationTimesFor, flaggedDrugRefs, flaggedDrugMessage, diffFields,
-  autoDurationForFrequency
+  autoDurationForFrequency, buildSnoSegments, buildSnoText
 } from "../lib/drugChartHelpers.js";
 
 const FIELD_IDS = ['f_admission', 'f_discharge', 'f_diagnosis'];
@@ -24,8 +24,8 @@ function blankChartRows() { return Array(18).fill(null).map(() => defaultRow());
 function rowsFromDoc(dataRows) {
   return (dataRows && dataRows.length)
     ? dataRows.map(r => Array.isArray(r)
-      ? { date: r[0] || '', sno: r[1] || '', time: r[2] || '', dose: r[3] || 'AP', route: r[4] || '', nurse: r[5] || '', remark: r[6] || '' }
-      : { ...r, dose: r.dose || 'AP' })
+      ? { date: r[0] || '', sno: r[1] || '', time: r[2] || '', dose: r[3] || 'AP', route: r[4] || '', nurse: r[5] || '', remark: r[6] || '', skipped: [] }
+      : { ...r, dose: r.dose || 'AP', skipped: Array.isArray(r.skipped) ? r.skipped : [] })
     : blankChartRows();
 }
 
@@ -144,6 +144,9 @@ export default function DrugCourseChart() {
 
   const [snoPickerRow, setSnoPickerRow] = useState(-1);
   const [snoPickerSelected, setSnoPickerSelected] = useState([]);
+  const [snoPickerSkipped, setSnoPickerSkipped] = useState({}); // { [drugNum]: reasonText }
+  const [snoPickerEditingNum, setSnoPickerEditingNum] = useState(-1);
+  const [snoPickerEditText, setSnoPickerEditText] = useState('');
 
   const [statusAction, setStatusAction] = useState('');
   const [transferWard, setTransferWard] = useState('');
@@ -405,8 +408,13 @@ export default function DrugCourseChart() {
       return;
     }
     const before = chartRowSnapshots.current[i] || {};
-    const wasBlank = !before.sno && !before.date && !before.time;
-    const changes = diffFields(before, row || {}, { date: 'Date', sno: 'Drug S/N', time: 'Time', dose: 'Dose', route: 'Route', remark: 'Remark' });
+    const wasBlank = !before.sno && !before.date && !before.time && !(before.skipped || []).length;
+    // Compare the combined given+not-given display text (not just row.sno)
+    // so a pencil-icon "not given" reason gets audited too, under the same
+    // "Drug S/N" label as an ordinary given-drug edit.
+    const beforeDiff = { ...before, snoDisplay: buildSnoText(before.sno, before.skipped) };
+    const afterDiff = { ...(row || {}), snoDisplay: buildSnoText(row?.sno, row?.skipped) };
+    const changes = diffFields(beforeDiff, afterDiff, { date: 'Date', snoDisplay: 'Drug S/N', time: 'Time', dose: 'Dose', route: 'Route', remark: 'Remark' });
     if (changes.length) {
       const prefix = wasBlank ? ('Dose recorded (row ' + (i + 1) + '): ') : ('Chart entry edited (row ' + (i + 1) + '): ');
       logAudit(prefix + changes.join(', '));
@@ -438,16 +446,59 @@ export default function DrugCourseChart() {
     const nums = (chartRows[i]?.sno || '').match(/\d+/g) || [];
     const active = activeDrugNumbers();
     setSnoPickerSelected(nums.map(n => parseInt(n, 10)).filter(n => active.includes(n)));
+    const skipMap = {};
+    (chartRows[i]?.skipped || []).forEach(({ num, reason }) => { skipMap[num] = reason; });
+    setSnoPickerSkipped(skipMap);
+    setSnoPickerEditingNum(-1);
+    setSnoPickerEditText('');
     setSnoPickerRow(i);
   }
-  function closeSnoPicker() { setSnoPickerRow(-1); setSnoPickerSelected([]); }
-  function toggleSnoPickerDrug(num) {
-    setSnoPickerSelected((sel) => sel.includes(num) ? sel.filter(n => n !== num) : [...sel, num].sort((a, b) => a - b));
+  function closeSnoPicker() {
+    setSnoPickerRow(-1); setSnoPickerSelected([]);
+    setSnoPickerSkipped({}); setSnoPickerEditingNum(-1); setSnoPickerEditText('');
   }
+  function toggleSnoPickerDrug(num) {
+    setSnoPickerSelected((sel) => {
+      const wasSelected = sel.includes(num);
+      // Checking a drug as given clears any "not given" reason on it —
+      // a dose is either given or documented as not, never both.
+      if (!wasSelected) setSnoPickerSkipped((s) => (s[num] ? (({ [num]: _, ...rest }) => rest)(s) : s));
+      return wasSelected ? sel.filter(n => n !== num) : [...sel, num].sort((a, b) => a - b);
+    });
+  }
+
+  // --- "Not given" reason editor (pencil icon in the Select Drug(s) Given picker) ---
+  function openSnoSkipEditor(num) {
+    setSnoPickerEditText(snoPickerSkipped[num] || '');
+    setSnoPickerEditingNum(num);
+  }
+  function cancelSnoSkipEditor() { setSnoPickerEditingNum(-1); setSnoPickerEditText(''); }
+  function saveSnoSkipReason() {
+    const num = snoPickerEditingNum;
+    const text = snoPickerEditText.trim();
+    setSnoPickerSkipped((s) => {
+      const n = { ...s };
+      if (text) n[num] = text; else delete n[num];
+      return n;
+    });
+    // A documented reason means the drug wasn't given — clear it from the
+    // given checklist if it happened to be checked.
+    if (text) setSnoPickerSelected((sel) => sel.filter(n => n !== num));
+    setSnoPickerEditingNum(-1);
+    setSnoPickerEditText('');
+  }
+  function clearSnoSkipReason(num) {
+    setSnoPickerSkipped((s) => { const n = { ...s }; delete n[num]; return n; });
+    if (snoPickerEditingNum === num) { setSnoPickerEditingNum(-1); setSnoPickerEditText(''); }
+  }
+
   function applySnoPicker() {
     const i = snoPickerRow;
     const sno = snoPickerSelected.join(', ');
-    updateChartRow(i, { sno, route: computeRouteFromSno(sno, drugs) });
+    const skipped = Object.entries(snoPickerSkipped)
+      .filter(([, reason]) => reason && reason.trim())
+      .map(([num, reason]) => ({ num: parseInt(num, 10), reason: reason.trim() }));
+    updateChartRow(i, { sno, route: computeRouteFromSno(sno, drugs), skipped });
     closeSnoPicker();
   }
 
@@ -835,7 +886,7 @@ export default function DrugCourseChart() {
                             updateDrug(i, patch);
                           }} />
                         </td>
-                        <td className="no-print" style={due.overdue ? { color: '#dc2626', fontWeight: 'bold' } : {}}>{due.text}</td>
+                        <td className="no-print" style={due.overdue ? { color: '#dc2626', fontWeight: 'bold' } : due.skippedPending ? { color: '#d97706', fontWeight: 'bold' } : {}} title={due.skippedPending ? 'Last due dose was documented as not given' : undefined}>{due.text}</td>
                         <td className="no-print"><button className="remove-drug-btn" onClick={() => removeDrug(i)}>x</button></td>
                       </tr>
                     );
@@ -852,7 +903,7 @@ export default function DrugCourseChart() {
                       </td>
                       <td>{d.action ? <span style={{ display: 'inline-block', padding: '2px 8px', borderRadius: 10, color: '#fff', fontSize: 11, fontWeight: 'bold', background: actionColor(d.action) }}>{d.action}</span> : '—'}</td>
                       <td>{d.duration || '—'}</td>
-                      <td className="no-print" style={due.overdue ? { color: '#dc2626', fontWeight: 'bold' } : {}}>{due.text}</td>
+                      <td className="no-print" style={due.overdue ? { color: '#dc2626', fontWeight: 'bold' } : due.skippedPending ? { color: '#d97706', fontWeight: 'bold' } : {}} title={due.skippedPending ? 'Last due dose was documented as not given' : undefined}>{due.text}</td>
                       {showPencil && <td className="no-print"></td>}
                     </tr>
                   );
@@ -898,7 +949,7 @@ export default function DrugCourseChart() {
                       <td className="col-rowedit no-print"><button className="row-lock-btn" title="Done editing this row" onClick={() => lockChartRow(i)}>✓</button></td>
                       <td className="col-date"><input type="date" value={row.date || ''} onChange={(e) => updateChartRow(i, { date: e.target.value })} /></td>
                       <td className="col-sno"><button type="button" className="sno-picker-btn" onClick={() => openSnoPicker(i)}>
-                        <span className="sno-picker-text">{row.sno || 'Select drug(s)'}</span>
+                        <span className="sno-picker-text">{buildSnoText(row.sno, row.skipped) || 'Select drug(s)'}</span>
                         <span className="sno-picker-caret">{'\u25BE'}</span>
                       </button></td>
                       <td className="col-time"><input type="time" value={row.time || ''} onChange={(e) => updateChartRow(i, { time: e.target.value })} /></td>
@@ -913,7 +964,17 @@ export default function DrugCourseChart() {
                   <tr key={i}>
                     {showPencil && <td className="col-rowedit no-print"><button className="row-edit-btn" title="Edit this row" onClick={() => unlockChartRow(i)}>🖊️</button></td>}
                     <td className="col-date view-cell">{row.date || '\u00A0'}</td>
-                    <td className="col-sno view-cell">{row.sno || '\u00A0'}</td>
+                    <td className="col-sno view-cell">
+                      {(() => {
+                        const segs = buildSnoSegments(row.sno, row.skipped);
+                        if (!segs.length) return '\u00A0';
+                        return segs.map((s, idx) => (
+                          <span key={idx} className={s.type === 'skip' ? 'sno-skip-text' : ''}>
+                            {(idx > 0 ? '. ' : '') + s.text}
+                          </span>
+                        ));
+                      })()}
+                    </td>
                     <td className="col-time view-cell">{row.time || '\u00A0'}</td>
                     <td className="col-dose view-cell">{row.dose || 'AP'}</td>
                     <td className="col-route view-cell">{row.route || '\u00A0'}</td>
@@ -1053,15 +1114,33 @@ export default function DrugCourseChart() {
                 const d = drugs[num - 1];
                 const due = dueLabelFor(d, num - 1, chartRows, now);
                 const checked = snoPickerSelected.includes(num);
+                const skipReason = snoPickerSkipped[num];
+                const editingThis = snoPickerEditingNum === num;
                 return (
-                  <label className="sno-picker-option" key={num}>
-                    <input type="checkbox" checked={checked} onChange={() => toggleSnoPickerDrug(num)} />
-                    <span className="sno-picker-option-text" style={due.overdue ? { color: '#dc2626', fontWeight: 'bold' } : {}}>
-                      {num + (d.name ? ' - ' + d.name : '')}
-                      {d.route ? ' (' + d.route + ')' : ''}
-                    </span>
-                    {due.overdue && <span className="sno-picker-due-tag">Due {due.text}</span>}
-                  </label>
+                  <div className="sno-picker-row" key={num}>
+                    <label className="sno-picker-option">
+                      <input type="checkbox" checked={checked} onChange={() => toggleSnoPickerDrug(num)} />
+                      <span className="sno-picker-option-text" style={due.overdue ? { color: '#dc2626', fontWeight: 'bold' } : skipReason ? { color: '#d97706' } : {}}>
+                        {num + (d.name ? ' - ' + d.name : '')}
+                        {d.route ? ' (' + d.route + ')' : ''}
+                      </span>
+                      {due.overdue && <span className="sno-picker-due-tag">Due {due.text}</span>}
+                      <button type="button" className="sno-picker-pencil-btn" title="Not given — write a reason" aria-label="Not given — write a reason" onClick={(e) => { e.preventDefault(); openSnoSkipEditor(num); }}>✏️</button>
+                    </label>
+                    {skipReason && !editingThis && (
+                      <div className="sno-picker-skip-note" onClick={() => openSnoSkipEditor(num)}>{num + ' ' + skipReason}</div>
+                    )}
+                    {editingThis && (
+                      <div className="sno-picker-skip-editor">
+                        <textarea rows={2} placeholder="Reason not given, e.g. No IV line" value={snoPickerEditText} onChange={(e) => setSnoPickerEditText(e.target.value)} autoFocus />
+                        <div style={{ display: 'flex', gap: 6, marginTop: 4 }}>
+                          <button className="btn btn-primary" style={{ padding: '4px 10px', fontSize: 12 }} onClick={saveSnoSkipReason}>Save</button>
+                          {skipReason && <button className="btn btn-secondary" style={{ padding: '4px 10px', fontSize: 12 }} onClick={() => clearSnoSkipReason(num)}>Clear</button>}
+                          <button className="btn btn-secondary" style={{ padding: '4px 10px', fontSize: 12 }} onClick={cancelSnoSkipEditor}>Cancel</button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 );
               })}
             </div>
