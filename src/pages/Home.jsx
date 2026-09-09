@@ -8,8 +8,7 @@ import { avatarMarkup } from "../lib/avatar.js";
 import Topbar from "../components/Topbar.jsx";
 import PatientForm from "../components/PatientForm.jsx";
 import NewPatientTransfersModal from "../components/NewPatientTransfersModal.jsx";
-import { parseBulkText } from "../lib/drugChartHelpers.js";
-import { parsePatientFields, extractDrugSection } from "../lib/patientParse.js";
+import { parsePatientFields } from "../lib/patientParse.js";
 import { generateCsvTemplate, parsePatientCsv } from "../lib/patientCsv.js";
 import { pendingTransfersFor } from "../lib/wardTransfer.js";
 import { wardHeadcount } from "../lib/wardCensus.js";
@@ -39,7 +38,6 @@ export default function Home() {
   const [showEmrPaste, setShowEmrPaste] = useState(false);
   const [emrPasteText, setEmrPasteText] = useState('');
   const [emrParseMsg, setEmrParseMsg] = useState('');
-  const [pendingDrugs, setPendingDrugs] = useState([]);
 
   const [showTransfers, setShowTransfers] = useState(false);
 
@@ -90,19 +88,13 @@ export default function Home() {
       allergies: fields.allergies || f.allergies,
       insurance: fields.insurance || f.insurance
     }));
-    const drugBlock = extractDrugSection(emrPasteText);
-    const drugs = drugBlock ? parseBulkText(drugBlock) : [];
-    setPendingDrugs(drugs);
     const foundCount = Object.values(fields).filter(Boolean).length;
     setEmrParseMsg(
-      (foundCount ? 'Filled ' + foundCount + ' patient field(s)' : 'Could not find patient details in that text') +
-      (drugs.length ? ', and found ' + drugs.length + ' drug order(s) below.' : ' \u2014 no drug orders found.') +
+      (foundCount ? 'Filled ' + foundCount + ' patient field(s).' : 'Could not find patient details in that text.') +
       ' Please review everything before saving.'
     );
   }
-  function updatePendingDrug(i, patch) { setPendingDrugs((rows) => rows.map((r, idx) => idx === i ? { ...r, ...patch } : r)); }
-  function removePendingDrug(i) { setPendingDrugs((rows) => rows.filter((_, idx) => idx !== i)); }
-  function clearEmrPaste() { setShowEmrPaste(false); setEmrPasteText(''); setEmrParseMsg(''); setPendingDrugs([]); }
+  function clearEmrPaste() { setShowEmrPaste(false); setEmrPasteText(''); setEmrParseMsg(''); }
 
   async function createPatient() {
     const name = newForm.name.trim();
@@ -134,15 +126,6 @@ export default function Home() {
       console.warn('Patient write queued locally; will retry once back online:', e);
     });
 
-    if (pendingDrugs.length) {
-      setDoc(doc(db, 'patients', ref.id, 'drugCourseChart', 'main'), {
-        f_admission: '', f_discharge: '', f_diagnosis: diagnosis,
-        drugs: pendingDrugs, rows: [], verbalOrders: [], careInstructions: [], auditLog: [],
-        updatedAt: serverTimestamp()
-      }).catch((e) => {
-        console.warn('Drug list write queued locally; will retry once back online:', e);
-      });
-    }
     // Update the in-memory list directly instead of re-fetching the whole
     // patients collection — that fetch isn't needed (we already have the
     // new patient's data) and, like the writes above, is best avoided here
@@ -416,39 +399,6 @@ export default function Home() {
                   <button className="btn btn-secondary" onClick={clearEmrPaste}>Clear</button>
                 </div>
                 {emrParseMsg && <div style={{ fontSize: 12, color: '#555', marginTop: 6 }}>{emrParseMsg}</div>}
-
-                {pendingDrugs.length > 0 && (
-                  <div style={{ marginTop: 10, overflowX: 'auto' }}>
-                    <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 4 }}>
-                      Drug orders found — review before saving:
-                    </div>
-                    <table style={{ borderCollapse: 'collapse', width: '100%' }}>
-                      <thead>
-                        <tr>
-                          <th style={{ border: '1px solid #000', padding: 3, fontSize: 12 }}>Drug Name</th>
-                          <th style={{ border: '1px solid #000', padding: 3, fontSize: 12 }}>Route</th>
-                          <th style={{ border: '1px solid #000', padding: 3, fontSize: 12 }}>Frequency</th>
-                          <th style={{ border: '1px solid #000', padding: 3, fontSize: 12 }}>Duration</th>
-                          <th style={{ border: '1px solid #000', padding: 3, fontSize: 12 }}></th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {pendingDrugs.map((d, i) => (
-                          <tr key={i}>
-                            <td style={{ border: '1px solid #000', padding: 3 }}><input type="text" style={{ width: '100%', border: 'none', fontSize: 12 }} value={d.name} onChange={(e) => updatePendingDrug(i, { name: e.target.value })} /></td>
-                            <td style={{ border: '1px solid #000', padding: 3 }}><input type="text" style={{ width: '100%', border: 'none', fontSize: 12 }} value={d.route} onChange={(e) => updatePendingDrug(i, { route: e.target.value })} /></td>
-                            <td style={{ border: '1px solid #000', padding: 3 }}><input type="text" style={{ width: '100%', border: 'none', fontSize: 12 }} value={d.frequency} onChange={(e) => updatePendingDrug(i, { frequency: e.target.value })} /></td>
-                            <td style={{ border: '1px solid #000', padding: 3 }}><input type="text" style={{ width: '100%', border: 'none', fontSize: 12 }} value={d.duration} onChange={(e) => updatePendingDrug(i, { duration: e.target.value })} /></td>
-                            <td style={{ border: '1px solid #000', padding: 3, textAlign: 'center' }}><button className="remove-drug-btn" onClick={() => removePendingDrug(i)}>x</button></td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                    <div style={{ fontSize: 11, color: '#888', marginTop: 4 }}>
-                      These will be added to the patient's Drug Course Chart automatically once saved. Any custom frequency text can be picked from the dropdown there afterward.
-                    </div>
-                  </div>
-                )}
               </div>
             )}
 
