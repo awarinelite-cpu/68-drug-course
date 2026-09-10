@@ -58,6 +58,31 @@ export default function Home() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Ward-to-ward transfers, new admissions, etc. are written by other
+  // devices, so a plain load-on-mount only shows what existed when this
+  // page opened. Poll quietly in the background so an incoming transfer
+  // (or any other change) shows up within 30s without a manual reload.
+  // Paused while the tab/app is backgrounded so it doesn't burn reads for
+  // a screen nobody's looking at, and skipped while a form is open so a
+  // background refresh can't blow away unsaved input.
+  useEffect(() => {
+    const POLL_MS = 30000;
+    const pollTimer = setInterval(() => {
+      if (document.visibilityState !== 'visible') return;
+      if (showNewForm || showBulkUpload || showEmrPaste) return;
+      loadAllPatients(true);
+    }, POLL_MS);
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') loadAllPatients(true);
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      clearInterval(pollTimer);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showNewForm, showBulkUpload, showEmrPaste]);
+
   async function loadAllPatients(force) {
     if (allPatients && !force) return allPatients;
     const snap = await getDocs(collection(db, 'patients'));
