@@ -25,6 +25,15 @@ service cloud.firestore {
         && exists(/databases/$(database)/documents/nurseReportRoles/$(wid))
         && get(/databases/$(database)/documents/nurseReportRoles/$(wid)).data.overallNurse.uid == request.auth.uid;
     }
+    // Same check as isOverallForWeek() above, but against MHL's own
+    // nurseReportRoles_mhl collection — see the "MILITARY HOSPITAL LAGOS
+    // (MHL) app" block below for why MHL keeps its own copy of every
+    // ward/patient collection while still sharing /users with 68.
+    function isOverallForWeekMhl(wid) {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/nurseReportRoles_mhl/$(wid))
+        && get(/databases/$(database)/documents/nurseReportRoles_mhl/$(wid)).data.overallNurse.uid == request.auth.uid;
+    }
 
     // User profiles / roles
     match /users/{uid} {
@@ -208,6 +217,50 @@ service cloud.firestore {
       match /{chartCollection}/{chartDoc} {
         allow read, create, update, delete: if isKnownUser();
       }
+    }
+
+    // ---------------------------------------------------------------
+    // MILITARY HOSPITAL LAGOS (MHL) app — same Firebase project as 68
+    // (shared /users login/roles, shared /settings, /communityPosts,
+    // /conversations, /nurseReportConfig), but its own patients, ward
+    // allocations, ward-report archive, and nurse-report/overall-nurse
+    // collections so a patient or ward report in one app never shows up
+    // in the other. Each _mhl collection below mirrors the access rule
+    // of its 68 counterpart above.
+    // ---------------------------------------------------------------
+
+    match /patients_mhl/{patientId} {
+      allow read, create, update: if isKnownUser();
+      allow delete: if isAdmin();
+
+      match /{chartCollection}/{chartDoc} {
+        allow read, create, update, delete: if isKnownUser();
+      }
+    }
+
+    match /allocations_mhl/{allocationId} {
+      allow read: if isKnownUser();
+      allow create, update: if isSignedIn() && request.resource.data.uid == request.auth.uid;
+      allow delete: if isSignedIn() && resource.data.uid == request.auth.uid;
+    }
+
+    match /nurseReportRoles_mhl/{weekId} {
+      allow read, write: if isKnownUser();
+    }
+    match /nurseReports_mhl/{dateId} {
+      allow read, write: if isKnownUser();
+
+      match /wards/{wardKey} {
+        allow read, write: if isKnownUser();
+      }
+    }
+
+    match /archives_mhl/{archiveId} {
+      allow read: if isKnownUser();
+      allow create: if isKnownUser()
+        && (isAdmin() || isSubadmin() || isOverallForWeekMhl(request.resource.data.weekId));
+      allow update: if isAdmin() || isSubadmin();
+      allow delete: if false;
     }
   }
 }
