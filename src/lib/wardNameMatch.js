@@ -33,6 +33,9 @@ const WARD_LABEL_ALIASES = {
   'FEMALE MEDICAL WARD': 'fmw1',
   'FEMALE SURGICAL WARD': 'fsw2',
   'ORTHOPEDIC WARD': 'ortho',
+  // The report abbreviates Extension Ward's name to "FSW EXT" the same
+  // way it does FMW I/FSW II, so normalization alone can't catch it.
+  'EXTENSION WARD': 'fswext',
   // Maternity's "Cots" row (newborns) has no patient-chart equivalent —
   // babies aren't given their own patient record in this app — so only
   // the Mothers row (matbed) maps back to real patients here. Cots stays
