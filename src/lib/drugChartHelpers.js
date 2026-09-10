@@ -8,6 +8,14 @@ export const WARD_OPTIONS = [
   'ORTHOPEDIC WARD', 'EXTENSION WARD', 'OFFICERS WARD'
 ];
 
+// The exact WARD_OPTIONS value a patient's ward carries while on Accident
+// & Emergency — used to detect a "TRANS IN from A&E" admission the moment
+// a transfer out of A&E is accepted (see acceptTransfer in wardTransfer.js).
+// Kept as one named constant instead of repeating the literal string so
+// the two stay in sync if this list is ever edited. Same value as MHL's
+// AE_WARD_LABEL (shared /patients doc, same WARD_OPTIONS list).
+export const AE_WARD_LABEL = 'ACCIDENT & EMERGENCY';
+
 // PEDIATRIC/NICU WARD is one patient-chart ward but two physically
 // separate report wards (PAED BED / PAED COT, see wardNameMatch.js) —
 // a patient registered there needs to say which one they're actually

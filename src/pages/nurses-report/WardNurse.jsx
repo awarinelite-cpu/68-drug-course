@@ -14,7 +14,7 @@ import {
 } from "../../lib/nurses-report-common.js";
 import { patientWardAndBedTypeForReportKey } from "../../lib/wardNameMatch.js";
 import { wardHeadcount } from "../../lib/wardCensus.js";
-import { applyPatientStatus, closeOutDischargedPatient } from "../../lib/patientAdmissionStatus.js";
+import { applyPatientStatus, closeOutDischargedPatient, activeAdmissionTag, clearAdmissionTag, ADMISSION_TAG_LABEL, ADMISSION_TAG_STATUS_STAMP } from "../../lib/patientAdmissionStatus.js";
 import Topbar from "../../components/Topbar.jsx";
 import wardSelectBg from "../../assets/ward-select-bg.svg";
 
@@ -384,7 +384,12 @@ function useWardReport(wardKey, isAdmin, profile, user) {
           // so the nurse can tap their name and write a closing note; see
           // WardPatientPicker below for how it's shown, and submitReport
           // for how they finally drop off once that note is submitted.
-          list.push({ id: d.id, name: data.name || '', emr: data.emr || '', age: data.age || '', admissionDate: data.admissionDate || '', diagnosis: data.diagnosis || '', dischargeStatus: data.dischargeStatus || '' });
+          // admissionTag ('AE_TRANSFER' / 'NEW_PATIENT' / '') mirrors
+          // dischargeStatus but on the arrival side — see
+          // ADMISSION_TAG_LABEL/activeAdmissionTag in
+          // patientAdmissionStatus.js and WardPatientPicker below for how
+          // it's shown (blue, vs dischargeStatus's red).
+          list.push({ id: d.id, name: data.name || '', emr: data.emr || '', age: data.age || '', admissionDate: data.admissionDate || '', diagnosis: data.diagnosis || '', dischargeStatus: data.dischargeStatus || '', admissionTag: activeAdmissionTag(data) });
         });
         list.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
         if (!cancelled) setWardPatientOptions(list);
@@ -602,6 +607,11 @@ function useWardReport(wardKey, isAdmin, profile, user) {
         // nurse doesn't have to set it by hand, but never override
         // something the nurse already picked themselves.
         if (!next.status && record.dischargeStatus) next.status = record.dischargeStatus;
+        // Same idea for a patient tagged TRANS IN FROM A&E / NEW PATIENT
+        // (see admissionTag on wardPatientOptions) — pre-fill Status to
+        // the matching write-up stamp, again only if the nurse hasn't
+        // already set something themselves.
+        if (!next.status && record.admissionTag) next.status = ADMISSION_TAG_STATUS_STAMP[record.admissionTag] || '';
         return next;
       })
     }));
@@ -729,6 +739,19 @@ function useWardReport(wardKey, isAdmin, profile, user) {
         ? { text: 'Report submitted, but could not archive: ' + archiveErrors.join('; '), error: true }
         : { text: 'Report submitted.', error: false });
       setWardDoc((d) => ({ ...d, ...doc_, submitted: true, locked: true, nightUpdateBy: payload.nightUpdateBy || d.nightUpdateBy }));
+
+      // A patient tagged AE_TRANSFER/NEW_PATIENT (see wardPatientOptions
+      // above) whose name was picked for one of this report's write-ups
+      // has now had a report written on them — clear their blue tag. Not
+      // gated on navigator.onLine like the discharge archiving above:
+      // nothing else depends on this succeeding, so it's fine to just
+      // fire it and let Firestore's offline queue catch up later.
+      const admissionTaggedIds = new Set(wardPatientOptions.filter((p) => p.admissionTag).map((p) => p.id));
+      doc_.patients.forEach((p) => {
+        if (p.sourcePatientId && admissionTaggedIds.has(p.sourcePatientId)) {
+          clearAdmissionTag(p.sourcePatientId).catch(() => {});
+        }
+      });
     } catch (e) {
       setSaveStatus({ text: "Couldn't submit: " + (e.code || e.message || 'unknown error'), error: true });
     }
@@ -800,9 +823,11 @@ function WardPatientPicker({ value, options, onSelect }) {
                     <span className={"ward-patient-picker-name" + (o.id === value ? ' is-selected' : '')}>
                       {(o.name || 'Unnamed') + (o.emr ? ' (' + o.emr + ')' : '')}
                     </span>
-                    {o.dischargeStatus && (
+                    {o.dischargeStatus ? (
                       <div className="ward-patient-picker-tag">{o.dischargeStatus === 'TRANS OUT' ? 'TRANS OUT' : 'Discharged'}</div>
-                    )}
+                    ) : o.admissionTag ? (
+                      <div className="ward-patient-picker-tag admission">{ADMISSION_TAG_LABEL[o.admissionTag] || o.admissionTag}</div>
+                    ) : null}
                   </div>
                 </div>
               ))}

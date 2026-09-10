@@ -36,6 +36,65 @@ export async function closeOutDischargedPatient(patientId) {
   }
 }
 
+// The blue tag shown under a patient's name on the Ward Report's "Select
+// from ward" picker (see WardPatientPicker in WardNurse.jsx) when they've
+// recently arrived on the ward — either transferred in from Accident &
+// Emergency (see acceptTransfer in wardTransfer.js, which sets this the
+// moment a ward accepts a transfer whose fromWard was A&E) or freshly
+// registered straight onto a ward with no transfer at all (see
+// createPatient / saveBulkPatients in Home.jsx). `admissionSource` /
+// `admissionSourceAt` live on the shared /patients doc, same as
+// dischargeStatus — an admission recorded from either MHL or 68 shows up
+// the same way on both. Unlike dischargeStatus, this never removes the
+// patient from the roster (it's an admission, not an exit): it just stops
+// showing, either after 24h or once a write-up for them is submitted
+// through the Ward Report, whichever comes first — see activeAdmissionTag
+// and clearAdmissionTag below.
+export const ADMISSION_TAG_LABEL = { AE_TRANSFER: 'TRANS IN from A&E', NEW_PATIENT: 'NEW PATIENT' };
+
+// Maps an admissionTag to the matching PATIENT_STATUS_OPTIONS string (see
+// nurses-report-common.js) — these were already options on the write-up's
+// own Status dropdown before this feature existed, just never set
+// automatically. Used by selectPatientFromWard to pre-fill Status the
+// same way it already does for dischargeStatus, so picking a tagged
+// patient stamps their write-up correctly without the nurse having to
+// pick it by hand.
+export const ADMISSION_TAG_STATUS_STAMP = { AE_TRANSFER: 'TRANS IN FROM A&E', NEW_PATIENT: 'NEW PATIENT' };
+const ADMISSION_TAG_WINDOW_MS = 24 * 60 * 60 * 1000;
+
+function toMillis(v) {
+  if (!v) return 0;
+  if (typeof v.toMillis === 'function') return v.toMillis();
+  if (typeof v === 'number') return v;
+  if (typeof v.seconds === 'number') return v.seconds * 1000;
+  return 0;
+}
+
+// Returns 'AE_TRANSFER' | 'NEW_PATIENT' | '' — '' once more than 24h have
+// passed since admissionSourceAt, even if the fields are still set in
+// Firestore (the 24h cutoff is just computed here on read each time,
+// rather than needing a scheduled function to go clear it).
+export function activeAdmissionTag(data) {
+  if (!data || !data.admissionSource) return '';
+  if (Date.now() - toMillis(data.admissionSourceAt) > ADMISSION_TAG_WINDOW_MS) return '';
+  return data.admissionSource;
+}
+
+// Clears admissionSource/admissionSourceAt once a write-up linking to this
+// patient has been submitted through the Ward Report — the other way (besides
+// the 24h window) this tag disappears. Safe to call even if the patient was
+// never tagged, or the tag already expired — just a no-op wipe of blank fields.
+export async function clearAdmissionTag(patientId) {
+  try {
+    await updateDoc(doc(db, 'patients', patientId), {
+      admissionSource: '', admissionSourceAt: null, updatedAt: serverTimestamp()
+    });
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, message: e.code || e.message || 'unknown error' };
+  }
+}
+
 // Archives every chart for a patient's current admission (drug course
 // chart, blood glucose, vitals, intake & output, seizure) into a new
 // `admissions` record, then resets all of those charts blank so the next

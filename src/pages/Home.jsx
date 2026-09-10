@@ -134,7 +134,11 @@ export default function Home() {
       age: newForm.age.trim(),
       hospNo: newForm.hospNo.trim(), admissionDate: newForm.admissionDate.trim(), allergies: newForm.allergies.trim(),
       insurance: newForm.insurance.trim(),
-      createdAt: serverTimestamp(), createdBy: user ? user.uid : null
+      createdAt: serverTimestamp(), createdBy: user ? user.uid : null,
+      // Brand-new record, no transfer involved — tags this patient "NEW
+      // PATIENT" (blue) on the ward's roster picker for 24h. See
+      // ADMISSION_TAG_LABEL/activeAdmissionTag in patientAdmissionStatus.js.
+      admissionSource: 'NEW_PATIENT', admissionSourceAt: serverTimestamp()
     };
 
     // Client-generated ID — doc() needs no network round trip, so the patient
@@ -265,7 +269,12 @@ export default function Home() {
           ward: r.data.ward, pedBedType: r.data.ward === 'PEDIATRIC/NICU WARD' ? r.data.pedBedType : '',
           age: r.data.age, hospNo: r.data.hospNo, admissionDate: r.data.admissionDate,
           allergies: r.data.allergies, insurance: r.data.insurance,
-          createdAt: serverTimestamp(), createdBy: user ? user.uid : null
+          createdAt: serverTimestamp(), createdBy: user ? user.uid : null,
+          // Same "NEW PATIENT" admission tag as the single Add Patient
+          // form — only for rows creating a brand-new record; a row that
+          // matched an existing patient by EMR (the `existing` branch
+          // above) isn't a new admission and gets no tag.
+          admissionSource: 'NEW_PATIENT', admissionSourceAt: serverTimestamp()
         };
         const ref = doc(collection(db, 'patients'));
         setDoc(ref, data).catch((e) => {
