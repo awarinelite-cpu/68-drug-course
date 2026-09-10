@@ -913,6 +913,25 @@ table.ward-shift tr.shift-section-row td { font-weight: bold; text-align: left; 
 /* --- Nurses Report: patient status stamp/select, night update, archive --- */
 .status-select { padding: 6px 8px; border: 1px solid var(--border); border-radius: 999px; font-size: 16px; font-weight: bold; background: var(--surface-bg); }
 .status-select.set { background: var(--danger-bg); color: var(--danger-text); border-color: #fca5a5; }
+
+/* --- "Select Patient" picker (button + modal — see WardPatientPicker in
+   WardNurse.jsx). Not a native <select>: its <option> can only ever be
+   one line of plain text, so it can't carry the small red
+   DISCHARGE/TRANS OUT tag a discharged/referred patient needs. --- */
+.ward-patient-picker-btn {
+  width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  padding: 7px; border: 1px solid var(--border); border-radius: 6px; font-size: 16px;
+  font-family: inherit; background: var(--surface-bg); color: inherit; box-sizing: border-box; cursor: pointer; text-align: left;
+}
+.ward-patient-picker-btn.set { border-color: #93c5fd; }
+.ward-patient-picker-btn-text { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ward-patient-picker-body { padding: 4px 0; }
+.ward-patient-picker-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 10px 16px; border-bottom: 1px solid var(--border); cursor: pointer; }
+.ward-patient-picker-row:last-child { border-bottom: none; }
+.ward-patient-picker-row:active { background: var(--hover-bg, rgba(0,0,0,.04)); }
+.ward-patient-picker-name { font-size: 16px; }
+.ward-patient-picker-name.is-selected { font-weight: bold; }
+.ward-patient-picker-tag { font-size: 11px; font-weight: bold; color: #dc2626; text-transform: uppercase; letter-spacing: .02em; margin-top: 2px; }
 .status-stamp {
   position: absolute; top: 10px; right: 14px;
   color: var(--danger); font-weight: 900; font-size: 16px; text-transform: uppercase;

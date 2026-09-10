@@ -15,6 +15,7 @@ import {
   parseDoseSequence, administrationTimesFor, flaggedDrugRefs, flaggedDrugMessage, diffFields,
   autoDurationForFrequency, buildSnoSegments, buildSnoText, abbreviateReason
 } from "../lib/drugChartHelpers.js";
+import { ROSTER_TAG_FOR_REASON } from "../lib/patientAdmissionStatus.js";
 
 const FIELD_IDS = ['f_admission', 'f_discharge', 'f_diagnosis'];
 
@@ -817,7 +818,12 @@ export default function DrugCourseChart() {
         setDoc(chartRefPath.current, blankDrugChart), // full overwrite (no merge) so old data doesn't linger
         setDoc(doc(db, 'patients', patientId, 'bloodGlucose', 'main'), { chartType: '6point', rows6: [], rows3: [], updatedAt: serverTimestamp() }),
         setDoc(doc(db, 'patients', patientId, 'intakeOutputSummary', 'current'), { intake: 0, output: 0, balance: 0, periodDate: new Date().toISOString().slice(0, 10), updatedAt: serverTimestamp() }),
-        clearEntries('vitals'), clearEntries('intakeOutput'), clearEntries('seizure')
+        clearEntries('vitals'), clearEntries('intakeOutput'), clearEntries('seizure'),
+        // Tag the patient doc so the Ward Report's "Select from ward"
+        // picker can flag them DISCHARGE/TRANS OUT for the nurse — they
+        // stay on that ward's roster until a closing report is submitted
+        // for them (see closeOutDischargedPatient in patientAdmissionStatus.js).
+        updateDoc(doc(db, 'patients', patientId), { dischargeStatus: ROSTER_TAG_FOR_REASON[reason] || '', dischargeStatusAt: serverTimestamp() })
       ]);
     } catch (e) {
       setStatusMsg({ color: '#dc2626', text: 'Archived, but could not fully reset the new charts: ' + (e.code || e.message) });

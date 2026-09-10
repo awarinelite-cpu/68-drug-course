@@ -5,6 +5,37 @@ import { STATUS_LABELS, defaultRow } from "./drugChartHelpers.js";
 function blankDrugs() { return Array(8).fill(null).map(() => ({ name: '', route: '', frequency: '', action: '', duration: '' })); }
 function blankChartRows() { return Array(18).fill(null).map(() => defaultRow()); }
 
+// The tag shown under a patient's name in the Ward Report's "Select from
+// ward" picker (see WardPatientPicker in WardNurse.jsx) once they've been
+// discharged or referred out — from *here*, from Patient.jsx's own status
+// control, or from Drug Course Chart's inline duplicate of this flow
+// (applyStatusAction in DrugCourseChart.jsx, which sets the same field —
+// see ROSTER_TAG_FOR_REASON there). Deliberately not set for 'transferred':
+// a ward transfer already has its own pendingTransfer marker and the
+// patient is expected to keep appearing normally once accepted onto the
+// receiving ward.
+export const ROSTER_TAG_FOR_REASON = { discharged: 'DISCHARGE', referred: 'TRANS OUT' };
+
+// Clears a patient's ward membership once their discharge/trans-out has
+// been given a closing write-up and that Ward Report has been submitted
+// (see submitReport in WardNurse.jsx) — the final step of the flow
+// described on WardPatientPicker: the patient stays on the ward's picker,
+// tagged DISCHARGE/TRANS OUT, so the nurse can tap their name and write
+// that closing note, and only disappears from the roster once that note
+// is actually submitted. Safe to call even if the patient was never
+// tagged (e.g. a straight non-report discharge) — it's just a no-op wipe
+// of fields that were already blank.
+export async function closeOutDischargedPatient(patientId) {
+  try {
+    await updateDoc(doc(db, 'patients', patientId), {
+      ward: '', pedBedType: '', dischargeStatus: '', dischargeStatusAt: null, updatedAt: serverTimestamp()
+    });
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, message: e.code || e.message || 'unknown error' };
+  }
+}
+
 // Archives every chart for a patient's current admission (drug course
 // chart, blood glucose, vitals, intake & output, seizure) into a new
 // `admissions` record, then resets all of those charts blank so the next
@@ -137,7 +168,12 @@ export async function applyPatientStatus({ patientId, reason, transferWard, from
       setDoc(chartRef, blankDrugChart), // full overwrite (no merge) so old data doesn't linger
       setDoc(doc(db, 'patients', patientId, 'bloodGlucose', 'main'), { chartType: '6point', rows6: [], rows3: [], updatedAt: serverTimestamp() }),
       setDoc(doc(db, 'patients', patientId, 'intakeOutputSummary', 'current'), { intake: 0, output: 0, balance: 0, periodDate: new Date().toISOString().slice(0, 10), updatedAt: serverTimestamp() }),
-      clearEntries('vitals'), clearEntries('intakeOutput'), clearEntries('seizure')
+      clearEntries('vitals'), clearEntries('intakeOutput'), clearEntries('seizure'),
+      // Tag the patient doc itself so the Ward Report's "Select from ward"
+      // picker can flag them DISCHARGE/TRANS OUT for the nurse, even
+      // though they stay on the roster (still keyed by `ward`) until a
+      // closing report is submitted for them — see closeOutDischargedPatient.
+      updateDoc(doc(db, 'patients', patientId), { dischargeStatus: ROSTER_TAG_FOR_REASON[reason] || '', dischargeStatusAt: serverTimestamp() })
     ]);
   } catch (e) {
     return { ok: false, archived: true, message: 'Archived, but could not fully reset the new charts: ' + (e.code || e.message) };

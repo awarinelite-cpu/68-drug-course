@@ -14,7 +14,7 @@ import {
 } from "../../lib/nurses-report-common.js";
 import { patientWardAndBedTypeForReportKey } from "../../lib/wardNameMatch.js";
 import { wardHeadcount } from "../../lib/wardCensus.js";
-import { applyPatientStatus } from "../../lib/patientAdmissionStatus.js";
+import { applyPatientStatus, closeOutDischargedPatient } from "../../lib/patientAdmissionStatus.js";
 import Topbar from "../../components/Topbar.jsx";
 import wardSelectBg from "../../assets/ward-select-bg.svg";
 
@@ -376,7 +376,15 @@ function useWardReport(wardKey, isAdmin, profile, user) {
           const data = d.data();
           if (data.pendingTransfer) return;
           if (info.bedType && (data.pedBedType || '') !== info.bedType) return;
-          list.push({ id: d.id, name: data.name || '', emr: data.emr || '', age: data.age || '', admissionDate: data.admissionDate || '', diagnosis: data.diagnosis || '' });
+          // dischargeStatus ('DISCHARGE' / 'TRANS OUT') is set by
+          // applyPatientStatus (patientAdmissionStatus.js) the moment a
+          // patient is discharged/referred — via this report's own status
+          // dropdown, via Patient.jsx, or straight off the Drug Course
+          // Chart. The patient stays on this list (still keyed by `ward`)
+          // so the nurse can tap their name and write a closing note; see
+          // WardPatientPicker below for how it's shown, and submitReport
+          // for how they finally drop off once that note is submitted.
+          list.push({ id: d.id, name: data.name || '', emr: data.emr || '', age: data.age || '', admissionDate: data.admissionDate || '', diagnosis: data.diagnosis || '', dischargeStatus: data.dischargeStatus || '' });
         });
         list.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
         if (!cancelled) setWardPatientOptions(list);
@@ -588,6 +596,12 @@ function useWardReport(wardKey, isAdmin, profile, user) {
         if (!next.age && record.age) next.age = record.age;
         if (!next.doa && record.admissionDate) next.doa = record.admissionDate;
         if (!next.diagnosis && record.diagnosis) next.diagnosis = record.diagnosis;
+        // Picking someone already tagged DISCHARGE/TRANS OUT (see
+        // WardPatientPicker) means this write-up is their closing note —
+        // pre-fill Status to match so submitReport recognizes it and the
+        // nurse doesn't have to set it by hand, but never override
+        // something the nurse already picked themselves.
+        if (!next.status && record.dischargeStatus) next.status = record.dischargeStatus;
         return next;
       })
     }));
@@ -634,26 +648,46 @@ function useWardReport(wardKey, isAdmin, profile, user) {
     }
 
     // A write-up linked to a real patient record (picked via "Select
-    // Patient") whose status is DISCHARGE or TRANS OUT (TRANS OUT
-    // doubles as "referred to another hospital") gets that patient
-    // discharged/referred for real on submit — the exact same
-    // archive-and-reset flow as the Drug Course Chart's own Patient
-    // Status control (applyPatientStatus), just triggered from here
-    // instead. Skips anything already archived this way (so
-    // re-submitting doesn't double-archive) or with no linked record.
-    const toArchive = doc_.patients.filter((p) => p.sourcePatientId && !p.archivedFromReport && PATIENT_STATUS_ARCHIVE_REASON[p.status]);
-    if (toArchive.length && !navigator.onLine) {
-      setSaveStatus({ text: "Some patients here are marked Discharge/Trans Out — archiving them needs an internet connection. Please try again once online, or clear their status to submit without archiving them.", error: true });
+    // Patient") whose status is DISCHARGE or TRANS OUT (TRANS OUT doubles
+    // as "referred to another hospital") finalizes that patient on
+    // submit. Two cases, handled the same way from here on:
+    //  - Freshly set here (wardPatientOptions didn't already show them
+    //    tagged DISCHARGE/TRANS OUT): archive their current admission for
+    //    real — the same archive-and-reset flow as the Drug Course
+    //    Chart's own Patient Status control (applyPatientStatus), just
+    //    triggered from here instead.
+    //  - Already tagged (the nurse picked them off the roster where they
+    //    showed the small red DISCHARGE/TRANS OUT tag — see
+    //    WardPatientPicker below — because they were discharged/referred
+    //    straight off the Drug Course Chart, or off Patient.jsx, earlier):
+    //    already archived, so this write-up is just their closing note —
+    //    skip re-archiving.
+    // Either way, once submitted this closes them out
+    // (closeOutDischargedPatient) so they finally drop off this and every
+    // other ward-scoped patient list. Skips anything already finalized
+    // this way (so re-submitting doesn't double-archive or re-run the
+    // close-out) or with no linked record.
+    const alreadyTaggedIds = new Set(wardPatientOptions.filter((p) => p.dischargeStatus).map((p) => p.id));
+    const toFinalize = doc_.patients.filter((p) => p.sourcePatientId && !p.archivedFromReport && PATIENT_STATUS_ARCHIVE_REASON[p.status]);
+    if (toFinalize.length && !navigator.onLine) {
+      setSaveStatus({ text: "Some patients here are marked Discharge/Trans Out — closing them out needs an internet connection. Please try again once online, or clear their status to submit without closing them out.", error: true });
       return;
     }
     const archiveErrors = [];
-    if (toArchive.length) {
-      const results = await Promise.all(toArchive.map((p) =>
-        applyPatientStatus({
-          patientId: p.sourcePatientId, reason: PATIENT_STATUS_ARCHIVE_REASON[p.status],
-          transferWard: '', fromWard: w?.label || '', transferredByName: profile?.name || 'Unknown'
-        }).then((r) => ({ id: p.id, ok: r.ok, message: r.message, name: p.name || p.emr || 'A patient' }))
-      ));
+    if (toFinalize.length) {
+      const results = await Promise.all(toFinalize.map(async (p) => {
+        const name = p.name || p.emr || 'A patient';
+        if (!alreadyTaggedIds.has(p.sourcePatientId)) {
+          const r = await applyPatientStatus({
+            patientId: p.sourcePatientId, reason: PATIENT_STATUS_ARCHIVE_REASON[p.status],
+            transferWard: '', fromWard: w?.label || '', transferredByName: profile?.name || 'Unknown'
+          });
+          if (!r.ok) return { id: p.id, ok: false, message: r.message, name };
+        }
+        const closed = await closeOutDischargedPatient(p.sourcePatientId);
+        if (!closed.ok) return { id: p.id, ok: false, message: closed.message, name };
+        return { id: p.id, ok: true, name };
+      }));
       const okIds = new Set(results.filter((r) => r.ok).map((r) => r.id));
       results.forEach((r) => { if (!r.ok) archiveErrors.push(r.name + ': ' + r.message); });
       doc_ = { ...doc_, patients: doc_.patients.map((p) => okIds.has(p.id) ? { ...p, archivedFromReport: true } : p) };
@@ -711,6 +745,56 @@ function useWardReport(wardKey, isAdmin, profile, user) {
 // the one Save/Submit bar shown (Mothers') saves both member wards'
 // data together, since Cots' own numeric figures (entered in the shared
 // table above) would otherwise have no button of their own to save.
+// "Select Patient" picker for a write-up card — a button that opens a
+// modal listing this ward's patients (wardPatientOptions), rather than a
+// plain <select>. A native <select>'s <option> can only ever be a single
+// line of plain text, so it can't carry the small red DISCHARGE/TRANS OUT
+// tag a patient needs once they've been discharged or referred out (see
+// dischargeStatus on wardPatientOptions, set by applyPatientStatus in
+// patientAdmissionStatus.js) — they stay on this list, tag and all, until
+// a closing report is submitted for them (see submitReport above), so the
+// nurse can still find and tap them to write that closing note.
+function WardPatientPicker({ value, options, onSelect }) {
+  const [open, setOpen] = useState(false);
+  const selected = options.find((o) => o.id === value);
+  const label = selected ? ((selected.name || 'Unnamed') + (selected.emr ? ' (' + selected.emr + ')' : '')) : '\u2014 Select from ward \u2014';
+
+  function pick(id) { onSelect(id); setOpen(false); }
+
+  return (
+    <>
+      <button type="button" className={"ward-patient-picker-btn" + (value ? ' set' : '')} onClick={() => setOpen(true)}>
+        <span className="ward-patient-picker-btn-text">{label}</span>
+        <span className="sno-picker-caret">{'\u25BE'}</span>
+      </button>
+      {open && (
+        <div className="modal-overlay no-print" onClick={(e) => { if (e.target === e.currentTarget) setOpen(false); }}>
+          <div className="modal-box">
+            <div className="modal-header"><h3>Select Patient</h3><button className="modal-close" onClick={() => setOpen(false)}>&times;</button></div>
+            <div className="modal-body ward-patient-picker-body">
+              <div className="ward-patient-picker-row" onClick={() => pick('')}>
+                <span className={"ward-patient-picker-name" + (!value ? ' is-selected' : '')}>{'\u2014 Select from ward \u2014'}</span>
+              </div>
+              {options.map((o) => (
+                <div className="ward-patient-picker-row" key={o.id} onClick={() => pick(o.id)}>
+                  <div>
+                    <span className={"ward-patient-picker-name" + (o.id === value ? ' is-selected' : '')}>
+                      {(o.name || 'Unnamed') + (o.emr ? ' (' + o.emr + ')' : '')}
+                    </span>
+                    {o.dischargeStatus && (
+                      <div className="ward-patient-picker-tag">{o.dischargeStatus === 'TRANS OUT' ? 'TRANS OUT' : 'Discharged'}</div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
 function WardPanelRest({ h, showLabel, isAdmin, navigate, includeShiftTable = true, includePreviousOcc = true, includeHeader = true, includeDemographics = true, onSave, onSubmit, useMaternityDemographics = false, locationOptions }) {
   const {
     w, wardDoc, topStatus, saveStatus, editable, adminEditOverride, setAdminEditOverride,
@@ -786,10 +870,7 @@ function WardPanelRest({ h, showLabel, isAdmin, navigate, includeShiftTable = tr
                     {wardPatientOptions && wardPatientOptions.length > 0 && (
                       <div className="patient-field">
                         <label>Select Patient:</label>
-                        <select className={"status-select" + (p.sourcePatientId ? ' set' : '')} value={p.sourcePatientId || ''} onChange={(e) => selectPatientFromWard(p.id, e.target.value)}>
-                          <option value="">{'\u2014 Select from ward \u2014'}</option>
-                          {wardPatientOptions.map((wp) => <option key={wp.id} value={wp.id}>{(wp.name || 'Unnamed') + (wp.emr ? ' (' + wp.emr + ')' : '')}</option>)}
-                        </select>
+                        <WardPatientPicker value={p.sourcePatientId || ''} options={wardPatientOptions} onSelect={(id) => selectPatientFromWard(p.id, id)} />
                       </div>
                     )}
                     {locationOptions && (
