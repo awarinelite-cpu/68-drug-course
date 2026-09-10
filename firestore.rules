@@ -27,8 +27,8 @@ service cloud.firestore {
     }
     // Same check as isOverallForWeek() above, but against MHL's own
     // nurseReportRoles_mhl collection — see the "MILITARY HOSPITAL LAGOS
-    // (MHL) app" block below for why MHL keeps its own copy of every
-    // ward/patient collection while still sharing /users with 68.
+    // (MHL) app" block below for what MHL keeps separate from 68 and what
+    // it shares.
     function isOverallForWeekMhl(wid) {
       return isSignedIn()
         && exists(/databases/$(database)/documents/nurseReportRoles_mhl/$(wid))
@@ -220,23 +220,24 @@ service cloud.firestore {
     }
 
     // ---------------------------------------------------------------
-    // MILITARY HOSPITAL LAGOS (MHL) app — same Firebase project as 68
-    // (shared /users login/roles, shared /settings, /communityPosts,
-    // /conversations, /nurseReportConfig), but its own patients, ward
-    // allocations, ward-report archive, and nurse-report/overall-nurse
-    // collections so a patient or ward report in one app never shows up
-    // in the other. Each _mhl collection below mirrors the access rule
-    // of its 68 counterpart above.
+    // MILITARY HOSPITAL LAGOS (MHL) app — same Firebase project as 68,
+    // and the same shared /patients records (a patient's demographics
+    // and every chart — drug course, vitals, blood glucose, intake &
+    // output, seizure — are one record either hospital reads/writes,
+    // covered by the /patients rule above). What's kept separate is only
+    // *which ward a patient is currently placed on*: MHL writes that to
+    // its own wardMhl/pendingTransferMhl/pedBedTypeMhl fields on the same
+    // patient doc instead of 68's ward/pendingTransfer/pedBedType, so a
+    // patient can be on a ward in one hospital's app and unplaced (shows
+    // only in a name/EMR search, not on any ward list) in the other's,
+    // until a nurse there transfers them onto one. No extra Firestore
+    // rule is needed for that — it's just different field names within
+    // the same /patients read/write rule above.
+    //
+    // Ward allocations, the ward-report archive, and nurse-report/
+    // overall-nurse do still get their own MHL-only collections below,
+    // each mirroring the access rule of its 68 counterpart.
     // ---------------------------------------------------------------
-
-    match /patients_mhl/{patientId} {
-      allow read, create, update: if isKnownUser();
-      allow delete: if isAdmin();
-
-      match /{chartCollection}/{chartDoc} {
-        allow read, create, update, delete: if isKnownUser();
-      }
-    }
 
     match /allocations_mhl/{allocationId} {
       allow read: if isKnownUser();
