@@ -152,7 +152,12 @@ export default function BloodGlucose() {
 
   async function saveChart() {
     if (isArchived || !chartRefPath.current) return;
-    const toDocRows = (arr) => arr.map(cells => ({ cells }));
+    // Defensive: a row can still be a sparse array (holes = undefined) if it
+    // came from an older cached/loaded state. Firestore rejects `undefined`
+    // field values outright, which is what made saving fail whenever a
+    // column — or, for a day with no test strip, every column — was left
+    // empty. Normalize every hole to '' so an all-empty row still saves.
+    const toDocRows = (arr) => arr.map(cells => ({ cells: cells.map(c => (c === undefined ? '' : c)) }));
     try {
       await setDoc(chartRefPath.current, {
         chartType: currentTypeRef.current,
@@ -188,7 +193,14 @@ export default function BloodGlucose() {
     setRowsCache((cache) => {
       const rows = cache[currentType].map((r, i) => {
         if (i !== rowIdx) return r;
-        const copy = r.slice();
+        // Filling a later column (e.g. Remark) while earlier ones are still
+        // blank leaves the skipped indices as real array holes rather than
+        // empty strings — no strip was available so FBS/RBS etc were never
+        // typed into. Firestore rejects holes (they read back as
+        // `undefined`), which is what made the chart "refuse to save" when
+        // some columns were deliberately left empty. Backfill every hole up
+        // to colIdx with '' so the row is always a dense array of strings.
+        const copy = Array.from({ length: Math.max(r.length, colIdx + 1) }, (_, idx) => (r[idx] === undefined ? '' : r[idx]));
         copy[colIdx] = value;
         return copy;
       });
