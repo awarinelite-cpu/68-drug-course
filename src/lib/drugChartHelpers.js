@@ -452,6 +452,13 @@ const DURATION_WORD_RE = /^(days?|d|weeks?|wks?|months?|mo)$/i;
 // "2days", "x3days", "1month" — however it lands, no space between the
 // (optional leading "x", the) number, and the unit word.
 const DURATION_WORD_COMPACT_RE = /^x?(\d+)(days?|d|weeks?|wks?|months?|mo)$/i;
+// The hour-based counterpart of DURATION_WORD_RE, a duration given in
+// hours but spelled out as two tokens instead of one, e.g. "24 hours",
+// "8 hrs". Without this, only the compact single-token form ("24hrs",
+// matched by DURATION_HOURS_RE) is recognized, so a line like
+// "8 hrly x 24 hours" never gets its duration split out and "24 hours"
+// leaks into the Frequency text instead.
+const DURATION_HOUR_WORD_RE = /^(hrs?|hours?|h)$/i;
 function isDosageToken(t) { return DOSAGE_RE.test(t) || COMPOUND_DOSAGE_RE.test(t); }
 
 // A dose written with a stray space before its unit ("120 mg" instead of
@@ -610,11 +617,12 @@ export function parseDrugLine(line) {
     rest.splice(durIdx, 1);
   } else {
     // Duration spelled out as two tokens instead of one, e.g. "10 days",
-    // "x1 day", "2 weeks", "1 month" — find a bare number (optionally
-    // "x"-prefixed) immediately followed by one of those unit words and
-    // pull the pair out together.
+    // "x1 day", "2 weeks", "1 month", "24 hours" — find a bare number
+    // (optionally "x"-prefixed) immediately followed by one of those unit
+    // words and pull the pair out together.
     const wordIdx = rest.findIndex((t, idx) =>
-      idx > 0 && /^x?\d+$/i.test(rest[idx - 1]) && DURATION_WORD_RE.test(t.replace(/[.,]$/, ''))
+      idx > 0 && /^x?\d+$/i.test(rest[idx - 1]) &&
+      (DURATION_WORD_RE.test(t.replace(/[.,]$/, '')) || DURATION_HOUR_WORD_RE.test(t.replace(/[.,]$/, '')))
     );
     if (wordIdx !== -1) {
       const num = rest[wordIdx - 1].replace(/^x/i, '');
