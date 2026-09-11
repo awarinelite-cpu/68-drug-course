@@ -718,8 +718,78 @@ function parseAlternatingFluidLine(tokens, route) {
   return { name, route, frequency, action: '', duration, createdAt: new Date().toISOString() };
 }
 
+// --- Staged fluid orders ("X then Y then Z") -----------------------------
+// Some IV fluid orders describe several back-to-back stages at different
+// rates rather than one steady frequency, e.g. "IVF normal saline 500mls
+// fast over 30 mins then 500ml over 1hr, then 500mls 4hrly" — a fast bolus,
+// then a titrated bag, then ongoing maintenance dosing. Each stage is
+// really its own order (its own Frequency/Duration) even though a doctor
+// writes it as a single line, so the bulk parser splits these into one row
+// per stage instead of collapsing the whole line into a single row.
+const THEN_SPLIT_RE = /,?\s*\bthen\b\s*/i;
+const OVER_TIME_RE = /\bover\s+(\d+)\s*(mins?|minutes?|hrs?|hours?|h)\b/i;
+
+// A stage written as "over 30 mins"/"over 1hr" is a rate-controlled,
+// one-off run of fluid rather than a recurring dose — it gets Frequency
+// "STAT" with the stated run time as its Duration. A stage with no "over
+// <time>" is assumed to be an ordinary recurring order (e.g. "4hrly") and
+// is parsed for a frequency word the normal way, falling back to the raw
+// text if it's not one of the recognized aliases.
+function parseFluidStage(text, baseDrugName, baseDosage) {
+  const tokens = text.trim().split(/\s+/).filter(Boolean);
+  const stageDoseIdx = tokens.findIndex(t => isDosageToken(t.replace(/,$/, '')));
+  const dose = stageDoseIdx !== -1 ? tokens[stageDoseIdx] : baseDosage;
+  const name = (baseDrugName + ' ' + dose).trim();
+  const remainder = (stageDoseIdx !== -1 ? tokens.slice(stageDoseIdx + 1) : tokens).join(' ');
+
+  const overM = remainder.match(OVER_TIME_RE);
+  let frequency = '', duration = '';
+  if (overM) {
+    const num = overM[1];
+    duration = overM[2].toLowerCase().startsWith('min') ? num + ' mins' : num + 'hr' + (num === '1' ? '' : 's');
+    frequency = 'STAT';
+  } else {
+    const key = remainder.toLowerCase().replace(/[\s,.]/g, '');
+    frequency = FREQ_ALIASES[key] || remainder.trim();
+  }
+
+  return { name, route: 'IV', frequency, action: '', duration, createdAt: new Date().toISOString() };
+}
+
+// Splits a single staged-fluid line into one row per stage, or returns null
+// if the line isn't one (so the caller falls back to the normal single-row
+// parseDrugLine). Only triggers for a fluid dose on an IV/IVF route — the
+// one context this staging pattern actually shows up in — so an unrelated
+// line that happens to contain the word "then" is left alone.
+export function parseStagedFluidLine(line) {
+  const raw = line.trim();
+  if (!raw || !/\bthen\b/i.test(raw)) return null;
+  const segments = raw.split(THEN_SPLIT_RE).map(s => s.trim()).filter(Boolean);
+  if (segments.length < 2) return null;
+
+  let tokens = segments[0].split(/\s+/);
+  const firstKey = tokens[0].toLowerCase().replace(/\.$/, '');
+  if (ROUTE_ALIASES[firstKey] !== 'IV') return null;
+  tokens = tokens.slice(1);
+
+  const dosageIdx = tokens.findIndex(t => isDosageToken(t.replace(/,$/, '')));
+  if (dosageIdx === -1) return null;
+  const baseDrugName = tokens.slice(0, dosageIdx).join(' ');
+  const baseDosage = tokens[dosageIdx];
+  const firstRemainder = tokens.slice(dosageIdx + 1).join(' ');
+
+  return segments.map((seg, i) => parseFluidStage(i === 0 ? firstRemainder : seg, baseDrugName, baseDosage));
+}
+
 export function parseBulkText(text) {
-  return text.split('\n').map(parseDrugLine).filter(Boolean);
+  const rows = [];
+  text.split('\n').forEach(line => {
+    const staged = parseStagedFluidLine(line);
+    if (staged) { rows.push(...staged); return; }
+    const parsed = parseDrugLine(line);
+    if (parsed) rows.push(parsed);
+  });
+  return rows;
 }
 
 // Compares `before` and `after` on the given fields (a { field: label } map)
