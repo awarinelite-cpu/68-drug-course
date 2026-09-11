@@ -425,6 +425,7 @@ const FREQ_ALIASES = {
   nocte: 'Nocte', night: 'Nocte',
   hs: 'HS', bedtime: 'HS', atbedtime: 'HS',
   qod: 'QOD', eod: 'QOD', altday: 'QOD', alternateday: 'QOD', alternatedays: 'QOD',
+  premealtds: 'Premeal TDS', premeal: 'Premeal TDS', actds: 'Premeal TDS',
   q4h: 'Q4H', '4hrly': 'Q4H', '4hourly': 'Q4H',
   q6h: 'Q6H', '6hrly': 'Q6H', '6hourly': 'Q6H',
   q8h: 'Q8H', '8hrly': 'Q8H', '8hourly': 'Q8H',
@@ -551,9 +552,30 @@ export function parseDrugLine(line) {
   }
   let name, dosage, rest;
   if (dosageIdx === -1) {
-    name = tokens.join(' ');
-    dosage = '';
-    rest = [];
+    // No dose/strength token anywhere in the line — a standing order can
+    // be written as just route + drug + frequency with no stated dose
+    // (e.g. "IV levofloxacin dly"). Check whether the line ends in a
+    // recognized frequency word (one token, or two like "8 hrly") and, if
+    // so, split it off so Frequency still gets parsed instead of the
+    // whole line — frequency word included — silently landing in Name.
+    let freqSplitIdx = -1;
+    if (tokens.length >= 3) {
+      const twoKey = (tokens[tokens.length - 2] + tokens[tokens.length - 1].replace(/[.,]$/, '')).toLowerCase();
+      if (FREQ_ALIASES[twoKey]) freqSplitIdx = tokens.length - 2;
+    }
+    if (freqSplitIdx === -1 && tokens.length >= 2) {
+      const lastKey = tokens[tokens.length - 1].replace(/[.,]$/, '').toLowerCase();
+      if (FREQ_ALIASES[lastKey]) freqSplitIdx = tokens.length - 1;
+    }
+    if (freqSplitIdx !== -1) {
+      name = tokens.slice(0, freqSplitIdx).join(' ');
+      dosage = '';
+      rest = tokens.slice(freqSplitIdx);
+    } else {
+      name = tokens.join(' ');
+      dosage = '';
+      rest = [];
+    }
   } else {
     name = tokens.slice(0, dosageIdx).join(' ');
     dosage = tokens[dosageIdx];
