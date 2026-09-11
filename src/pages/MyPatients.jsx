@@ -65,6 +65,29 @@ export default function MyPatients() {
     }
   }
 
+  const [clearingAll, setClearingAll] = useState(false);
+
+  // One-shot cleanup for allocations that piled up before discharge/transfer
+  // started clearing them automatically (or from covering another ward) —
+  // deletes every allocation doc currently shown, not just the ones from
+  // this session, since loadAllocations() already pulled the full list for
+  // this uid regardless of ward.
+  async function clearAllAllocations() {
+    if (allocations.length === 0) return;
+    if (!confirm('Remove all ' + allocations.length + ' allocated patient(s) from your list? You\u2019ll stop receiving their due-dose/glucose alerts until you allocate yourself again.')) return;
+    setClearingAll(true);
+    const toRemove = allocations;
+    try {
+      await Promise.all(toRemove.map(a => deleteDoc(doc(db, 'allocations', a.id))));
+      setAllocations((prev) => prev.filter(a => !toRemove.some(r => r.id === a.id)));
+    } catch (e) {
+      alert("Couldn't clear all: " + (e.code || e.message || 'unknown error') + ' — some may remain.');
+      loadAllocations(); // re-sync with whatever actually got deleted
+    } finally {
+      setClearingAll(false);
+    }
+  }
+
   return (
     <>
       <Topbar brand="My Patients">
@@ -73,7 +96,14 @@ export default function MyPatients() {
 
       <div className="container">
         <div className="card-box">
-          <h2 style={{ marginTop: 0 }}>My Allocated Patients</h2>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
+            <h2 style={{ marginTop: 0 }}>My Allocated Patients</h2>
+            {status === 'ready' && allocations.length > 0 && (
+              <button className="btn btn-secondary" style={{ padding: '5px 10px', fontSize: 12, whiteSpace: 'nowrap' }} disabled={clearingAll} onClick={clearAllAllocations}>
+                {clearingAll ? 'Clearing…' : 'Clear All'}
+              </button>
+            )}
+          </div>
           <div style={{ fontSize: 13, color: '#6b7280', marginBottom: 4 }}>
             Patients you've allocated to yourself from the Search page. Tap a patient to open their chart, or remove them once you're done.
           </div>

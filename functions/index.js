@@ -24,7 +24,7 @@
 
 const { onSchedule } = require('firebase-functions/v2/scheduler');
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
-const { onDocumentCreated } = require('firebase-functions/v2/firestore');
+const { onDocumentCreated, onDocumentUpdated } = require('firebase-functions/v2/firestore');
 const admin = require('firebase-admin');
 
 admin.initializeApp();
@@ -221,17 +221,33 @@ async function getTokenEntries(usersSnap) {
 
 // Mirrors src/pages/Patient.jsx's "Allocate to Me" — allocations/{alloc_uid_patientId}
 // docs with { uid, patientId } — and src/pages/MyPatients.jsx which reads them
-// back. Returns patientId -> Set(uid) so a due-dose/glucose alert for a given
-// patient can be routed only to the nurse(s) that patient is actually
-// allocated to.
+// back. Also reads allocations_mhl, the MHL Svelte app's own collection for
+// the exact same flow (see MHL's src/routes/patient/+page.svelte —
+// allocationDocRef uses "allocations_mhl" instead of "allocations", kept
+// separate the same way wardMhl/pendingTransferMhl are kept separate from
+// 68's ward/pendingTransfer on the shared /patients doc — see wardCensus.js).
+// Both hospitals' apps share these same scheduled dose/glucose checks, so a
+// patient allocated only through MHL still needs to resolve to a real
+// nurse here — without this, every MHL-only allocation looked
+// "unallocated" to tokensForPatient and fell back to admin/subadmin
+// devices for EVERY MHL patient, regardless of ward. Returns
+// patientId -> Set(uid), merging both collections since in principle a
+// patient could (incorrectly) be allocated from both apps at once.
 async function loadAllocatedUidsByPatient() {
-  const snap = await db.collection('allocations').get();
+  const [snap, snapMhl] = await Promise.all([
+    db.collection('allocations').get(),
+    db.collection('allocations_mhl').get()
+  ]);
   const map = {}; // patientId -> Set(uid)
-  snap.forEach((d) => {
-    const data = d.data() || {};
-    if (!data.uid || !data.patientId) return;
-    (map[data.patientId] = map[data.patientId] || new Set()).add(data.uid);
-  });
+  function ingest(s) {
+    s.forEach((d) => {
+      const data = d.data() || {};
+      if (!data.uid || !data.patientId) return;
+      (map[data.patientId] = map[data.patientId] || new Set()).add(data.uid);
+    });
+  }
+  ingest(snap);
+  ingest(snapMhl);
   return map;
 }
 
@@ -845,3 +861,62 @@ exports.deleteUserAccount = onCall({ region: 'us-central1' }, async (request) =>
 
   return { success: true };
 });
+
+// Server-side backstop for allocation cleanup on discharge/refer/transfer.
+// Both apps' client code (68's patientAdminStatus.js/DrugCourseChart.jsx,
+// MHL's Svelte equivalent) already deletes the ACTING nurse's own
+// allocation doc as soon as they apply the status change — but Firestore
+// rules only let a nurse delete her own allocation doc (`resource.data.uid
+// == request.auth.uid` on both allocations/ and allocations_mhl/, see
+// firestore.rules), so if a DIFFERENT nurse had allocated themselves to
+// the same patient earlier (e.g. the previous shift, or someone covering
+// another ward), that doc can't be cleaned up client-side — it would sit
+// there, stale, still routing this patient's due-dose/glucose alerts to a
+// nurse who's no longer involved. Running with Admin SDK privileges here
+// bypasses that rule to clean up every allocation for the patient, from
+// either hospital's collection, regardless of who created it.
+//
+// Fires on any /patients/{patientId} update and inspects before/after
+// rather than requiring a specific caller, so it's a backstop against ANY
+// path that ends a patient's admission or moves their ward — not just the
+// two client call sites that already know to clean up after themselves.
+exports.clearAllocationsOnPatientStatusChange = onDocumentUpdated(
+  { document: 'patients/{patientId}', region: 'us-central1' },
+  async (event) => {
+    const before = event.data.before.data() || {};
+    const after = event.data.after.data() || {};
+    const patientId = event.params.patientId;
+
+    // Discharge/refer: dischargeStatusAt is set fresh (as a Timestamp) the
+    // moment applyPatientStatus/applyStatusAction archives the admission —
+    // comparing the millis (not just truthiness) means a later re-tag with
+    // the exact same status/timestamp value can't be mistaken for "no
+    // change" and skipped, though in practice each discharge/refer always
+    // gets its own serverTimestamp() so this is mostly belt-and-braces.
+    const beforeDischargeMs = before.dischargeStatusAt && before.dischargeStatusAt.toMillis ? before.dischargeStatusAt.toMillis() : 0;
+    const afterDischargeMs = after.dischargeStatusAt && after.dischargeStatusAt.toMillis ? after.dischargeStatusAt.toMillis() : 0;
+    const justDischarged = !!after.dischargeStatus && afterDischargeMs !== beforeDischargeMs;
+
+    // Transfer: either hospital's pendingTransfer(Mhl) field gets freshly
+    // set with a new transferredAt the moment the sending ward starts the
+    // transfer (see applyPatientStatus's 'transferred' branch / its MHL
+    // equivalent) — the admission carries on, just on a different ward, so
+    // the sending ward's claim on this patient no longer applies.
+    function transferJustStarted(field) {
+      const b = before[field] && before[field].transferredAt && before[field].transferredAt.toMillis ? before[field].transferredAt.toMillis() : 0;
+      const a = after[field] && after[field].transferredAt && after[field].transferredAt.toMillis ? after[field].transferredAt.toMillis() : 0;
+      return !!(after[field] && a && a !== b);
+    }
+
+    if (!justDischarged && !transferJustStarted('pendingTransfer') && !transferJustStarted('pendingTransferMhl')) return;
+
+    const [snap, snapMhl] = await Promise.all([
+      db.collection('allocations').where('patientId', '==', patientId).get(),
+      db.collection('allocations_mhl').where('patientId', '==', patientId).get()
+    ]);
+    const refs = [...snap.docs, ...snapMhl.docs].map((d) => d.ref);
+    if (refs.length === 0) return;
+    await Promise.all(refs.map((r) => r.delete()));
+    console.log(`Cleared ${refs.length} allocation(s) for patient ${patientId} after status change.`);
+  }
+);
