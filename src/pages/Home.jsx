@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { collection, getDocs, getDoc, doc, setDoc, serverTimestamp } from "firebase/firestore";
+import { collection, getDoc, doc, setDoc, serverTimestamp } from "firebase/firestore";
 import { db } from "../firebase.js";
 import { useAuth } from "../contexts/AuthContext.jsx";
 import { useExitOnDoubleBack } from "../hooks/useExitOnDoubleBack.js";
@@ -10,10 +10,12 @@ import PatientForm from "../components/PatientForm.jsx";
 import NewPatientTransfersModal from "../components/NewPatientTransfersModal.jsx";
 import { parsePatientFields } from "../lib/patientParse.js";
 import { generateCsvTemplate, parsePatientCsv } from "../lib/patientCsv.js";
-import { pendingTransfersFor } from "../lib/wardTransfer.js";
 import { wardHeadcount } from "../lib/wardCensus.js";
 import { reportWardKeysForPatientWard, patientWardAndBedTypeForReportKey } from "../lib/wardNameMatch.js";
 import { WARDS } from "../lib/nurses-report-common.js";
+import { loadWardPatients, loadIncomingTransfers, searchPatients, findPatientByEmrExact } from "../lib/patientDirectory.js";
+
+function normEmr(emr) { return (emr || '').trim().toLowerCase(); }
 
 const EMPTY_FORM = { name: '', emr: '', diagnosis: '', ward: '', pedBedType: '', age: '', hospNo: '', admissionDate: '', allergies: '', insurance: '' };
 
@@ -29,7 +31,18 @@ export default function Home() {
   const searchInputRef = useRef(null);
 
   const [searchQuery, setSearchQuery] = useState('');
-  const [allPatients, setAllPatients] = useState(null); // null = still loading
+  // Just this ward's patients (see patientDirectory.js) — replaces what
+  // used to be every patient in the hospital. null = still loading.
+  const [myWardPatients, setMyWardPatients] = useState(null);
+  const [incomingTransfers, setIncomingTransfers] = useState([]);
+  // Cross-ward name/EMR search results — null when the search box is
+  // empty (the patient list below falls back to myWardPatients then).
+  const [searchResults, setSearchResults] = useState(null);
+  const [searching, setSearching] = useState(false);
+  // EMR -> matched existing patient, resolved once per parsed bulk-upload
+  // file (see handleBulkFile) instead of re-querying per row on every
+  // render or during the actual save.
+  const [bulkEmrMatches, setBulkEmrMatches] = useState(new Map());
 
   const [showNewForm, setShowNewForm] = useState(false);
   const [newForm, setNewForm] = useState(EMPTY_FORM);
@@ -54,7 +67,7 @@ export default function Home() {
       searchInputRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
       searchInputRef.current.focus();
     }
-    loadAllPatients();
+    loadWardData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -70,10 +83,10 @@ export default function Home() {
     const pollTimer = setInterval(() => {
       if (document.visibilityState !== 'visible') return;
       if (showNewForm || showBulkUpload || showEmrPaste) return;
-      loadAllPatients(true);
+      loadWardData(true);
     }, POLL_MS);
     const onVisible = () => {
-      if (document.visibilityState === 'visible') loadAllPatients(true);
+      if (document.visibilityState === 'visible') loadWardData(true);
     };
     document.addEventListener('visibilitychange', onVisible);
     return () => {
@@ -83,15 +96,39 @@ export default function Home() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showNewForm, showBulkUpload, showEmrPaste]);
 
-  async function loadAllPatients(force) {
-    if (allPatients && !force) return allPatients;
-    const snap = await getDocs(collection(db, 'patients'));
-    const list = [];
-    snap.forEach(d => list.push({ id: d.id, ...d.data() }));
-    list.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
-    setAllPatients(list);
-    return list;
+  // Replaces the old getDocs(collection(db,'patients')) full-hospital
+  // scan with two targeted queries scoped to just this nurse's ward (see
+  // patientDirectory.js) — the day-to-day view doesn't need to touch any
+  // other ward's patients at all, so this stays fast no matter how large
+  // the hospital's total patient count grows. A profile with no ward set
+  // (e.g. an admin account) now sees an empty list here rather than
+  // everyone — the search box below is the way to find a specific
+  // patient in that case.
+  async function loadWardData(force) {
+    if (myWardPatients && !force) return;
+    const myWard = profile?.ward || '';
+    const [wardList, incoming] = await Promise.all([
+      loadWardPatients(myWard),
+      loadIncomingTransfers(myWard)
+    ]);
+    setMyWardPatients(wardList);
+    setIncomingTransfers(incoming);
   }
+
+  // Debounced cross-ward search — fires a targeted, indexed query (see
+  // searchPatients in patientDirectory.js) instead of filtering an
+  // already-downloaded full patient list. Clearing the box drops back to
+  // the myWardPatients view above.
+  useEffect(() => {
+    const term = searchQuery.trim();
+    if (!term) { setSearchResults(null); setSearching(false); return; }
+    setSearching(true);
+    const t = setTimeout(() => {
+      searchPatients(term).then(setSearchResults).finally(() => setSearching(false));
+    }, 300);
+    return () => clearTimeout(t);
+  }, [searchQuery]);
+
 
   function openPatient(p) {
     navigate('/patient?patient=' + p.id);
@@ -129,6 +166,7 @@ export default function Home() {
     const diagnosis = newForm.diagnosis.trim();
     const data = {
       name, emr,
+      nameLower: name.toLowerCase(), emrLower: emr.toLowerCase(),
       diagnosis, ward: newForm.ward.trim(),
       pedBedType: newForm.ward.trim() === 'PEDIATRIC/NICU WARD' ? (newForm.pedBedType || '') : '',
       age: newForm.age.trim(),
@@ -155,11 +193,14 @@ export default function Home() {
       console.warn('Patient write queued locally; will retry once back online:', e);
     });
 
-    // Update the in-memory list directly instead of re-fetching the whole
-    // patients collection — that fetch isn't needed (we already have the
-    // new patient's data) and, like the writes above, is best avoided here
-    // so this flow doesn't depend on a round trip at all while offline.
-    setAllPatients((prev) => prev ? [...prev, { id: ref.id, ...data }] : [{ id: ref.id, ...data }]);
+    // Update the in-memory ward list directly instead of re-querying —
+    // we already have the new patient's data, so this needs no round
+    // trip while offline. Only shown here if it lands on the ward
+    // currently in view; otherwise it'll turn up next time that ward's
+    // list loads.
+    if (data.ward === (profile?.ward || '')) {
+      setMyWardPatients((prev) => prev ? [...prev, { id: ref.id, ...data }] : [{ id: ref.id, ...data }]);
+    }
     setShowNewForm(false);
     setNewForm(EMPTY_FORM);
     clearEmrPaste();
@@ -186,6 +227,7 @@ export default function Home() {
     setBulkFileName(file.name);
     setBulkMsg('');
     setBulkRows(null);
+    setBulkEmrMatches(new Map());
     const reader = new FileReader();
     reader.onload = () => {
       const { headerOk, rows } = parsePatientCsv(String(reader.result || ''));
@@ -205,20 +247,19 @@ export default function Home() {
         rows.length + ' row(s) found' +
         (errorCount ? ', ' + errorCount + ' with errors \u2014 fix or they\u2019ll be skipped.' : ', all look good.')
       );
+      // Resolve every row's EMR against Firestore once, up front — one
+      // indexed lookup per row instead of the old in-memory scan of a
+      // fully-downloaded patient list. Both the preview table below and
+      // saveBulkPatients read from this same resolved map, so a given
+      // EMR is only looked up once per file, not once per render.
+      const validRows = rows.filter(r => r.errors.length === 0 && r.data.emr);
+      Promise.all(validRows.map((r) => findPatientByEmrExact(r.data.emr).then((p) => [normEmr(r.data.emr), p])))
+        .then((pairs) => setBulkEmrMatches(new Map(pairs.filter(([, p]) => p))));
     };
     reader.onerror = () => setBulkMsg('Could not read that file.');
     reader.readAsText(file);
   }
 
-  // Matches an "add drugs to an existing patient" CSV row against a patient
-  // already in Firestore, purely by EMR Number (case/whitespace-insensitive)
-  // — the same identifier the admin already used the first time they
-  // uploaded that patient.
-  function findExistingPatientByEmr(emr) {
-    const norm = (emr || '').trim().toLowerCase();
-    if (!norm) return null;
-    return (allPatients || []).find(p => (p.emr || '').trim().toLowerCase() === norm) || null;
-  }
 
   // Adds a CSV row's parsed drugs onto a patient's Drug Course Chart —
   // creating the chart doc if the patient doesn't have one yet, or
@@ -254,7 +295,7 @@ export default function Home() {
     const created = [];
     let newCount = 0, updatedCount = 0, drugCount = 0;
     for (const r of validRows) {
-      const existing = findExistingPatientByEmr(r.data.emr);
+      const existing = bulkEmrMatches.get(normEmr(r.data.emr));
       let patientId;
       if (existing) {
         // Same EMR Number as a patient already on file — recognized as the
@@ -265,7 +306,9 @@ export default function Home() {
         updatedCount++;
       } else {
         const data = {
-          name: r.data.name, emr: r.data.emr, diagnosis: r.data.diagnosis,
+          name: r.data.name, emr: r.data.emr,
+          nameLower: (r.data.name || '').trim().toLowerCase(), emrLower: (r.data.emr || '').trim().toLowerCase(),
+          diagnosis: r.data.diagnosis,
           ward: r.data.ward, pedBedType: r.data.ward === 'PEDIATRIC/NICU WARD' ? r.data.pedBedType : '',
           age: r.data.age, hospNo: r.data.hospNo, admissionDate: r.data.admissionDate,
           allergies: r.data.allergies, insurance: r.data.insurance,
@@ -288,7 +331,12 @@ export default function Home() {
         drugCount += await addDrugsToChart(patientId, r.data.drugsParsed);
       }
     }
-    setAllPatients((prev) => prev ? [...prev, ...created] : created);
+    // Only the ones landing on the ward currently in view need adding to
+    // myWardPatients directly — the rest will show up next time that
+    // ward's own list loads.
+    const myWard = profile?.ward || '';
+    const onMyWard = created.filter((p) => p.ward === myWard);
+    if (onMyWard.length) setMyWardPatients((prev) => prev ? [...prev, ...onMyWard] : onMyWard);
     setBulkSaving(false);
     setBulkMsg(
       newCount + ' new patient(s) created, ' + updatedCount + ' existing patient(s) matched by EMR' +
@@ -307,18 +355,14 @@ export default function Home() {
 
   const q = searchQuery.trim().toLowerCase();
   const myWard = profile?.ward || '';
-  // Patients mid-transfer (pendingTransfer set) are held out of every
-  // normal ward list — they only show up in the receiving ward's "New
-  // Patient" queue below until a nurse there accepts or rejects them.
-  // The search box is a general patient lookup, not a ward-scoped one: once
-  // the nurse types something, we search across every ward. With no query,
-  // we fall back to the normal "my ward" list.
-  const visiblePatients = (allPatients || []).filter(p =>
-    !p.pendingTransfer &&
-    (q
-      ? ((p.emr || '').toLowerCase().includes(q) || (p.name || '').toLowerCase().includes(q))
-      : (!myWard || p.ward === myWard))
-  );
+  // Patients mid-transfer are excluded already, inside patientDirectory.js
+  // (both loadWardPatients and searchPatients filter them out) — they
+  // only show up in the receiving ward's "New Patient" queue below until
+  // a nurse there accepts or rejects them. With a search query, the list
+  // is searchResults (cross-ward, see the debounced effect above);
+  // otherwise it's this ward's own list.
+  const visiblePatients = q ? (searchResults || []) : (myWardPatients || []);
+  const patientsLoaded = q ? searchResults !== null : myWardPatients !== null;
   // The count shown next to the heading. Where myWard has a matching
   // nurse-report ward (see reportWardKeysForPatientWard), it's that
   // ward's live Occ from today's Shift Statistics report — a split ward
@@ -338,16 +382,17 @@ export default function Home() {
   // matches that key's Bed/Cot side (see
   // patientWardAndBedTypeForReportKey) — patients with no pedBedType set
   // yet aren't counted on either side here, but still show up in the
-  // "Bed/Cot not set" group in the list below.
+  // "Bed/Cot not set" group in the list below. myWardPatients is already
+  // scoped to this ward (see loadWardData above); wardHeadcount's own
+  // ward filter here is just a no-op safety net.
   const wardBreakdown = reportWardKeys.map((k) => {
     const info = patientWardAndBedTypeForReportKey(k);
-    const count = wardHeadcount(allPatients, myWard, info?.bedType);
+    const count = wardHeadcount(myWardPatients, myWard, info?.bedType);
     return { key: k, bedType: info?.bedType || null, count };
   });
   const wardPatientCount = reportWardKeys.length
     ? wardBreakdown.reduce((sum, x) => sum + x.count, 0)
-    : wardHeadcount(allPatients, myWard);
-  const incomingTransfers = pendingTransfersFor(allPatients, myWard);
+    : wardHeadcount(myWardPatients, myWard);
   // Grouped view of the patient list for a split ward — Bed / Cot
   // sections plus an "unset" bucket, instead of one flat list, so the
   // list matches the per-key badges above it. Only makes sense for the
@@ -448,7 +493,7 @@ export default function Home() {
                           {r.data.drugsParsed && r.data.drugsParsed.length
                             ? r.data.drugsParsed.length + ' drug(s)'
                             : '—'}
-                          {findExistingPatientByEmr(r.data.emr) && (
+                          {bulkEmrMatches.has(normEmr(r.data.emr)) && (
                             <div style={{ color: '#2563eb' }}>existing patient — drugs only</div>
                           )}
                         </td>
@@ -531,14 +576,14 @@ export default function Home() {
             </div>
           )}
           <div className="search-results">
-            {allPatients === null && 'Loading patients…'}
-            {allPatients && visiblePatients.length === 0 && (
+            {!patientsLoaded && (searching ? 'Searching…' : 'Loading patients…')}
+            {patientsLoaded && visiblePatients.length === 0 && (
               <div className="error-msg">
                 {q ? 'No patient matches that search.' :
                   (myWard ? 'No patients on ' + myWard + ' yet. Use "+ New Patient" to register one.' : 'No patients registered yet. Use "+ New Patient" to register one.')}
               </div>
             )}
-            {allPatients && visiblePatients.length > 0 && pedGroups && (
+            {patientsLoaded && visiblePatients.length > 0 && pedGroups && (
               <>
                 {pedGroups.groups.map((g) => (
                   <div key={g.key} style={{ marginBottom: 10 }}>
@@ -567,7 +612,7 @@ export default function Home() {
                 )}
               </>
             )}
-            {allPatients && visiblePatients.length > 0 && !pedGroups && visiblePatients.map(p => (
+            {patientsLoaded && visiblePatients.length > 0 && !pedGroups && visiblePatients.map(p => (
               <div key={p.id} className="search-result-item" onClick={() => openPatient(p)}>
                 <span><b>{p.name || 'Unnamed'}</b>{'. '}EMR: {p.emr || 'N/A'}{q && p.ward ? '. Ward: ' + p.ward : ''}</span>
                 <span>{p.diagnosis || ''}</span>
@@ -582,7 +627,7 @@ export default function Home() {
           ward={myWard}
           transfers={incomingTransfers}
           onClose={() => setShowTransfers(false)}
-          onResolved={() => loadAllPatients(true)}
+          onResolved={() => loadWardData(true)}
         />
       )}
 

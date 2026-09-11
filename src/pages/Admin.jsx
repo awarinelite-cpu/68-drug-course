@@ -8,6 +8,7 @@ import { app, db, firebaseConfig } from "../firebase.js";
 import { useAuth } from "../contexts/AuthContext.jsx";
 import { useGoBack } from "../hooks/useGoBack.js";
 import { downloadFullBackup } from "../lib/export.js";
+import { rebuildSearchIndex } from "../lib/patientDirectory.js";
 import { avatarMarkup } from "../lib/avatar.js";
 import {
   SOUND_OPTIONS, APPEARANCE_OPTIONS, REPEAT_OPTIONS, ALL_FREQUENCIES, GLUCOSE_INTERVAL_OPTIONS,
@@ -65,6 +66,9 @@ export default function Admin() {
   const [backupRunning, setBackupRunning] = useState(false);
   const [backupStatus, setBackupStatus] = useState('');
 
+  const [reindexRunning, setReindexRunning] = useState(false);
+  const [reindexStatus, setReindexStatus] = useState('');
+
   useEffect(() => {
     loadUsers();
     loadPatients();
@@ -108,6 +112,29 @@ export default function Admin() {
       setBackupStatus('Backup failed: ' + (e.message || e.code || 'unknown error'));
     } finally {
       setBackupRunning(false);
+    }
+  }
+
+  // One-time backfill for the Home page's search box (see
+  // patientDirectory.js) — any patient record created before this feature
+  // shipped is missing the nameLower/emrLower fields the search's indexed
+  // "starts with" queries rely on, so those older records won't turn up
+  // in a search until this has run once. Safe to run again later (it
+  // only touches records still missing the fields, e.g. after restoring
+  // an old backup), and doesn't affect the ordinary myWard patient list,
+  // which never needed these fields.
+  async function runReindex() {
+    setReindexRunning(true);
+    setReindexStatus('Scanning patient records…');
+    try {
+      const updated = await rebuildSearchIndex();
+      setReindexStatus(updated
+        ? 'Done — ' + updated + ' older patient record(s) are now searchable by name/EMR.'
+        : 'Done — every patient record was already up to date.');
+    } catch (e) {
+      setReindexStatus('Reindex failed: ' + (e.message || e.code || 'unknown error'));
+    } finally {
+      setReindexRunning(false);
     }
   }
 
@@ -437,6 +464,12 @@ export default function Admin() {
           </p>
           <button className="btn btn-primary" disabled={backupRunning} onClick={runBackup}>Download Full Backup (JSON)</button>
           <div style={{ fontSize: 12, color: '#555', marginTop: 8 }}>{backupStatus}</div>
+          <button className="btn btn-secondary" style={{ marginTop: 12 }} disabled={reindexRunning} onClick={runReindex}>
+            {reindexRunning ? 'Rebuilding search index…' : 'Rebuild Patient Search Index'}
+          </button>
+          <div style={{ fontSize: 12, color: '#555', marginTop: 8 }}>
+            {reindexStatus || 'Run this once after updating, so older patient records show up in the Home page search box.'}
+          </div>
         </div>
       </div>
 
