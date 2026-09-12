@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { signInWithEmailAndPassword, sendPasswordResetEmail } from "firebase/auth";
 import { auth } from "../firebase.js";
@@ -13,6 +13,8 @@ function friendlyError(e) {
 }
 
 export default function Login() {
+  const emailRef = useRef(null);
+  const passwordRef = useRef(null);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [msg, setMsg] = useState(null); // { type: 'error'|'info', text }
@@ -20,10 +22,13 @@ export default function Login() {
 
   async function doLogin() {
     setMsg(null);
-    const em = email.trim();
-    if (!em || !password) { setMsg({ type: 'error', text: 'Enter your email and password.' }); return; }
+    // Fall back to the actual DOM value in case the browser autofilled
+    // the field without firing React's onChange (state would still be empty).
+    const em = (email || emailRef.current?.value || '').trim();
+    const pw = password || passwordRef.current?.value || '';
+    if (!em || !pw) { setMsg({ type: 'error', text: 'Enter your email and password.' }); return; }
     try {
-      await signInWithEmailAndPassword(auth, em, password);
+      await signInWithEmailAndPassword(auth, em, pw);
       navigate('/');
     } catch (e) {
       setMsg({ type: 'error', text: friendlyError(e) });
@@ -31,7 +36,7 @@ export default function Login() {
   }
 
   async function doReset() {
-    const em = email.trim();
+    const em = (email || emailRef.current?.value || '').trim();
     if (!em) { setMsg({ type: 'error', text: 'Enter your email above first, then click "Forgot password?".' }); return; }
     try {
       await sendPasswordResetEmail(auth, em);
@@ -50,12 +55,12 @@ export default function Login() {
         <div className="field">
           <label>Email</label>
           <input type="email" placeholder="name@example.com" autoComplete="username"
-            value={email} onChange={(e) => setEmail(e.target.value)} />
+            ref={emailRef} value={email} onChange={(e) => setEmail(e.target.value)} />
         </div>
         <div className="field">
           <label>Password</label>
           <input type="password" placeholder="Password" autoComplete="current-password"
-            value={password} onChange={(e) => setPassword(e.target.value)}
+            ref={passwordRef} value={password} onChange={(e) => setPassword(e.target.value)}
             onKeyDown={(e) => { if (e.key === 'Enter') doLogin(); }} />
         </div>
         <button className="btn btn-primary" style={{ width: '100%' }} onClick={doLogin}>Log In</button>
