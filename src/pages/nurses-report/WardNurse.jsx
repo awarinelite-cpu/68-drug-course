@@ -1191,6 +1191,21 @@ function MergedWardReportPanel({ group, isAdmin, profile, user, navigate }) {
   const bothLoaded = hooks.every((h) => h.wardDoc);
   const mergedDemographics = group.demographicsVariant === 'merged';
 
+  // Same quick lookup as WardPanelRest's own Previous Occ card — reads off
+  // hA's wardPatientOptions since the Patients section below (rendered via
+  // WardPanelRest with h={hA}) is always hA's, regardless of which member
+  // ward the write-ups actually belong to.
+  const [quickLookupId, setQuickLookupId] = useState('');
+  const quickLookupRecord = (hA.wardPatientOptions || []).find((o) => o.id === quickLookupId);
+  let quickLookupTag = null;
+  if (quickLookupRecord) {
+    quickLookupTag = quickLookupRecord.dischargeStatus
+      ? (quickLookupRecord.dischargeStatus === 'TRANS OUT' ? 'TRANS OUT' : quickLookupRecord.dischargeStatus === 'DEATH' ? 'Death' : 'Discharged')
+      : quickLookupRecord.admissionTag
+        ? (ADMISSION_TAG_LABEL[quickLookupRecord.admissionTag] || quickLookupRecord.admissionTag)
+        : 'Active \u2014 no status tag';
+  }
+
   async function saveBoth() { await Promise.all([hA.saveReport(), hB.saveReport()]); }
   async function submitBoth() { await Promise.all([hA.submitReport(), hB.submitReport()]); }
 
@@ -1212,6 +1227,17 @@ function MergedWardReportPanel({ group, isAdmin, profile, user, navigate }) {
                 <input type="number" inputMode="numeric" disabled={!h.editable} value={h.wardDoc.startOcc} onChange={(e) => h.updateStartOcc(e.target.value)} />
               </div>
             ))}
+            {hA.wardPatientOptions && hA.wardPatientOptions.length > 0 && (
+              <div className="patient-field" style={{ minWidth: 220 }}>
+                <label>Check a patient's status:</label>
+                <WardPatientPicker value={quickLookupId} options={hA.wardPatientOptions} onSelect={setQuickLookupId} />
+                {quickLookupTag && (
+                  <div style={{ fontSize: 12, marginTop: 4, fontWeight: 'bold', color: quickLookupRecord.dischargeStatus ? '#dc2626' : quickLookupRecord.admissionTag ? '#2563eb' : '#6b7280' }}>
+                    {quickLookupTag}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
           <div className="table-wrap">
             <MergedShiftTable panels={hooks.map((h) => ({
