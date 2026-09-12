@@ -27,6 +27,10 @@ export default function Login() {
   const [msg, setMsg] = useState(null); // { type: 'error'|'info', text }
   const navigate = useNavigate();
 
+  // No Enter-to-submit on the password field anymore, and the button only
+  // reacts to e.isTrusted clicks (a real tap/click, never a script- or
+  // autofill-simulated one). Login now only ever fires from an explicit,
+  // genuine press of this button.
   async function doLogin() {
     const em = (emailRef.current?.value || '').trim();
     const pw = passwordRef.current?.value || '';
@@ -65,10 +69,9 @@ export default function Login() {
         <div className="field">
           <label>Password</label>
           <input type="password" placeholder="Password" autoComplete="current-password"
-            ref={passwordRef} defaultValue=""
-            onKeyDown={(e) => { if (e.key === 'Enter') doLogin(); }} />
+            ref={passwordRef} defaultValue="" />
         </div>
-        <button className="btn btn-primary" style={{ width: '100%' }} onClick={doLogin}>Log In</button>
+        <button className="btn btn-primary" style={{ width: '100%' }} onClick={(e) => { if (e.isTrusted) doLogin(); }}>Log In</button>
 
         <div style={{ textAlign: 'center', marginTop: 12 }}>
           <a href="#" onClick={(e) => { e.preventDefault(); doReset(); }} style={{ fontSize: 13, color: '#2563eb' }}>Forgot password?</a>
