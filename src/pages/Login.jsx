@@ -13,23 +13,23 @@ function friendlyError(e) {
 }
 
 export default function Login() {
+  // Deliberately UNCONTROLLED: these two inputs are not bound to React
+  // state via `value`. Browser autofill / password managers set the DOM
+  // value directly without always firing a React-visible change event, and
+  // a controlled input gets forced back to its (still-empty) state on the
+  // very next render for ANY reason — clicking Login, but also anything
+  // else in the tree re-rendering (auth listener, offline banner, etc).
+  // That's what was wiping the fields before the user even touched the
+  // button. Reading straight from the DOM via refs at submit time sidesteps
+  // the whole class of bug: the input is always the source of truth.
   const emailRef = useRef(null);
   const passwordRef = useRef(null);
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
   const [msg, setMsg] = useState(null); // { type: 'error'|'info', text }
   const navigate = useNavigate();
 
   async function doLogin() {
-    // Fall back to the actual DOM value in case the browser autofilled
-    // the field without firing React's onChange (state would still be empty).
-    // Sync state to it FIRST, before any state update triggers a re-render —
-    // otherwise the very next render forces the controlled input back to
-    // the (still empty) old state and visibly wipes what the user sees.
-    const em = (email || emailRef.current?.value || '').trim();
-    const pw = password || passwordRef.current?.value || '';
-    if (em !== email) setEmail(em);
-    if (pw !== password) setPassword(pw);
+    const em = (emailRef.current?.value || '').trim();
+    const pw = passwordRef.current?.value || '';
     setMsg(null);
     if (!em || !pw) { setMsg({ type: 'error', text: 'Enter your email and password.' }); return; }
     try {
@@ -41,8 +41,7 @@ export default function Login() {
   }
 
   async function doReset() {
-    const em = (email || emailRef.current?.value || '').trim();
-    if (em !== email) setEmail(em);
+    const em = (emailRef.current?.value || '').trim();
     if (!em) { setMsg({ type: 'error', text: 'Enter your email above first, then click "Forgot password?".' }); return; }
     try {
       await sendPasswordResetEmail(auth, em);
@@ -61,12 +60,12 @@ export default function Login() {
         <div className="field">
           <label>Email</label>
           <input type="email" placeholder="name@example.com" autoComplete="username"
-            ref={emailRef} value={email} onChange={(e) => setEmail(e.target.value)} />
+            ref={emailRef} defaultValue="" />
         </div>
         <div className="field">
           <label>Password</label>
           <input type="password" placeholder="Password" autoComplete="current-password"
-            ref={passwordRef} value={password} onChange={(e) => setPassword(e.target.value)}
+            ref={passwordRef} defaultValue=""
             onKeyDown={(e) => { if (e.key === 'Enter') doLogin(); }} />
         </div>
         <button className="btn btn-primary" style={{ width: '100%' }} onClick={doLogin}>Log In</button>
