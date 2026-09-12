@@ -821,7 +821,7 @@ function WardPatientPicker({ value, options, onSelect }) {
                 <div className="ward-patient-picker-row" key={o.id} onClick={() => pick(o.id)}>
                   <div>
                     <span className={"ward-patient-picker-name" + (o.id === value ? ' is-selected' : '')}>
-                      {(o.name || 'Unnamed') + (o.emr ? ' (' + o.emr + ')' : '')}
+                      {(o.name || 'Unnamed') + (o.emr ? ' (' + o.emr + ')' : '')}{o.location ? ' \u2014 ' + o.location : ''}
                     </span>
                     {o.dischargeStatus ? (
                       <div className="ward-patient-picker-tag">{o.dischargeStatus === 'TRANS OUT' ? 'TRANS OUT' : o.dischargeStatus === 'DEATH' ? 'Death' : 'Discharged'}</div>
@@ -1191,12 +1191,21 @@ function MergedWardReportPanel({ group, isAdmin, profile, user, navigate }) {
   const bothLoaded = hooks.every((h) => h.wardDoc);
   const mergedDemographics = group.demographicsVariant === 'merged';
 
-  // Same quick lookup as WardPanelRest's own Previous Occ card — reads off
-  // hA's wardPatientOptions since the Patients section below (rendered via
-  // WardPanelRest with h={hA}) is always hA's, regardless of which member
-  // ward the write-ups actually belong to.
+  // Same idea as WardPanelRest's own Previous Occ card, but merges BOTH
+  // member wards' patients — unlike the "Select Patient" list further
+  // down (which stays hA-only, since every write-up saves under hA's
+  // doc), this is read-only lookup, so there's no reason to hide Cot
+  // patients from it. For Maternity, hB (Cots) never has real patient
+  // records (newborns aren't charted — see wardNameMatch.js), so this is
+  // effectively just hA's list there; for Paed, Bed and Cot are both real
+  // wards with their own patients, tagged here by member label so a nurse
+  // can tell which is which.
   const [quickLookupId, setQuickLookupId] = useState('');
-  const quickLookupRecord = (hA.wardPatientOptions || []).find((o) => o.id === quickLookupId);
+  const quickLookupOptions = [
+    ...(hA.wardPatientOptions || []).map((o) => ({ ...o, location: hA.w?.label })),
+    ...(hB.wardPatientOptions || []).map((o) => ({ ...o, location: hB.w?.label }))
+  ].sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+  const quickLookupRecord = quickLookupOptions.find((o) => o.id === quickLookupId);
   let quickLookupTag = null;
   if (quickLookupRecord) {
     quickLookupTag = quickLookupRecord.dischargeStatus
@@ -1227,13 +1236,13 @@ function MergedWardReportPanel({ group, isAdmin, profile, user, navigate }) {
                 <input type="number" inputMode="numeric" disabled={!h.editable} value={h.wardDoc.startOcc} onChange={(e) => h.updateStartOcc(e.target.value)} />
               </div>
             ))}
-            {hA.wardPatientOptions && hA.wardPatientOptions.length > 0 && (
+            {quickLookupOptions.length > 0 && (
               <div className="patient-field" style={{ minWidth: 220 }}>
                 <label>Check a patient's status:</label>
-                <WardPatientPicker value={quickLookupId} options={hA.wardPatientOptions} onSelect={setQuickLookupId} />
+                <WardPatientPicker value={quickLookupId} options={quickLookupOptions} onSelect={setQuickLookupId} />
                 {quickLookupTag && (
                   <div style={{ fontSize: 12, marginTop: 4, fontWeight: 'bold', color: quickLookupRecord.dischargeStatus ? '#dc2626' : quickLookupRecord.admissionTag ? '#2563eb' : '#6b7280' }}>
-                    {quickLookupTag}
+                    {quickLookupTag}{quickLookupRecord.location ? ' \u2014 ' + quickLookupRecord.location : ''}
                   </div>
                 )}
               </div>
