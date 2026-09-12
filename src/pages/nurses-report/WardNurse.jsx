@@ -824,7 +824,7 @@ function WardPatientPicker({ value, options, onSelect }) {
                       {(o.name || 'Unnamed') + (o.emr ? ' (' + o.emr + ')' : '')}
                     </span>
                     {o.dischargeStatus ? (
-                      <div className="ward-patient-picker-tag">{o.dischargeStatus === 'TRANS OUT' ? 'TRANS OUT' : 'Discharged'}</div>
+                      <div className="ward-patient-picker-tag">{o.dischargeStatus === 'TRANS OUT' ? 'TRANS OUT' : o.dischargeStatus === 'DEATH' ? 'Death' : 'Discharged'}</div>
                     ) : o.admissionTag ? (
                       <div className="ward-patient-picker-tag admission">{ADMISSION_TAG_LABEL[o.admissionTag] || o.admissionTag}</div>
                     ) : null}

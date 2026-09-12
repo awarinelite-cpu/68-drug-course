@@ -685,6 +685,7 @@ table.chart td input { width:100%; border:none; background:transparent; text-ali
 .badge-referred { background:var(--accent-purple); }
 .badge-transferred { background:#d97706; }
 .badge-discharged { background:var(--success); }
+.badge-died { background:#7f1d1d; }
 .empty-msg { color:#777; font-size: 16px; padding:20px; text-align:center; }
 
 /* --- Ward patient count / new-patient-transfer notification badges --- */

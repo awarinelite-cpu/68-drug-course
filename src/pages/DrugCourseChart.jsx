@@ -737,7 +737,7 @@ export default function DrugCourseChart() {
     // automatically, the moment the patient is actually discharged — never
     // typed in manually.
     let dischargeDate = fields.f_discharge;
-    if (reason === 'discharged' && !dischargeDate) {
+    if ((reason === 'discharged' || reason === 'died') && !dischargeDate) {
       dischargeDate = new Date().toISOString().slice(0, 10);
       setFields((f) => ({ ...f, f_discharge: dischargeDate }));
       latestRef.current.fields = { ...latestRef.current.fields, f_discharge: dischargeDate };
@@ -1079,6 +1079,7 @@ export default function DrugCourseChart() {
                 <option value="referred">Referred to another hospital</option>
                 <option value="transferred">Transferred to another ward</option>
                 <option value="discharged">Discharged</option>
+                <option value="died">Death</option>
               </select>
               {statusAction === 'transferred' && (
                 <select style={{ width: 'auto', minWidth: 220 }} value={transferWard} onChange={(e) => setTransferWard(e.target.value)}>

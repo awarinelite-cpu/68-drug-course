@@ -422,7 +422,8 @@ export const PATIENT_STATUS_OPTIONS = [
 // "referred to another hospital" here — there's no separate status for it.
 export const PATIENT_STATUS_ARCHIVE_REASON = {
   'DISCHARGE': 'discharged',
-  'TRANS OUT': 'referred'
+  'TRANS OUT': 'referred',
+  'DEATH': 'died'
 };
 
 function pad(n) { return String(n).padStart(2, '0'); }

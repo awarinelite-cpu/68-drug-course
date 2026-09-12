@@ -11,7 +11,7 @@ import { usePatientHeader } from "../hooks/usePatientHeader.js";
 import Topbar from "./Topbar.jsx";
 import PatientBanner from "./PatientBanner.jsx";
 
-const STATUS_LABELS = { referred: 'Referred to another hospital', transferred: 'Transferred to another ward', discharged: 'Discharged' };
+const STATUS_LABELS = { referred: 'Referred to another hospital', transferred: 'Transferred to another ward', discharged: 'Discharged', died: 'Death' };
 
 // columns entries support:
 //   { key, label, type }                 — normal entered field
