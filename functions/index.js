@@ -64,12 +64,37 @@ const WARDS = [
 // PRN (as-needed), and any custom free-text frequency are intentionally
 // skipped — there's no reliable interval to compute a "next due" from.
 const INTERVAL_HOURS = {
-  OD: 24, Mane: 24, Nocte: 24, HS: 24,
+  OD: 24, Mane: 24, Nocte: 24, AM: 24, PM: 24, HS: 24,
   BD: 12, TDS: 8, QDS: 6, QOD: 48,
   Q4H: 4, Q6H: 6, Q8H: 8, Q12H: 12,
   Weekly: 168,
   'STAT then Q4H': 4, 'STAT then Q6H': 6, 'STAT then Q8H': 8, 'STAT then Q12H': 12
 };
+
+// Open-ended "N times weekly" frequencies ("Twice Weekly", "Thrice Weekly",
+// "4x Weekly", ...) aren't fixed keys in INTERVAL_HOURS above since the
+// count is unbounded — mirrors parseWeeklyFrequency in
+// src/lib/drugChartHelpers.js (kept in sync by hand, same as INTERVAL_HOURS
+// itself, since that file is an ES module and this is a CommonJS Function).
+const WEEKLY_WORD_MULTIPLIERS = { once: 1, twice: 2, thrice: 3, four: 4, five: 5, six: 6, seven: 7 };
+function parseWeeklyFrequency(freqText) {
+  const t = (freqText || '').trim().toLowerCase().replace(/\s+/g, ' ');
+  if (!t) return null;
+  if (t === 'weekly') return 1;
+  const word = t.replace(/\s*weekly$/, '');
+  if (/ weekly$/.test(t) && WEEKLY_WORD_MULTIPLIERS[word]) return WEEKLY_WORD_MULTIPLIERS[word];
+  let m = t.match(/^(\d+)\s*(?:x|times)\s*weekly$/);
+  if (m) return parseInt(m[1], 10);
+  m = t.match(/^(\d+)\s*\/\s*week(?:ly)?$/);
+  if (m) return parseInt(m[1], 10);
+  return null;
+}
+function intervalHoursFor(frequency) {
+  const fixed = INTERVAL_HOURS[frequency];
+  if (fixed) return fixed;
+  const weeklyN = parseWeeklyFrequency(frequency);
+  return weeklyN ? (7 * 24) / weeklyN : null;
+}
 
 function toWardDate(dateStr, timeStr) {
   if (!dateStr || !timeStr) return null;
@@ -164,7 +189,7 @@ function lastGivenFor(drugIndex, chartRows) {
 function computeDueAt(drug, chartRows, drugIndex) {
   const lastGiven = lastGivenFor(drugIndex, chartRows);
   if (lastGiven) {
-    const intervalHours = INTERVAL_HOURS[drug.frequency];
+    const intervalHours = intervalHoursFor(drug.frequency);
     return new Date(lastGiven.getTime() + intervalHours * 3600 * 1000);
   }
   // Never administered yet — anchor to whichever of these is available.
@@ -312,7 +337,7 @@ exports.checkDueDrugs = onSchedule(
       let changed = false;
 
       drugs.forEach((drug, i) => {
-        if (!INTERVAL_HOURS[drug.frequency]) return; // STAT / PRN / custom text — not covered yet
+        if (!intervalHoursFor(drug.frequency)) return; // STAT / PRN / custom text — not covered yet
         if (!alarmSettings.frequencies.includes(drug.frequency)) return; // admin turned this frequency off
         if (drug.action && drug.action !== 'Ongoing') return; // discontinued/withheld/completed/other
 

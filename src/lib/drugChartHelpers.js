@@ -1,5 +1,5 @@
 export const ROUTE_OPTIONS = ['', 'Oral', 'IV', 'IM', 'SC', 'Sublingual', 'Topical', 'Rectal', 'Suppository', 'Inhalation', 'NG Tube', 'Other'];
-export const FREQ_OPTIONS = ['', 'OD', 'Daily', 'Mane', 'Nocte', 'HS', 'BD', 'TDS', 'Premeal TDS', 'QDS', 'QOD', 'STAT', 'STAT then Q4H', 'STAT then Q6H', 'STAT then Q8H', 'STAT then Q12H', 'PRN', 'Q4H', 'Q6H', '8hrly', 'Q8H', '12hrly', 'Q12H', 'Weekly', '0,12,24hr', 'Other'];
+export const FREQ_OPTIONS = ['', 'OD', 'Daily', 'Mane', 'Nocte', 'AM', 'PM', 'HS', 'BD', 'TDS', 'Premeal TDS', 'QDS', 'QOD', 'STAT', 'STAT then Q4H', 'STAT then Q6H', 'STAT then Q8H', 'STAT then Q12H', 'PRN', 'Q4H', 'Q6H', '8hrly', 'Q8H', '12hrly', 'Q12H', 'Weekly', 'Twice Weekly', 'Thrice Weekly', '0,12,24hr', 'Other'];
 export const ACTION_OPTIONS = ['', 'Ongoing', 'Completed', 'Discontinued', 'Withheld', 'Other'];
 export const STATUS_LABELS = { referred: 'Referred to another hospital', transferred: 'Transferred to another ward', discharged: 'Discharged', died: 'Death' };
 export const WARD_OPTIONS = [
@@ -37,7 +37,53 @@ export function defaultRow() {
 // push alert): next due = this drug's own last-administered time + its
 // frequency's interval, or its start/created time if never given yet. Kept
 // here too so a nurse can see it at a glance without waiting on a push.
-export const INTERVAL_HOURS = { OD: 24, Mane: 24, Nocte: 24, HS: 24, BD: 12, TDS: 8, QDS: 6, QOD: 48, Q4H: 4, Q6H: 6, Q8H: 8, Q12H: 12, Weekly: 168, 'STAT then Q4H': 4, 'STAT then Q6H': 6, 'STAT then Q8H': 8, 'STAT then Q12H': 12 };
+export const INTERVAL_HOURS = { OD: 24, Mane: 24, Nocte: 24, AM: 24, PM: 24, HS: 24, BD: 12, TDS: 8, QDS: 6, QOD: 48, Q4H: 4, Q6H: 6, Q8H: 8, Q12H: 12, Weekly: 168, 'STAT then Q4H': 4, 'STAT then Q6H': 6, 'STAT then Q8H': 8, 'STAT then Q12H': 12 };
+
+// --- "N times weekly" frequencies (Weekly, Twice Weekly, Thrice Weekly, ...) ---
+// An open-ended pattern rather than a fixed list, so any dose-count phrasing
+// a doctor writes — "weekly", "twice weekly", "thrice weekly", "4x weekly",
+// "5 times weekly", "2/week" — is recognized the same way, not just the
+// exact strings already in INTERVAL_HOURS/FREQ_ALIASES. Returns how many
+// times a week the drug is given, or null if the text isn't this pattern.
+const WEEKLY_WORD_MULTIPLIERS = { once: 1, twice: 2, thrice: 3, four: 4, five: 5, six: 6, seven: 7 };
+export function parseWeeklyFrequency(freqText) {
+  const t = (freqText || '').trim().toLowerCase().replace(/\s+/g, ' ');
+  if (!t) return null;
+  if (t === 'weekly') return 1;
+  if (WEEKLY_WORD_MULTIPLIERS[t.replace(/\s*weekly$/, '')] && / weekly$/.test(t)) {
+    return WEEKLY_WORD_MULTIPLIERS[t.replace(/\s*weekly$/, '')];
+  }
+  let m = t.match(/^(\d+)\s*(?:x|times)\s*weekly$/);
+  if (m) return parseInt(m[1], 10);
+  m = t.match(/^(\d+)\s*\/\s*week(?:ly)?$/);
+  if (m) return parseInt(m[1], 10);
+  return null;
+}
+
+// Canonical display text for a weekly dose-count, e.g. 2 -> "Twice Weekly".
+// Used to normalize whatever phrasing was typed/pasted into one consistent
+// stored value, the same way "dly"/"od"/"daily" all normalize to "OD".
+const WEEKLY_MULTIPLIER_LABEL = { 1: 'Weekly', 2: 'Twice Weekly', 3: 'Thrice Weekly' };
+export function weeklyFrequencyLabel(n) { return WEEKLY_MULTIPLIER_LABEL[n] || (n + 'x Weekly'); }
+
+function startOfWeek(date) {
+  const d = new Date(date); d.setHours(0, 0, 0, 0);
+  const day = d.getDay(); // 0 = Sunday .. 6 = Saturday
+  d.setDate(d.getDate() + ((day === 0 ? -6 : 1) - day)); // back up to Monday
+  return d;
+}
+
+// For a drug given more than once a week (e.g. EPO "Twice Weekly"), how
+// many of THIS Mon-Sun week's doses have already been given (or documented
+// as not given, same as the due-clock in lastDrugEventFor) — lets the
+// chart show a running "\u2705\u2705" tally distinct from the single next-due
+// time dueLabelFor already shows.
+export function weeklyDosesGivenThisWeek(chartRows, index, now) {
+  const weekStart = startOfWeek(now || new Date());
+  const weekEnd = new Date(weekStart.getTime() + 7 * 86400000);
+  const events = [...administrationTimesFor(chartRows, index), ...skipTimesFor(chartRows, index)];
+  return events.filter(t => t >= weekStart && t < weekEnd).length;
+}
 
 // "8hrly" and "Q8H" (likewise "12hrly"/"Q12H") are two labels a doctor
 // might pick for the exact same schedule — the frequency dropdown offers
@@ -161,7 +207,12 @@ export function parseDoseSequence(freqText) {
 }
 
 export function computeDueAt(d, i, chartRows) {
-  const intervalHours = INTERVAL_HOURS[normalizeFrequency(d.frequency)];
+  const freq = normalizeFrequency(d.frequency);
+  let intervalHours = INTERVAL_HOURS[freq];
+  if (!intervalHours) {
+    const weeklyN = parseWeeklyFrequency(freq);
+    if (weeklyN) intervalHours = (7 * 24) / weeklyN;
+  }
   if (!intervalHours) return null; // STAT / PRN / custom text — not covered
   if (d.action && d.action !== 'Ongoing') return null;
 
@@ -423,6 +474,7 @@ const FREQ_ALIASES = {
   stat: 'STAT', prn: 'PRN',
   mane: 'Mane', morning: 'Mane',
   nocte: 'Nocte', night: 'Nocte',
+  am: 'AM', pm: 'PM',
   hs: 'HS', bedtime: 'HS', atbedtime: 'HS',
   qod: 'QOD', eod: 'QOD', altday: 'QOD', alternateday: 'QOD', alternatedays: 'QOD',
   premealtds: 'Premeal TDS', premeal: 'Premeal TDS', actds: 'Premeal TDS',
@@ -433,6 +485,11 @@ const FREQ_ALIASES = {
   weekly: 'Weekly',
   '01224hr': '0,12,24hr', '01224hrs': '0,12,24hr'
 };
+// Meal-time qualifiers a doctor tacks on right after the dose to say when
+// in the day it's taken (e.g. "Sitagliptin 50mg lunchtime dly") — these
+// describe the drug's timing, not a formal frequency code, so they're
+// folded into the drug name instead of left polluting the Frequency cell.
+const MEAL_TIME_WORDS = new Set(['lunchtime', 'breakfast', 'dinnertime', 'suppertime', 'teatime']);
 const DOSAGE_RE = /^\d+(\.\d+)?(mg|g|mcg|ug|mls?|l|cc|iu|units?|%|mmol)$/i;
 // Compound doses for combination drugs, e.g. Artemether/Lumefantrine
 // "80/480mg" — two numbers sharing one trailing unit.
@@ -589,6 +646,17 @@ export function parseDrugLine(line) {
     rest = tokens.slice(dosageIdx + 1);
   }
 
+  // A meal-time qualifier right after the dose (e.g. "50mg lunchtime dly")
+  // describes when in the day it's taken — pull it out of the frequency
+  // tokens and fold it into the name below, before the rest of Frequency
+  // parsing runs on what's left ("dly" on its own then normalizes to OD).
+  let mealTime = '';
+  const mealIdx = rest.findIndex(t => MEAL_TIME_WORDS.has(t.toLowerCase().replace(/[.,]$/, '')));
+  if (mealIdx !== -1) {
+    mealTime = rest[mealIdx].replace(/[.,]$/, '').toLowerCase();
+    rest.splice(mealIdx, 1);
+  }
+
   // An order can carry an additive after the main dose/frequency, e.g.
   // "IV 0.9 N/saline 1L 8hrly + 3cc Vit Bco". Split it off before duration/
   // frequency parsing so it doesn't get swallowed into the Frequency cell,
@@ -666,13 +734,56 @@ export function parseDrugLine(line) {
   } else if (freqKey && FREQ_ALIASES[freqKey]) {
     frequency = FREQ_ALIASES[freqKey];
   } else if (freqRaw) {
-    frequency = freqRaw;
+    // Open-ended "N times weekly" phrasing ("twice weekly", "2x weekly",
+    // "3 times weekly", however cased/spaced) normalizes to one canonical
+    // display string instead of being left as whatever raw text was typed.
+    const weeklyN = parseWeeklyFrequency(freqRaw);
+    frequency = weeklyN ? weeklyFrequencyLabel(weeklyN) : freqRaw;
   }
 
   duration = autoDurationForFrequency(frequency) || duration;
 
-  const fullName = (name + (dosage ? ' ' + dosage : '') + (additive ? ' ' + additive : '')).trim();
+  const fullName = (name + (dosage ? ' ' + dosage : '') + (mealTime ? ' ' + mealTime : '') + (additive ? ' ' + additive : '')).trim();
   return { name: fullName, route, frequency, action, duration, createdAt: new Date().toISOString() };
+}
+
+// --- Bulk Upload: split-dose lines ("Novomix 16iu AM 8iu PM") ------------
+// A doctor sometimes writes a morning/evening split dose as one line
+// instead of two — the two halves are really separate orders (different
+// dose amounts given at different times), so this splits such a line into
+// two drug rows, each with its own dose and AM/PM frequency, rather than
+// letting the whole thing collapse into one row with a jumbled Frequency
+// ("AM 8iu PM"). Only triggers for exactly two dosage tokens each
+// immediately followed by AM/PM with nothing else on the line, so an
+// ordinary single-dose line is never affected. Returns null (falls back to
+// the normal single-row parseDrugLine) if the line isn't this pattern.
+const SPLIT_DOSE_MERIDIEM_WORDS = new Set(['am', 'pm']);
+export function parseSplitDoseLine(line) {
+  const raw = line.trim();
+  if (!raw) return null;
+  let tokens = raw.split(/\s+/);
+  const firstKey = tokens[0].toLowerCase().replace(/\.$/, '');
+  let route = 'Oral';
+  if (ROUTE_ALIASES[firstKey]) { route = ROUTE_ALIASES[firstKey]; tokens = tokens.slice(1); }
+
+  const doseIdxs = [];
+  tokens.forEach((t, idx) => { if (isDosageToken(t.replace(/[,.]$/, ''))) doseIdxs.push(idx); });
+  if (doseIdxs.length !== 2) return null;
+  const [i1, i2] = doseIdxs;
+  if (i1 === 0) return null; // need a drug name before the first dose
+  if (i2 !== i1 + 2) return null; // exactly one token (the AM/PM word) between the two doses
+  if (i2 + 2 !== tokens.length) return null; // nothing trailing after the second AM/PM word
+
+  const f1 = tokens[i1 + 1].toLowerCase().replace(/[.,]$/, '');
+  const f2 = tokens[i2 + 1].toLowerCase().replace(/[.,]$/, '');
+  if (!SPLIT_DOSE_MERIDIEM_WORDS.has(f1) || !SPLIT_DOSE_MERIDIEM_WORDS.has(f2)) return null;
+
+  const name = tokens.slice(0, i1).join(' ');
+  const mk = (doseTok, freqWord) => ({
+    name: (name + ' ' + doseTok).trim(), route, frequency: FREQ_ALIASES[freqWord],
+    action: '', duration: '', createdAt: new Date().toISOString()
+  });
+  return [mk(tokens[i1], f1), mk(tokens[i2], f2)];
 }
 
 // Alternating-fluid orders ("...to alt with...") keep both fluids together
@@ -792,6 +903,8 @@ export function parseStagedFluidLine(line) {
 export function parseBulkText(text) {
   const rows = [];
   text.split('\n').forEach(line => {
+    const splitDose = parseSplitDoseLine(line);
+    if (splitDose) { rows.push(...splitDose); return; }
     const staged = parseStagedFluidLine(line);
     if (staged) { rows.push(...staged); return; }
     const parsed = parseDrugLine(line);

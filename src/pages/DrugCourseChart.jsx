@@ -13,7 +13,8 @@ import {
   ROUTE_OPTIONS, FREQ_OPTIONS, ACTION_OPTIONS, STATUS_LABELS, WARD_OPTIONS, actionColor, defaultRow,
   dueLabelFor, withDrugCompletionChecked, computeRouteFromSno, parseBulkText,
   parseDoseSequence, administrationTimesFor, flaggedDrugRefs, flaggedDrugMessage, diffFields,
-  autoDurationForFrequency, buildSnoSegments, buildSnoText, abbreviateReason
+  autoDurationForFrequency, buildSnoSegments, buildSnoText, abbreviateReason,
+  parseWeeklyFrequency, weeklyDosesGivenThisWeek
 } from "../lib/drugChartHelpers.js";
 import { ROSTER_TAG_FOR_REASON, clearAllocationsForPatient } from "../lib/patientAdmissionStatus.js";
 
@@ -74,6 +75,24 @@ function DoseSequenceBadges({ drug, index, chartRows }) {
           </span>
         );
       })}
+    </div>
+  );
+}
+
+// Green check-tally under the Frequency cell for a "Twice Weekly"/"Thrice
+// Weekly"/etc. drug (see parseWeeklyFrequency) — one \u2705 per dose already
+// given this Mon-Sun week, so a nurse can tell at a glance whether e.g.
+// this week's 2nd EPO dose has been given yet, without doing date math.
+// Mirrors DoseSequenceBadges' pattern but keyed off the calendar week
+// rather than a fixed hour-offset sequence.
+function WeeklyDoseBadges({ drug, index, chartRows, now }) {
+  const timesPerWeek = parseWeeklyFrequency(drug.frequency);
+  if (!timesPerWeek || timesPerWeek < 2) return null;
+  const givenThisWeek = weeklyDosesGivenThisWeek(chartRows, index, now);
+  if (!givenThisWeek) return null;
+  return (
+    <div className="dose-seq-badges" title={givenThisWeek + ' of ' + timesPerWeek + ' doses given this week'}>
+      <span className="dose-seq-pill given">{'\u2705'.repeat(Math.min(givenThisWeek, timesPerWeek))}</span>
     </div>
   );
 }
@@ -961,6 +980,7 @@ export default function DrugCourseChart() {
                       <td>
                         {d.frequency || '—'}
                         <DoseSequenceBadges drug={d} index={i} chartRows={chartRows} />
+                        <WeeklyDoseBadges drug={d} index={i} chartRows={chartRows} now={now} />
                       </td>
                       <td>{d.action ? <span style={{ display: 'inline-block', padding: '2px 8px', borderRadius: 10, color: '#fff', fontSize: 11, fontWeight: 'bold', background: actionColor(d.action) }}>{d.action}</span> : '—'}</td>
                       <td>{d.duration || '—'}</td>
