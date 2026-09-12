@@ -801,6 +801,28 @@ function WardPatientPicker({ value, options, onSelect }) {
   const selected = options.find((o) => o.id === value);
   const label = selected ? ((selected.name || 'Unnamed') + (selected.emr ? ' (' + selected.emr + ')' : '')) : '\u2014 Select from ward \u2014';
 
+  // Two separate patient records can end up sharing the same EMR number
+  // (e.g. a name typed/reordered differently on re-entry - "Ernest Ukolio"
+  // vs "Ukolio Enerst", both 139680) — without a flag, both look like
+  // valid options and a nurse can't tell they're the same real patient,
+  // so she might pick either one, or the same person twice across two
+  // write-up cards, without realizing it. Flags every option whose EMR
+  // matches another option's, so she can check with the Overall Nurse/
+  // Admin instead of guessing which record is the live one.
+  const duplicateEmrIds = useMemo(() => {
+    const counts = {};
+    options.forEach((o) => {
+      const k = (o.emr || '').trim().toLowerCase();
+      if (k) counts[k] = (counts[k] || 0) + 1;
+    });
+    const ids = new Set();
+    options.forEach((o) => {
+      const k = (o.emr || '').trim().toLowerCase();
+      if (k && counts[k] > 1) ids.add(o.id);
+    });
+    return ids;
+  }, [options]);
+
   function pick(id) { onSelect(id); setOpen(false); }
 
   return (
@@ -823,6 +845,9 @@ function WardPatientPicker({ value, options, onSelect }) {
                     <span className={"ward-patient-picker-name" + (o.id === value ? ' is-selected' : '')}>
                       {(o.name || 'Unnamed') + (o.emr ? ' (' + o.emr + ')' : '')}{o.location ? ' \u2014 ' + o.location : ''}
                     </span>
+                    {duplicateEmrIds.has(o.id) && (
+                      <div className="ward-patient-picker-tag duplicate">{'\u26A0\uFE0F Duplicate EMR \u2014 check with Overall Nurse'}</div>
+                    )}
                     {o.dischargeStatus ? (
                       <div className="ward-patient-picker-tag">{o.dischargeStatus === 'TRANS OUT' ? 'TRANS OUT' : o.dischargeStatus === 'DEATH' ? 'Death' : 'Discharged'}</div>
                     ) : o.admissionTag ? (
