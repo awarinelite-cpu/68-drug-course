@@ -796,7 +796,14 @@ function useWardReport(wardKey, isAdmin, profile, user) {
 // patientAdmissionStatus.js) — they stay on this list, tag and all, until
 // a closing report is submitted for them (see submitReport above), so the
 // nurse can still find and tap them to write that closing note.
-function WardPatientPicker({ value, options, onSelect }) {
+//
+// usedIds (optional) — patient ids already picked in one of this report's
+// OTHER write-up cards (see WardPanelRest below). Faded out and
+// unclickable here so a nurse building a second write-up can see at a
+// glance who she's already written on and can't pick them again by
+// mistake — except the option matching this picker's own current value,
+// which stays fully selectable/highlighted since it's this card's pick.
+function WardPatientPicker({ value, options, onSelect, usedIds }) {
   const [open, setOpen] = useState(false);
   const selected = options.find((o) => o.id === value);
   const label = selected ? ((selected.name || 'Unnamed') + (selected.emr ? ' (' + selected.emr + ')' : '')) : '\u2014 Select from ward \u2014';
@@ -839,23 +846,30 @@ function WardPatientPicker({ value, options, onSelect }) {
               <div className="ward-patient-picker-row" onClick={() => pick('')}>
                 <span className={"ward-patient-picker-name" + (!value ? ' is-selected' : '')}>{'\u2014 Select from ward \u2014'}</span>
               </div>
-              {options.map((o) => (
-                <div className="ward-patient-picker-row" key={o.id} onClick={() => pick(o.id)}>
-                  <div>
-                    <span className={"ward-patient-picker-name" + (o.id === value ? ' is-selected' : '')}>
-                      {(o.name || 'Unnamed') + (o.emr ? ' (' + o.emr + ')' : '')}{o.location ? ' \u2014 ' + o.location : ''}
-                    </span>
-                    {duplicateEmrIds.has(o.id) && (
-                      <div className="ward-patient-picker-tag duplicate">{'\u26A0\uFE0F Duplicate EMR \u2014 check with Overall Nurse'}</div>
-                    )}
-                    {o.dischargeStatus ? (
-                      <div className="ward-patient-picker-tag">{o.dischargeStatus === 'TRANS OUT' ? 'TRANS OUT' : o.dischargeStatus === 'DEATH' ? 'Death' : 'Discharged'}</div>
-                    ) : o.admissionTag ? (
-                      <div className="ward-patient-picker-tag admission">{ADMISSION_TAG_LABEL[o.admissionTag] || o.admissionTag}</div>
-                    ) : null}
+              {options.map((o) => {
+                const isUsedElsewhere = !!usedIds && usedIds.has(o.id) && o.id !== value;
+                return (
+                  <div className={"ward-patient-picker-row" + (isUsedElsewhere ? ' is-used' : '')}
+                    key={o.id} onClick={() => { if (!isUsedElsewhere) pick(o.id); }}>
+                    <div>
+                      <span className={"ward-patient-picker-name" + (o.id === value ? ' is-selected' : '')}>
+                        {(o.name || 'Unnamed') + (o.emr ? ' (' + o.emr + ')' : '')}{o.location ? ' \u2014 ' + o.location : ''}
+                      </span>
+                      {isUsedElsewhere && (
+                        <div className="ward-patient-picker-tag used">{'Already selected in another write-up'}</div>
+                      )}
+                      {duplicateEmrIds.has(o.id) && (
+                        <div className="ward-patient-picker-tag duplicate">{'\u26A0\uFE0F Duplicate EMR \u2014 check with Overall Nurse'}</div>
+                      )}
+                      {o.dischargeStatus ? (
+                        <div className="ward-patient-picker-tag">{o.dischargeStatus === 'TRANS OUT' ? 'TRANS OUT' : o.dischargeStatus === 'DEATH' ? 'Death' : 'Discharged'}</div>
+                      ) : o.admissionTag ? (
+                        <div className="ward-patient-picker-tag admission">{ADMISSION_TAG_LABEL[o.admissionTag] || o.admissionTag}</div>
+                      ) : null}
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         </div>
@@ -968,7 +982,8 @@ function WardPanelRest({ h, showLabel, isAdmin, navigate, includeShiftTable = tr
                     {wardPatientOptions && wardPatientOptions.length > 0 && (
                       <div className="patient-field">
                         <label>Select Patient:</label>
-                        <WardPatientPicker value={p.sourcePatientId || ''} options={wardPatientOptions} onSelect={(id) => selectPatientFromWard(p.id, id)} />
+                        <WardPatientPicker value={p.sourcePatientId || ''} options={wardPatientOptions} onSelect={(id) => selectPatientFromWard(p.id, id)}
+                          usedIds={new Set(wardDoc.patients.filter((other) => other.id !== p.id && other.sourcePatientId).map((other) => other.sourcePatientId))} />
                       </div>
                     )}
                     {locationOptions && (
