@@ -21,11 +21,16 @@ export default function Login() {
   const navigate = useNavigate();
 
   async function doLogin() {
-    setMsg(null);
     // Fall back to the actual DOM value in case the browser autofilled
     // the field without firing React's onChange (state would still be empty).
+    // Sync state to it FIRST, before any state update triggers a re-render —
+    // otherwise the very next render forces the controlled input back to
+    // the (still empty) old state and visibly wipes what the user sees.
     const em = (email || emailRef.current?.value || '').trim();
     const pw = password || passwordRef.current?.value || '';
+    if (em !== email) setEmail(em);
+    if (pw !== password) setPassword(pw);
+    setMsg(null);
     if (!em || !pw) { setMsg({ type: 'error', text: 'Enter your email and password.' }); return; }
     try {
       await signInWithEmailAndPassword(auth, em, pw);
@@ -37,6 +42,7 @@ export default function Login() {
 
   async function doReset() {
     const em = (email || emailRef.current?.value || '').trim();
+    if (em !== email) setEmail(em);
     if (!em) { setMsg({ type: 'error', text: 'Enter your email above first, then click "Forgot password?".' }); return; }
     try {
       await sendPasswordResetEmail(auth, em);
