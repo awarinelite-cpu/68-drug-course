@@ -921,16 +921,7 @@ function WardPanelRest({ h, showLabel, isAdmin, navigate, includeShiftTable = tr
 
           {includePreviousOcc && (
             <div className="card-box">
-              <div className="ward-select-row">
-                <h2 style={{ margin: 0 }}>{showLabel && w?.label ? w.label : 'Previous Occ'}</h2>
-                <span className={"status-pill " + pillClass}>{pillText}</span>
-              </div>
-              {showLabel && w?.label && <div style={{ fontSize: 13, color: '#6b7280', margin: '6px 0 0' }}>Previous Occ</div>}
-              <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'flex-start', marginTop: 4 }}>
-                <div className="patient-field" style={{ maxWidth: 140, marginTop: 0 }}>
-                  <label>Previous Occ</label>
-                  <input type="number" inputMode="numeric" disabled={!editable} value={wardDoc.startOcc} onChange={(e) => updateStartOcc(e.target.value)} />
-                </div>
+              <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'flex-start' }}>
                 {includeHeader && w && (
                   <div className="patient-field" style={{ marginTop: 0, justifyContent: 'flex-end', display: 'flex', flexDirection: 'column' }}>
                     <button className="btn btn-secondary" style={{ padding: '6px 12px' }} type="button"
