@@ -886,7 +886,7 @@ function WardPanelRest({ h, showLabel, isAdmin, navigate, includeShiftTable = tr
                 <h2 style={{ margin: 0 }}>{showLabel && w?.label ? w.label : 'Previous Occ'}</h2>
                 <span className={"status-pill " + pillClass}>{pillText}</span>
                 {includeHeader && w && (
-                  <button className="btn btn-secondary" style={{ padding: '6px 12px' }} type="button"
+                  <button className="btn btn-secondary" style={{ padding: '6px 12px', marginLeft: 'auto' }} type="button"
                     onClick={() => navigate('/nurses-report/archive-list?type=ward&ward=' + encodeURIComponent(w.key) + '&label=' + encodeURIComponent(w.label))}>
                     {'\uD83D\uDCC1 Archive'}
                   </button>
@@ -1224,7 +1224,7 @@ function MergedWardReportPanel({ group, isAdmin, profile, user, navigate }) {
         <div className="card-box">
           <div className="ward-select-row">
             <h2 style={{ margin: 0 }}>{group.label} — Shift Statistics</h2>
-            <button className="btn btn-secondary" style={{ padding: '6px 12px' }} type="button"
+            <button className="btn btn-secondary" style={{ padding: '6px 12px', marginLeft: 'auto' }} type="button"
               onClick={() => navigate('/nurses-report/archive-list?type=ward&ward=' + encodeURIComponent(hA.w.key) + '&label=' + encodeURIComponent(group.label))}>
               {'\uD83D\uDCC1 Archive'}
             </button>
