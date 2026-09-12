@@ -921,14 +921,19 @@ function WardPanelRest({ h, showLabel, isAdmin, navigate, includeShiftTable = tr
 
           {includePreviousOcc && (
             <div className="card-box">
-              <div className="ward-select-row">
-                <h2 style={{ margin: 0 }}>{showLabel && w?.label ? w.label : 'Previous Occ'}</h2>
-                <span className={"status-pill " + pillClass}>{pillText}</span>
+              <div className="ward-select-row" style={{ justifyContent: 'space-between' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <h2 style={{ margin: 0 }}>{showLabel && w?.label ? w.label : 'Previous Occ'}</h2>
+                  <span className={"status-pill " + pillClass}>{pillText}</span>
+                </div>
                 {includeHeader && w && (
-                  <button className="btn btn-secondary" style={{ padding: '6px 12px', marginLeft: 'auto' }} type="button"
+                  <button className="btn btn-secondary" style={{ padding: '6px 12px' }} type="button"
                     onClick={() => navigate('/nurses-report/archive-list?type=ward&ward=' + encodeURIComponent(w.key) + '&label=' + encodeURIComponent(w.label))}>
                     {'\uD83D\uDCC1 Archive'}
                   </button>
+                )}
+                {wardPatientOptions && wardPatientOptions.length > 0 && (
+                  <label style={{ fontWeight: 'bold' }}>Check a patient's status:</label>
                 )}
               </div>
               {showLabel && w?.label && <div style={{ fontSize: 13, color: '#6b7280', margin: '6px 0 0' }}>Previous Occ</div>}
@@ -938,7 +943,6 @@ function WardPanelRest({ h, showLabel, isAdmin, navigate, includeShiftTable = tr
                 </div>
                 {wardPatientOptions && wardPatientOptions.length > 0 && (
                   <div className="patient-field" style={{ minWidth: 220, marginTop: 0 }}>
-                    <label>Check a patient's status:</label>
                     <WardPatientPicker value={quickLookupId} options={wardPatientOptions} onSelect={setQuickLookupId} />
                     {quickLookupTag && (
                       <div style={{ fontSize: 12, marginTop: 4, fontWeight: 'bold', color: quickLookupRecord.dischargeStatus ? '#dc2626' : quickLookupRecord.admissionTag ? '#2563eb' : '#6b7280' }}>
