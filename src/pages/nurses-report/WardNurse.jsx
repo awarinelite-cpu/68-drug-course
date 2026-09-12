@@ -849,6 +849,22 @@ function WardPanelRest({ h, showLabel, isAdmin, navigate, includeShiftTable = tr
     nightUpdateOpen, openNightUpdate, saveReport, submitReport, pillClass, pillText
   } = h;
 
+  // Quick lookup only, not tied to any write-up — lets the nurse glance at
+  // a patient's roster tag (Discharge/Trans Out/Death/admission tag) right
+  // next to Previous Occ while tallying the Shift Statistics table above,
+  // instead of scrolling all the way down to the Patients section to find
+  // that same tag on a linked write-up.
+  const [quickLookupId, setQuickLookupId] = useState('');
+  const quickLookupRecord = wardPatientOptions.find((o) => o.id === quickLookupId);
+  let quickLookupTag = null;
+  if (quickLookupRecord) {
+    quickLookupTag = quickLookupRecord.dischargeStatus
+      ? (quickLookupRecord.dischargeStatus === 'TRANS OUT' ? 'TRANS OUT' : quickLookupRecord.dischargeStatus === 'DEATH' ? 'Death' : 'Discharged')
+      : quickLookupRecord.admissionTag
+        ? (ADMISSION_TAG_LABEL[quickLookupRecord.admissionTag] || quickLookupRecord.admissionTag)
+        : 'Active \u2014 no status tag';
+  }
+
   return (
     <>
       {includeHeader && topStatus.text && (
@@ -877,8 +893,21 @@ function WardPanelRest({ h, showLabel, isAdmin, navigate, includeShiftTable = tr
                 )}
               </div>
               {showLabel && w?.label && <div style={{ fontSize: 13, color: '#6b7280', margin: '6px 0 0' }}>Previous Occ</div>}
-              <div className="patient-field" style={{ maxWidth: 140 }}>
-                <input type="number" inputMode="numeric" disabled={!editable} value={wardDoc.startOcc} onChange={(e) => updateStartOcc(e.target.value)} />
+              <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'flex-start', marginTop: 4 }}>
+                <div className="patient-field" style={{ maxWidth: 140, marginTop: 0 }}>
+                  <input type="number" inputMode="numeric" disabled={!editable} value={wardDoc.startOcc} onChange={(e) => updateStartOcc(e.target.value)} />
+                </div>
+                {wardPatientOptions && wardPatientOptions.length > 0 && (
+                  <div className="patient-field" style={{ minWidth: 220, marginTop: 0 }}>
+                    <label>Check a patient's status:</label>
+                    <WardPatientPicker value={quickLookupId} options={wardPatientOptions} onSelect={setQuickLookupId} />
+                    {quickLookupTag && (
+                      <div style={{ fontSize: 12, marginTop: 4, fontWeight: 'bold', color: quickLookupRecord.dischargeStatus ? '#dc2626' : quickLookupRecord.admissionTag ? '#2563eb' : '#6b7280' }}>
+                        {quickLookupTag}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           )}
