@@ -87,7 +87,11 @@ function DoseSequenceBadges({ drug, index, chartRows }) {
 // rather than a fixed hour-offset sequence.
 function WeeklyDoseBadges({ drug, index, chartRows, now }) {
   const timesPerWeek = parseWeeklyFrequency(drug.frequency);
-  if (!timesPerWeek || timesPerWeek < 2) return null;
+  if (!timesPerWeek) return null;
+  // weeklyDosesGivenThisWeek is already scoped to the current Mon-Sun week
+  // (see startOfWeek in drugChartHelpers.js), so this naturally reads 0 —
+  // no checkmark — the moment a new week starts, with no separate reset
+  // logic needed: last week's doses simply fall outside the window.
   const givenThisWeek = weeklyDosesGivenThisWeek(chartRows, index, now);
   if (!givenThisWeek) return null;
   return (

@@ -207,6 +207,32 @@ export function parseDoseSequence(freqText) {
 }
 
 export function computeDueAt(d, i, chartRows) {
+  if (d.action && d.action !== 'Ongoing') return null;
+
+  // Fixed dose-sequence (e.g. "0,12,24hr"): due times step through the
+  // sequence's own hour-gaps rather than one fixed repeating interval — the
+  // gap after the 1st dose is (seq[1]-seq[0]) hours, the gap after the 2nd
+  // is (seq[2]-seq[1]), etc. (12h each for the common "0,12,24hr" case, but
+  // this works for any hour-offset list). This is purely a due/overdue
+  // clock — it never rewrites d.frequency, which stays the fixed sequence
+  // the doctor ordered. Once every scheduled dose has been given,
+  // withDrugCompletionChecked flips Action to Completed and this returns
+  // null (nothing left to be due).
+  const seq = parseDoseSequence(d.frequency);
+  if (seq) {
+    const givenCount = administrationTimesFor(chartRows, i).length;
+    if (givenCount >= seq.length) return null; // sequence complete
+    if (givenCount === 0) {
+      if (d.startDate) return toLocalDate(d.startDate, '00:00');
+      if (d.createdAt) { const dt = new Date(d.createdAt); return isNaN(dt) ? null : dt; }
+      return null;
+    }
+    const lastEvent = lastDrugEventFor(chartRows, i);
+    if (!lastEvent) return null;
+    const stepHours = seq[givenCount] - seq[givenCount - 1];
+    return new Date(lastEvent.time.getTime() + stepHours * 3600 * 1000);
+  }
+
   const freq = normalizeFrequency(d.frequency);
   let intervalHours = INTERVAL_HOURS[freq];
   if (!intervalHours) {
@@ -214,7 +240,6 @@ export function computeDueAt(d, i, chartRows) {
     if (weeklyN) intervalHours = (7 * 24) / weeklyN;
   }
   if (!intervalHours) return null; // STAT / PRN / custom text — not covered
-  if (d.action && d.action !== 'Ongoing') return null;
 
   // A documented "not given" reason advances the due clock the same as an
   // actual dose (see lastDrugEventFor) — the alert shouldn't keep firing

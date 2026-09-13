@@ -96,6 +96,53 @@ function intervalHoursFor(frequency) {
   return weeklyN ? (7 * 24) / weeklyN : null;
 }
 
+// Fixed dose-sequence frequencies (e.g. "0,12,24hr") — mirrors
+// parseDoseSequence in src/lib/drugChartHelpers.js (kept in sync by hand,
+// same as INTERVAL_HOURS/parseWeeklyFrequency above, since that file is an
+// ES module and this is a CommonJS Function). A doctor writes a loading
+// dose followed by fixed hour-offsets rather than one repeating interval;
+// this recognizes that pattern so the scheduler can step through its own
+// hour-gaps (12h each for "0,12,24hr") instead of skipping it entirely.
+function parseDoseSequence(freqText) {
+  if (!freqText) return null;
+  const text = freqText.trim();
+  const statThen = text.match(
+    /^stat\b[,\s]*then\b.*?(\d+)\s*(?:hrly|hourly|hr|hrs|hours?)\b.*?(\d+)\s*(?:hr|hrs|hours?)\b/i
+  );
+  if (statThen) {
+    const interval = parseInt(statThen[1], 10);
+    const total = parseInt(statThen[2], 10);
+    if (interval > 0 && total >= interval) {
+      const nums = [];
+      for (let h = 0; h <= total; h += interval) nums.push(h);
+      if (nums.length >= 2) return nums;
+    }
+  }
+  const hourMatches = [...text.matchAll(/(\d+)\s*(?:hrs?|hours?)\b/gi)];
+  if (hourMatches.length >= 2) {
+    const nums = [...new Set(hourMatches.map((m) => parseInt(m[1], 10)))].sort((a, b) => a - b);
+    if (nums.length >= 2) return nums;
+  }
+  const compact = text.replace(/\s+/g, '');
+  const m = compact.match(/^(\d+(?:,\d+)+)(hrs?|hours?|h)?$/i);
+  if (!m) return null;
+  const nums = [...new Set(m[1].split(',').map((n) => parseInt(n, 10)))].sort((a, b) => a - b);
+  return nums.length >= 2 ? nums : null;
+}
+
+// Count of doses actually recorded as given for this drug (matched by Drug
+// S/N on the chart below) — mirrors administrationTimesFor's row-matching
+// in src/lib/drugChartHelpers.js, but only needs the count here, not the
+// timestamps themselves (lastGivenFor below already gets the latest one).
+function administrationCountFor(drugIndex, chartRows) {
+  let count = 0;
+  for (const row of chartRows || []) {
+    const nums = (row.sno || '').match(/\d+/g) || [];
+    if (nums.some((n) => parseInt(n, 10) === drugIndex + 1)) count++;
+  }
+  return count;
+}
+
 function toWardDate(dateStr, timeStr) {
   if (!dateStr || !timeStr) return null;
   const d = new Date(`${dateStr}T${timeStr}:00${WARD_UTC_OFFSET}`);
@@ -187,6 +234,28 @@ function lastGivenFor(drugIndex, chartRows) {
 }
 
 function computeDueAt(drug, chartRows, drugIndex) {
+  // Fixed dose-sequence (e.g. "0,12,24hr"): step through the sequence's own
+  // hour-gaps (12h each, for that example) instead of one repeating
+  // interval — see parseDoseSequence above and computeDueAt in
+  // src/lib/drugChartHelpers.js (client-side twin of this function).
+  const seq = parseDoseSequence(drug.frequency);
+  if (seq) {
+    const givenCount = administrationCountFor(drugIndex, chartRows);
+    if (givenCount >= seq.length) return null; // sequence complete
+    if (givenCount === 0) {
+      if (drug.startDate) return toWardDate(drug.startDate, '00:00');
+      if (drug.createdAt) {
+        const d = new Date(drug.createdAt);
+        return isNaN(d.getTime()) ? null : d;
+      }
+      return null;
+    }
+    const lastGiven = lastGivenFor(drugIndex, chartRows);
+    if (!lastGiven) return null;
+    const stepHours = seq[givenCount] - seq[givenCount - 1];
+    return new Date(lastGiven.getTime() + stepHours * 3600 * 1000);
+  }
+
   const lastGiven = lastGivenFor(drugIndex, chartRows);
   if (lastGiven) {
     const intervalHours = intervalHoursFor(drug.frequency);
@@ -337,8 +406,14 @@ exports.checkDueDrugs = onSchedule(
       let changed = false;
 
       drugs.forEach((drug, i) => {
-        if (!intervalHoursFor(drug.frequency)) return; // STAT / PRN / custom text — not covered yet
-        if (!alarmSettings.frequencies.includes(drug.frequency)) return; // admin turned this frequency off
+        const doseSeq = parseDoseSequence(drug.frequency);
+        if (!doseSeq && !intervalHoursFor(drug.frequency)) return; // STAT / PRN / custom text — not covered yet
+        // The admin's alert-frequency toggle list only ever offers fixed,
+        // literal frequency strings (see ALL_FREQUENCIES in
+        // src/lib/alarm-settings.js) — a dose-sequence like "0,12,24hr" (or
+        // any other hour-offset list a doctor types) can't be represented
+        // there, so it's always alerted rather than silently dropped.
+        if (!doseSeq && !alarmSettings.frequencies.includes(drug.frequency)) return; // admin turned this frequency off
         if (drug.action && drug.action !== 'Ongoing') return; // discontinued/withheld/completed/other
 
         const dueAt = computeDueAt(drug, chartRows, i);
