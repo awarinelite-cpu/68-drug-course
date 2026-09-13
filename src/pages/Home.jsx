@@ -191,14 +191,18 @@ export default function Home() {
       return;
     }
     setReadmitBusyId(p.id);
-    setReadmitMsgs((m) => ({ ...m, [p.id]: { color: '#555', text: 'Restoring charts\u2026' } }));
+    setReadmitMsgs((m) => ({ ...m, [p.id]: { color: '#555', text: 'Working\u2026' } }));
     const result = await readmitLatestAdmission({ patientId: p.id, nurseName: profile?.name });
     setReadmitBusyId(null);
     if (!result.ok) {
       setReadmitMsgs((m) => ({ ...m, [p.id]: { color: '#b91c1c', text: result.message } }));
       return;
     }
-    setReadmitMsgs((m) => ({ ...m, [p.id]: { color: '#16a34a', text: 'Readmitted.' } }));
+    // cancelledPendingExit: the old exit was never closed out and a new
+    // admission had already started for this patient — nothing was
+    // restored, the stale exit tag was just cleared (see
+    // readmitLatestAdmission in patientAdmissionStatus.js).
+    setReadmitMsgs((m) => ({ ...m, [p.id]: { color: '#16a34a', text: result.cancelledPendingExit ? 'Exit cancelled \u2014 patient stays on the ward.' : 'Readmitted.' } }));
     // Refresh the visible list(s) so the DISCHARGE/etc. badge drops off
     // now that the patient is active again.
     loadWardData(true);

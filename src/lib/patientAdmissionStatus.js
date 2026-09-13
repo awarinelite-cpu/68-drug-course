@@ -309,7 +309,47 @@ async function hasActiveAdmissionData(patientId) {
 // recently archived admission itself rather than requiring the caller
 // to already know its id — the ward list only has the dischargeStatus
 // tag, not an admission id.
+//
+// Two genuinely different situations both land on this Readmit button,
+// and they need different handling:
+//   1. "Awaiting ward report" — applyPatientStatus already tagged the
+//      patient dischargeStatus and archived+blanked their charts, but
+//      the ward hasn't submitted a closing write-up yet, so the patient
+//      is still on the ward roster (see closeOutDischargedPatient) and
+//      a nurse may have gone ahead and started a brand-new admission
+//      for them in the meantime (fresh drug chart, NEW PATIENT tag,
+//      etc.) before that old exit was ever closed out. Here "Readmit"
+//      just means "that exit shouldn't have happened" — cancel the
+//      stale dischargeStatus tag and leave the new admission's live
+//      data exactly as it is. There's nothing to restore: the thing
+//      being undone is the tag, not the charts.
+//   2. Already fully closed out (dischargeStatus cleared, patient off
+//      the ward roster) — this is the Admission Overview case, opening
+//      an actually-archived record from `admissions`. Here Readmit
+//      really does mean restoring that old archived chart data back to
+//      live, so the active-admission guard below still applies: if the
+//      patient has since started an unrelated new admission somewhere,
+//      refuse rather than overwrite it.
 export async function readmitLatestAdmission({ patientId, nurseName }) {
+  let dischargeStatus = '';
+  try {
+    const patientSnap = await getDoc(doc(db, 'patients', patientId));
+    if (patientSnap.exists()) dischargeStatus = patientSnap.data().dischargeStatus || '';
+  } catch (e) {
+    return { ok: false, message: 'Could not look up the patient record: ' + (e.code || e.message) };
+  }
+
+  if (dischargeStatus && await hasActiveAdmissionData(patientId)) {
+    // Situation 1 above: the old exit was never closed out and a new
+    // admission is already live. Just cancel the stale exit tag.
+    try {
+      await updateDoc(doc(db, 'patients', patientId), { dischargeStatus: '', dischargeStatusAt: null, updatedAt: serverTimestamp() });
+      return { ok: true, cancelledPendingExit: true };
+    } catch (e) {
+      return { ok: false, message: 'Could not cancel the exit: ' + (e.code || e.message) };
+    }
+  }
+
   let admSnap;
   try {
     const q = query(collection(db, 'patients', patientId, 'admissions'), orderBy('archivedAt', 'desc'), limit(1));

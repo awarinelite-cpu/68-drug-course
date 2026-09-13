@@ -102,7 +102,7 @@ export default function Admission() {
       return;
     }
 
-    setReadmitStatus({ color: '#16a34a', text: 'Readmitted \u2014 redirecting to the active chart\u2026' });
+    setReadmitStatus({ color: '#16a34a', text: result.cancelledPendingExit ? 'Exit cancelled \u2014 redirecting to the active chart\u2026' : 'Readmitted \u2014 redirecting to the active chart\u2026' });
     setTimeout(() => navigate('/charts/drug-course-chart?patient=' + patientId + '&from=admission'), 900);
   }
 
