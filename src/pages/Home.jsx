@@ -62,10 +62,11 @@ function PendingDischargeBadge({ patient, busy, message, onReadmit }) {
 // IN from A&E / TRANSFER REJECTED) — see activeAdmissionTag/ADMISSION_TAG_LABEL
 // in patientAdmissionStatus.js. Shown the same way PendingDischargeBadge shows
 // an exit status, so a nurse glancing at the ward list can see both a
-// patient's arrival and their departure at a glance. TRANSFER_REJECTED reuses
-// the existing .badge-transferred color (amber) since it's neither a fresh
-// arrival (blue) nor an exit (the DISCHARGE_BADGE_CLASS colors above) — and
-// appends which ward rejected it, from transferRejectedByWard, when known.
+// patient's arrival and their departure at a glance. TRANSFER_REJECTED gets
+// its own badge-emergency-blink animation (hard red/amber flash, see
+// styles.css) on top of its base color, so it stands out from the other,
+// static admission tags — appends which ward rejected it, from
+// transferRejectedByWard, when known.
 const ADMISSION_TAG_BADGE_CLASS = { AE_TRANSFER: 'badge-active', NEW_PATIENT: 'badge-active', TRANSFER_REJECTED: 'badge-transferred' };
 function AdmissionTagBadge({ patient }) {
   const tag = activeAdmissionTag(patient);
@@ -73,10 +74,11 @@ function AdmissionTagBadge({ patient }) {
   const label = tag === 'TRANSFER_REJECTED' && patient.transferRejectedByWard
     ? `TRANSFER REJECTED by ${patient.transferRejectedByWard}`
     : (ADMISSION_TAG_LABEL[tag] || tag);
+  const blinkClass = tag === 'TRANSFER_REJECTED' ? ' badge-emergency-blink' : '';
   return (
     <>
       <br />
-      <span className={"oi-badge " + (ADMISSION_TAG_BADGE_CLASS[tag] || 'badge-active')} style={{ fontSize: 12, padding: '2px 8px', marginTop: 2 }}>
+      <span className={"oi-badge " + (ADMISSION_TAG_BADGE_CLASS[tag] || 'badge-active') + blinkClass} style={{ fontSize: 12, padding: '2px 8px', marginTop: 2 }}>
         {label}
       </span>
     </>
