@@ -252,6 +252,8 @@ export default function Patient() {
                     <option value="transferred">{STATUS_LABELS.transferred}</option>
                     <option value="referred">{STATUS_LABELS.referred}</option>
                     <option value="died">{STATUS_LABELS.died}</option>
+                    <option value="dama">{STATUS_LABELS.dama}</option>
+                    <option value="absconded">{STATUS_LABELS.absconded}</option>
                   </select>
                   {statusAction === 'transferred' && (
                     <select style={{ width: 'auto', minWidth: 220 }} value={transferWard} onChange={(e) => setTransferWard(e.target.value)}>

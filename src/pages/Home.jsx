@@ -14,6 +14,7 @@ import { wardHeadcount } from "../lib/wardCensus.js";
 import { reportWardKeysForPatientWard, patientWardAndBedTypeForReportKey } from "../lib/wardNameMatch.js";
 import { WARDS } from "../lib/nurses-report-common.js";
 import { loadWardPatients, loadIncomingTransfers, searchPatients, findPatientByEmrExact } from "../lib/patientDirectory.js";
+import { activeAdmissionTag, ADMISSION_TAG_LABEL } from "../lib/patientAdmissionStatus.js";
 
 function normEmr(emr) { return (emr || '').trim().toLowerCase(); }
 
@@ -23,7 +24,7 @@ function normEmr(emr) { return (emr || '').trim().toLowerCase(); }
 // closeOutDischargedPatient clears their ward field and drops them off
 // this list. Reuses the same badge-* classes Overview.jsx/Admission.jsx
 // already use for archived-admission status pills.
-const DISCHARGE_BADGE_CLASS = { 'DISCHARGE': 'badge-discharged', 'TRANS OUT': 'badge-referred', 'DEATH': 'badge-died' };
+const DISCHARGE_BADGE_CLASS = { 'DISCHARGE': 'badge-discharged', 'TRANS OUT': 'badge-referred', 'DEATH': 'badge-died', 'DAMA': 'badge-dama', 'ABSC': 'badge-absconded' };
 function PendingDischargeBadge({ status }) {
   if (!status) return null;
   return (
@@ -31,6 +32,25 @@ function PendingDischargeBadge({ status }) {
       <br />
       <span className={"oi-badge " + (DISCHARGE_BADGE_CLASS[status] || 'badge-discharged')} style={{ fontSize: 12, padding: '2px 8px', marginTop: 2 }}>
         {status} — awaiting ward report
+      </span>
+    </>
+  );
+}
+
+// Ward-list badge for a patient's recent-admission tag (NEW PATIENT / TRANS
+// IN from A&E) — see activeAdmissionTag/ADMISSION_TAG_LABEL in
+// patientAdmissionStatus.js. Shown the same way PendingDischargeBadge shows
+// an exit status, so a nurse glancing at the ward list can see both a
+// patient's arrival and their departure at a glance.
+const ADMISSION_TAG_BADGE_CLASS = { AE_TRANSFER: 'badge-active', NEW_PATIENT: 'badge-active' };
+function AdmissionTagBadge({ patient }) {
+  const tag = activeAdmissionTag(patient);
+  if (!tag) return null;
+  return (
+    <>
+      <br />
+      <span className={"oi-badge " + (ADMISSION_TAG_BADGE_CLASS[tag] || 'badge-active')} style={{ fontSize: 12, padding: '2px 8px', marginTop: 2 }}>
+        {ADMISSION_TAG_LABEL[tag] || tag}
       </span>
     </>
   );
@@ -610,7 +630,7 @@ export default function Home() {
                     {g.patients.length === 0 && <div style={{ fontSize: 12, color: '#888' }}>No patients yet.</div>}
                     {g.patients.map(p => (
                       <div key={p.id} className="search-result-item" onClick={() => openPatient(p)}>
-                        <span><b>{p.name || 'Unnamed'}</b>{'. '}EMR: {p.emr || 'N/A'}<PendingDischargeBadge status={p.dischargeStatus} /></span>
+                        <span><b>{p.name || 'Unnamed'}</b>{'. '}EMR: {p.emr || 'N/A'}<AdmissionTagBadge patient={p} /><PendingDischargeBadge status={p.dischargeStatus} /></span>
                         <span>{p.diagnosis || ''}</span>
                       </div>
                     ))}
@@ -623,7 +643,7 @@ export default function Home() {
                     </div>
                     {pedGroups.unassigned.map(p => (
                       <div key={p.id} className="search-result-item" onClick={() => openPatient(p)}>
-                        <span><b>{p.name || 'Unnamed'}</b>{'. '}EMR: {p.emr || 'N/A'}<PendingDischargeBadge status={p.dischargeStatus} /></span>
+                        <span><b>{p.name || 'Unnamed'}</b>{'. '}EMR: {p.emr || 'N/A'}<AdmissionTagBadge patient={p} /><PendingDischargeBadge status={p.dischargeStatus} /></span>
                         <span>{p.diagnosis || ''}</span>
                       </div>
                     ))}
@@ -633,7 +653,7 @@ export default function Home() {
             )}
             {patientsLoaded && visiblePatients.length > 0 && !pedGroups && visiblePatients.map(p => (
               <div key={p.id} className="search-result-item" onClick={() => openPatient(p)}>
-                <span><b>{p.name || 'Unnamed'}</b>{'. '}EMR: {p.emr || 'N/A'}{q && p.ward ? '. Ward: ' + p.ward : ''}<PendingDischargeBadge status={p.dischargeStatus} /></span>
+                <span><b>{p.name || 'Unnamed'}</b>{'. '}EMR: {p.emr || 'N/A'}{q && p.ward ? '. Ward: ' + p.ward : ''}<AdmissionTagBadge patient={p} /><PendingDischargeBadge status={p.dischargeStatus} /></span>
                 <span>{p.diagnosis || ''}</span>
               </div>
             ))}

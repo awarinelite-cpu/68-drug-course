@@ -2,7 +2,7 @@ export const ROUTE_OPTIONS = ['', 'Oral', 'IV', 'IM', 'SC', 'Sublingual', 'Topic
 export const FREQ_OPTIONS = ['', 'OD', 'Daily', 'Mane', 'Nocte', 'AM', 'PM', 'HS', 'BD', 'TDS', 'Premeal TDS', 'QDS', 'QOD', 'STAT', 'STAT then Q4H', 'STAT then Q6H', 'STAT then Q8H', 'STAT then Q12H', 'PRN', 'Q4H', 'Q6H', '8hrly', 'Q8H', '12hrly', 'Q12H', 'Weekly', 'Twice Weekly', 'Thrice Weekly', '0,12,24hr', 'Other'];
 export const ACTION_OPTIONS = ['', 'Ongoing', 'Completed', 'Discontinued', 'Withheld', 'Other'];
 export const REMARK_OPTIONS = ['', 'Given', 'Not Given'];
-export const STATUS_LABELS = { referred: 'Referred to another hospital', transferred: 'Transferred to another ward', discharged: 'Discharged', died: 'Death' };
+export const STATUS_LABELS = { referred: 'Referred to another hospital', transferred: 'Transferred to another ward', discharged: 'Discharged', died: 'Death', dama: 'Discharged Against Medical Advice (DAMA)', absconded: 'Absconded' };
 export const WARD_OPTIONS = [
   '"A" WARD', 'ACCIDENT & EMERGENCY', 'GYNAE WARD', 'MATERNITY WARD', 'PEDIATRIC/NICU WARD',
   'THEATER', 'ICU', 'FEMALE MEDICAL WARD', 'FEMALE SURGICAL WARD', 'MALE MEDICAL WARD',

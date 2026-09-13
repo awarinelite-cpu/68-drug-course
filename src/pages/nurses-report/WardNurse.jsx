@@ -862,7 +862,7 @@ function WardPatientPicker({ value, options, onSelect, usedIds }) {
                         <div className="ward-patient-picker-tag duplicate">{'\u26A0\uFE0F Duplicate EMR \u2014 check with Overall Nurse'}</div>
                       )}
                       {o.dischargeStatus ? (
-                        <div className="ward-patient-picker-tag">{o.dischargeStatus === 'TRANS OUT' ? 'TRANS OUT' : o.dischargeStatus === 'DEATH' ? 'Death' : 'Discharged'}</div>
+                        <div className="ward-patient-picker-tag">{o.dischargeStatus === 'TRANS OUT' ? 'TRANS OUT' : o.dischargeStatus === 'DEATH' ? 'Death' : o.dischargeStatus === 'DAMA' ? 'DAMA' : o.dischargeStatus === 'ABSC' ? 'Absconded' : 'Discharged'}</div>
                       ) : o.admissionTag ? (
                         <div className="ward-patient-picker-tag admission">{ADMISSION_TAG_LABEL[o.admissionTag] || o.admissionTag}</div>
                       ) : null}
@@ -898,7 +898,7 @@ function WardPanelRest({ h, showLabel, isAdmin, navigate, includeShiftTable = tr
   let quickLookupTag = null;
   if (quickLookupRecord) {
     quickLookupTag = quickLookupRecord.dischargeStatus
-      ? (quickLookupRecord.dischargeStatus === 'TRANS OUT' ? 'TRANS OUT' : quickLookupRecord.dischargeStatus === 'DEATH' ? 'Death' : 'Discharged')
+      ? (quickLookupRecord.dischargeStatus === 'TRANS OUT' ? 'TRANS OUT' : quickLookupRecord.dischargeStatus === 'DEATH' ? 'Death' : quickLookupRecord.dischargeStatus === 'DAMA' ? 'DAMA' : quickLookupRecord.dischargeStatus === 'ABSC' ? 'Absconded' : 'Discharged')
       : quickLookupRecord.admissionTag
         ? (ADMISSION_TAG_LABEL[quickLookupRecord.admissionTag] || quickLookupRecord.admissionTag)
         : 'Active \u2014 no status tag';
@@ -1245,7 +1245,7 @@ function MergedWardReportPanel({ group, isAdmin, profile, user, navigate }) {
   let quickLookupTag = null;
   if (quickLookupRecord) {
     quickLookupTag = quickLookupRecord.dischargeStatus
-      ? (quickLookupRecord.dischargeStatus === 'TRANS OUT' ? 'TRANS OUT' : quickLookupRecord.dischargeStatus === 'DEATH' ? 'Death' : 'Discharged')
+      ? (quickLookupRecord.dischargeStatus === 'TRANS OUT' ? 'TRANS OUT' : quickLookupRecord.dischargeStatus === 'DEATH' ? 'Death' : quickLookupRecord.dischargeStatus === 'DAMA' ? 'DAMA' : quickLookupRecord.dischargeStatus === 'ABSC' ? 'Absconded' : 'Discharged')
       : quickLookupRecord.admissionTag
         ? (ADMISSION_TAG_LABEL[quickLookupRecord.admissionTag] || quickLookupRecord.admissionTag)
         : 'Active \u2014 no status tag';
