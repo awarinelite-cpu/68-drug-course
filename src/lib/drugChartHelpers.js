@@ -939,15 +939,15 @@ export function parseBulkText(text) {
 }
 
 // Compares `before` and `after` on the given fields (a { field: label } map)
-// and returns one human-readable "Label: "old" → "new"" line per changed
-// field. Used to build a single audit-log entry per edit session instead of
-// one per keystroke.
+// and returns one plain "Label: value" line per changed field, showing the
+// new value only (no quotes, no arrows). Used to build a single audit-log
+// entry per edit session instead of one per keystroke.
 export function diffFields(before, after, fieldLabels) {
   const changes = [];
   Object.keys(fieldLabels).forEach(f => {
     const a = (before[f] || '').toString();
     const b = (after[f] || '').toString();
-    if (a !== b) changes.push(fieldLabels[f] + ': "' + (a || '—') + '" \u2192 "' + (b || '—') + '"');
+    if (a !== b) changes.push(fieldLabels[f] + ': ' + (b || '—'));
   });
   return changes;
 }

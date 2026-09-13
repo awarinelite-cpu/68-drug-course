@@ -398,7 +398,7 @@ export default function DrugCourseChart() {
     const oldVal = (fields.f_diagnosis || '').trim();
     const newVal = diagEditText.trim();
     if (oldVal !== newVal) {
-      logAudit('Diagnosis: "' + (oldVal || '—') + '" → "' + (newVal || '—') + '"');
+      logAudit('Diagnosis edited\nDiagnosis: ' + (newVal || '—'));
     }
     updateField('f_diagnosis', diagEditText);
     setDiagModalOpen(false);
@@ -417,8 +417,8 @@ export default function DrugCourseChart() {
     const wasBlank = !before.name && !before.route && !before.frequency && !before.action && !before.duration;
     const changes = diffFields(before, after, { name: 'Name', route: 'Route', frequency: 'Frequency', action: 'Action', duration: 'Duration' });
     if (changes.length) {
-      const prefix = wasBlank ? ('Drug added (#' + (i + 1) + '): ') : ('Drug #' + (i + 1) + ' edited: ');
-      logAudit(prefix + changes.join(', '));
+      const prefix = wasBlank ? ('Drug added (#' + (i + 1) + ')') : ('Drug #' + (i + 1) + ' edited');
+      logAudit(prefix + '\n' + changes.join('\n'));
     }
     delete drugRowSnapshots.current[i];
     setEditingDrugRows((e) => { const n = { ...e }; delete n[i]; return n; });
@@ -484,8 +484,8 @@ export default function DrugCourseChart() {
     const afterDiff = { ...(row || {}), snoDisplay: buildSnoText(row?.sno, row?.skipped) };
     const changes = diffFields(beforeDiff, afterDiff, { date: 'Date', snoDisplay: 'Drug S/N', time: 'Time', dose: 'Dose', route: 'Route', remark: 'Remark' });
     if (changes.length) {
-      const prefix = wasBlank ? ('Dose recorded (row ' + (i + 1) + '): ') : ('Chart entry edited (row ' + (i + 1) + '): ');
-      logAudit(prefix + changes.join(', '));
+      const prefix = wasBlank ? ('Dose recorded (Row ' + (i + 1) + ')') : ('Chart entry edited (Row ' + (i + 1) + ')');
+      logAudit(prefix + '\n' + changes.join('\n'));
     }
     delete chartRowSnapshots.current[i];
     setEditingChartRows((e) => { const n = { ...e }; delete n[i]; return n; });
@@ -1160,7 +1160,7 @@ export default function DrugCourseChart() {
       {careModalOpen && (
         <div className="modal-overlay no-print" onClick={(e) => { if (e.target === e.currentTarget) closeCareModal(); }}>
           <div className="modal-box">
-            <div className="modal-header"><h3>\uD83D\uDCAC Care Instructions (Vitals / Standing Orders)</h3><button className="modal-close" onClick={closeCareModal}>&times;</button></div>
+            <div className="modal-header"><h3>💬 Care Instructions (Vitals / Standing Orders)</h3><button className="modal-close" onClick={closeCareModal}>&times;</button></div>
             <div className="modal-body">
               {!careInstructions.length && <p style={{ color: '#777', fontSize: 13, margin: 0 }}>No care instructions recorded yet.</p>}
               {careInstructions.map((o, i) => (
@@ -1253,7 +1253,7 @@ export default function DrugCourseChart() {
       {auditModalOpen && (
         <div className="modal-overlay no-print" onClick={(e) => { if (e.target === e.currentTarget) setAuditModalOpen(false); }}>
           <div className="modal-box">
-            <div className="modal-header"><h3>\uD83D\uDD53 Audit Log</h3><button className="modal-close" onClick={() => setAuditModalOpen(false)}>&times;</button></div>
+            <div className="modal-header"><h3>🕓 Audit Log</h3><button className="modal-close" onClick={() => setAuditModalOpen(false)}>&times;</button></div>
             <div className="modal-body">
               {!auditLog.length && <p style={{ color: '#777', fontSize: 13, margin: 0 }}>No changes logged yet.</p>}
               {auditLog.slice().reverse().map((entry, i) => (
