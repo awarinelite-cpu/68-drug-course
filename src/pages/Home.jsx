@@ -14,18 +14,23 @@ import { wardHeadcount } from "../lib/wardCensus.js";
 import { reportWardKeysForPatientWard, patientWardAndBedTypeForReportKey } from "../lib/wardNameMatch.js";
 import { WARDS } from "../lib/nurses-report-common.js";
 import { loadWardPatients, loadIncomingTransfers, searchPatients, findPatientByEmrExact } from "../lib/patientDirectory.js";
-import { activeAdmissionTag, ADMISSION_TAG_LABEL } from "../lib/patientAdmissionStatus.js";
+import { activeAdmissionTag, ADMISSION_TAG_LABEL, readmitLatestAdmission, READMIT_ELIGIBLE_TAGS } from "../lib/patientAdmissionStatus.js";
 
 function normEmr(emr) { return (emr || '').trim().toLowerCase(); }
 
-// Ward-list status badge for patients tagged DISCHARGE/TRANS OUT/DEATH by
-// applyPatientStatus (see patientAdmissionStatus.js) but still on the ward
-// roster, awaiting the ward nurse's closing report before
-// closeOutDischargedPatient clears their ward field and drops them off
-// this list. Reuses the same badge-* classes Overview.jsx/Admission.jsx
-// already use for archived-admission status pills.
+// Ward-list status badge for patients tagged DISCHARGE/TRANS OUT/DEATH/
+// DAMA/ABSC by applyPatientStatus (see patientAdmissionStatus.js) but
+// still on the ward roster, awaiting the ward nurse's closing report
+// before closeOutDischargedPatient clears their ward field and drops
+// them off this list. Reuses the same badge-* classes Overview.jsx/
+// Admission.jsx already use for archived-admission status pills. For
+// tags in READMIT_ELIGIBLE_TAGS (everything except DEATH — a transfer
+// to another ward never sets dischargeStatus in the first place, see
+// applyPatientStatus), also offers an inline Readmit action so a nurse
+// doesn't have to open Overview and hunt for the archived admission.
 const DISCHARGE_BADGE_CLASS = { 'DISCHARGE': 'badge-discharged', 'TRANS OUT': 'badge-referred', 'DEATH': 'badge-died', 'DAMA': 'badge-dama', 'ABSC': 'badge-absconded' };
-function PendingDischargeBadge({ status }) {
+function PendingDischargeBadge({ patient, busy, message, onReadmit }) {
+  const status = patient.dischargeStatus;
   if (!status) return null;
   return (
     <>
@@ -33,6 +38,22 @@ function PendingDischargeBadge({ status }) {
       <span className={"oi-badge " + (DISCHARGE_BADGE_CLASS[status] || 'badge-discharged')} style={{ fontSize: 12, padding: '2px 8px', marginTop: 2 }}>
         {status} — awaiting ward report
       </span>
+      {READMIT_ELIGIBLE_TAGS.includes(status) && (
+        <button
+          className="oi-badge"
+          style={{ fontSize: 12, padding: '2px 8px', marginTop: 2, marginLeft: 4, border: 'none', cursor: 'pointer', background: '#2563eb', color: '#fff' }}
+          disabled={busy}
+          onClick={(e) => { e.stopPropagation(); onReadmit(patient); }}
+        >
+          {busy ? 'Working…' : '\u21BA Readmit'}
+        </button>
+      )}
+      {message && (
+        <>
+          <br />
+          <span style={{ fontSize: 11, color: message.color }}>{message.text}</span>
+        </>
+      )}
     </>
   );
 }
@@ -152,6 +173,37 @@ export default function Home() {
     ]);
     setMyWardPatients(wardList);
     setIncomingTransfers(incoming);
+  }
+
+  // Readmit action inline on the ward list — cancels a DISCHARGE/TRANS
+  // OUT/DAMA/ABSC exit and restores the most recent archived admission
+  // back to active (see readmitLatestAdmission in patientAdmissionStatus.js),
+  // without a nurse having to open Overview and find the record by hand.
+  // Keyed by patient id so busy/status only affects the row that was tapped.
+  const [readmitBusyId, setReadmitBusyId] = useState(null);
+  const [readmitMsgs, setReadmitMsgs] = useState({});
+
+  async function handleReadmit(p) {
+    const patientName = (p.name || '').trim() || 'this patient';
+    if (!confirm('Readmit ' + patientName + '?\n\nThis cancels the exit and restores the drug chart, vitals, glycemic chart, intake & output, and seizure chart from this admission back to active. Care continues from exactly where it left off.')) return;
+    if (!navigator.onLine) {
+      setReadmitMsgs((m) => ({ ...m, [p.id]: { color: '#b91c1c', text: 'This needs an internet connection to safely restore the archived record. Please try again once online.' } }));
+      return;
+    }
+    setReadmitBusyId(p.id);
+    setReadmitMsgs((m) => ({ ...m, [p.id]: { color: '#555', text: 'Restoring charts\u2026' } }));
+    const result = await readmitLatestAdmission({ patientId: p.id, nurseName: profile?.name });
+    setReadmitBusyId(null);
+    if (!result.ok) {
+      setReadmitMsgs((m) => ({ ...m, [p.id]: { color: '#b91c1c', text: result.message } }));
+      return;
+    }
+    setReadmitMsgs((m) => ({ ...m, [p.id]: { color: '#16a34a', text: 'Readmitted.' } }));
+    // Refresh the visible list(s) so the DISCHARGE/etc. badge drops off
+    // now that the patient is active again.
+    loadWardData(true);
+    const term = searchQuery.trim();
+    if (term) searchPatients(term).then(setSearchResults);
   }
 
   // Debounced cross-ward search — fires a targeted, indexed query (see
@@ -630,7 +682,7 @@ export default function Home() {
                     {g.patients.length === 0 && <div style={{ fontSize: 12, color: '#888' }}>No patients yet.</div>}
                     {g.patients.map(p => (
                       <div key={p.id} className="search-result-item" onClick={() => openPatient(p)}>
-                        <span><b>{p.name || 'Unnamed'}</b>{'. '}EMR: {p.emr || 'N/A'}<AdmissionTagBadge patient={p} /><PendingDischargeBadge status={p.dischargeStatus} /></span>
+                        <span><b>{p.name || 'Unnamed'}</b>{'. '}EMR: {p.emr || 'N/A'}<AdmissionTagBadge patient={p} /><PendingDischargeBadge patient={p} busy={readmitBusyId === p.id} message={readmitMsgs[p.id]} onReadmit={handleReadmit} /></span>
                         <span>{p.diagnosis || ''}</span>
                       </div>
                     ))}
@@ -643,7 +695,7 @@ export default function Home() {
                     </div>
                     {pedGroups.unassigned.map(p => (
                       <div key={p.id} className="search-result-item" onClick={() => openPatient(p)}>
-                        <span><b>{p.name || 'Unnamed'}</b>{'. '}EMR: {p.emr || 'N/A'}<AdmissionTagBadge patient={p} /><PendingDischargeBadge status={p.dischargeStatus} /></span>
+                        <span><b>{p.name || 'Unnamed'}</b>{'. '}EMR: {p.emr || 'N/A'}<AdmissionTagBadge patient={p} /><PendingDischargeBadge patient={p} busy={readmitBusyId === p.id} message={readmitMsgs[p.id]} onReadmit={handleReadmit} /></span>
                         <span>{p.diagnosis || ''}</span>
                       </div>
                     ))}
@@ -653,7 +705,7 @@ export default function Home() {
             )}
             {patientsLoaded && visiblePatients.length > 0 && !pedGroups && visiblePatients.map(p => (
               <div key={p.id} className="search-result-item" onClick={() => openPatient(p)}>
-                <span><b>{p.name || 'Unnamed'}</b>{'. '}EMR: {p.emr || 'N/A'}{q && p.ward ? '. Ward: ' + p.ward : ''}<AdmissionTagBadge patient={p} /><PendingDischargeBadge status={p.dischargeStatus} /></span>
+                <span><b>{p.name || 'Unnamed'}</b>{'. '}EMR: {p.emr || 'N/A'}{q && p.ward ? '. Ward: ' + p.ward : ''}<AdmissionTagBadge patient={p} /><PendingDischargeBadge patient={p} busy={readmitBusyId === p.id} message={readmitMsgs[p.id]} onReadmit={handleReadmit} /></span>
                 <span>{p.diagnosis || ''}</span>
               </div>
             ))}
