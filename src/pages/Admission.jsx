@@ -10,8 +10,8 @@ import { buildExportRecord, downloadRecordAsPdf, downloadRecordAsJson, sharePdf 
 import Topbar from "../components/Topbar.jsx";
 import PatientBanner from "../components/PatientBanner.jsx";
 
-const STATUS_LABELS = { referred: 'Referred to another hospital', transferred: 'Transferred to another ward', discharged: 'Discharged' };
-const BADGE_CLASS = { referred: 'badge-referred', transferred: 'badge-transferred', discharged: 'badge-discharged' };
+const STATUS_LABELS = { referred: 'Referred to another hospital', transferred: 'Transferred to another ward', discharged: 'Discharged', died: 'Death' };
+const BADGE_CLASS = { referred: 'badge-referred', transferred: 'badge-transferred', discharged: 'badge-discharged', died: 'badge-died' };
 
 const CHARTS = [
   { key: 'drug-course-chart', label: 'Drug Course Chart', icon: '💊' },

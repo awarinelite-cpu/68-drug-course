@@ -13,7 +13,8 @@ import {
   ROUTE_OPTIONS, FREQ_OPTIONS, ACTION_OPTIONS, STATUS_LABELS, WARD_OPTIONS, actionColor, defaultRow,
   dueLabelFor, withDrugCompletionChecked, computeRouteFromSno, parseBulkText,
   parseDoseSequence, administrationTimesFor, flaggedDrugRefs, flaggedDrugMessage, diffFields,
-  autoDurationForFrequency, buildSnoSegments, buildSnoText, abbreviateReason
+  autoDurationForFrequency, buildSnoSegments, buildSnoText, abbreviateReason,
+  parseWeeklyFrequency, weeklyDosesGivenThisWeek
 } from "../lib/drugChartHelpers.js";
 import { ROSTER_TAG_FOR_REASON, clearAllocationsForPatient } from "../lib/patientAdmissionStatus.js";
 
@@ -74,6 +75,28 @@ function DoseSequenceBadges({ drug, index, chartRows }) {
           </span>
         );
       })}
+    </div>
+  );
+}
+
+// Green check-tally under the Frequency cell for a "Twice Weekly"/"Thrice
+// Weekly"/etc. drug (see parseWeeklyFrequency) — one \u2705 per dose already
+// given this Mon-Sun week, so a nurse can tell at a glance whether e.g.
+// this week's 2nd EPO dose has been given yet, without doing date math.
+// Mirrors DoseSequenceBadges' pattern but keyed off the calendar week
+// rather than a fixed hour-offset sequence.
+function WeeklyDoseBadges({ drug, index, chartRows, now }) {
+  const timesPerWeek = parseWeeklyFrequency(drug.frequency);
+  if (!timesPerWeek) return null;
+  // weeklyDosesGivenThisWeek is already scoped to the current Mon-Sun week
+  // (see startOfWeek in drugChartHelpers.js), so this naturally reads 0 —
+  // no checkmark — the moment a new week starts, with no separate reset
+  // logic needed: last week's doses simply fall outside the window.
+  const givenThisWeek = weeklyDosesGivenThisWeek(chartRows, index, now);
+  if (!givenThisWeek) return null;
+  return (
+    <div className="dose-seq-badges" title={givenThisWeek + ' of ' + timesPerWeek + ' doses given this week'}>
+      <span className="dose-seq-pill given">{'\u2705'.repeat(Math.min(givenThisWeek, timesPerWeek))}</span>
     </div>
   );
 }
@@ -737,7 +760,7 @@ export default function DrugCourseChart() {
     // automatically, the moment the patient is actually discharged — never
     // typed in manually.
     let dischargeDate = fields.f_discharge;
-    if (reason === 'discharged' && !dischargeDate) {
+    if ((reason === 'discharged' || reason === 'died') && !dischargeDate) {
       dischargeDate = new Date().toISOString().slice(0, 10);
       setFields((f) => ({ ...f, f_discharge: dischargeDate }));
       latestRef.current.fields = { ...latestRef.current.fields, f_discharge: dischargeDate };
@@ -961,6 +984,7 @@ export default function DrugCourseChart() {
                       <td>
                         {d.frequency || '—'}
                         <DoseSequenceBadges drug={d} index={i} chartRows={chartRows} />
+                        <WeeklyDoseBadges drug={d} index={i} chartRows={chartRows} now={now} />
                       </td>
                       <td>{d.action ? <span style={{ display: 'inline-block', padding: '2px 8px', borderRadius: 10, color: '#fff', fontSize: 11, fontWeight: 'bold', background: actionColor(d.action) }}>{d.action}</span> : '—'}</td>
                       <td>{d.duration || '—'}</td>
@@ -1079,6 +1103,7 @@ export default function DrugCourseChart() {
                 <option value="referred">Referred to another hospital</option>
                 <option value="transferred">Transferred to another ward</option>
                 <option value="discharged">Discharged</option>
+                <option value="died">Death</option>
               </select>
               {statusAction === 'transferred' && (
                 <select style={{ width: 'auto', minWidth: 220 }} value={transferWard} onChange={(e) => setTransferWard(e.target.value)}>

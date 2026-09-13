@@ -8,7 +8,7 @@ import { usePatientHeader } from "../hooks/usePatientHeader.js";
 import Topbar from "../components/Topbar.jsx";
 import PatientBanner from "../components/PatientBanner.jsx";
 
-const STATUS_LABELS = { referred: 'Referred to another hospital', transferred: 'Transferred to another ward', discharged: 'Discharged' };
+const STATUS_LABELS = { referred: 'Referred to another hospital', transferred: 'Transferred to another ward', discharged: 'Discharged', died: 'Death' };
 
 const CHART_DEFS = {
   '6point': {

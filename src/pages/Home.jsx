@@ -17,6 +17,25 @@ import { loadWardPatients, loadIncomingTransfers, searchPatients, findPatientByE
 
 function normEmr(emr) { return (emr || '').trim().toLowerCase(); }
 
+// Ward-list status badge for patients tagged DISCHARGE/TRANS OUT/DEATH by
+// applyPatientStatus (see patientAdmissionStatus.js) but still on the ward
+// roster, awaiting the ward nurse's closing report before
+// closeOutDischargedPatient clears their ward field and drops them off
+// this list. Reuses the same badge-* classes Overview.jsx/Admission.jsx
+// already use for archived-admission status pills.
+const DISCHARGE_BADGE_CLASS = { 'DISCHARGE': 'badge-discharged', 'TRANS OUT': 'badge-referred', 'DEATH': 'badge-died' };
+function PendingDischargeBadge({ status }) {
+  if (!status) return null;
+  return (
+    <>
+      <br />
+      <span className={"oi-badge " + (DISCHARGE_BADGE_CLASS[status] || 'badge-discharged')} style={{ fontSize: 12, padding: '2px 8px', marginTop: 2 }}>
+        {status} — awaiting ward report
+      </span>
+    </>
+  );
+}
+
 const EMPTY_FORM = { name: '', emr: '', diagnosis: '', ward: '', pedBedType: '', age: '', hospNo: '', admissionDate: '', allergies: '', insurance: '' };
 
 // Wards are stored/compared in ALL CAPS (matches WARD_OPTIONS); this is
@@ -591,7 +610,7 @@ export default function Home() {
                     {g.patients.length === 0 && <div style={{ fontSize: 12, color: '#888' }}>No patients yet.</div>}
                     {g.patients.map(p => (
                       <div key={p.id} className="search-result-item" onClick={() => openPatient(p)}>
-                        <span><b>{p.name || 'Unnamed'}</b>{'. '}EMR: {p.emr || 'N/A'}</span>
+                        <span><b>{p.name || 'Unnamed'}</b>{'. '}EMR: {p.emr || 'N/A'}<PendingDischargeBadge status={p.dischargeStatus} /></span>
                         <span>{p.diagnosis || ''}</span>
                       </div>
                     ))}
@@ -604,7 +623,7 @@ export default function Home() {
                     </div>
                     {pedGroups.unassigned.map(p => (
                       <div key={p.id} className="search-result-item" onClick={() => openPatient(p)}>
-                        <span><b>{p.name || 'Unnamed'}</b>{'. '}EMR: {p.emr || 'N/A'}</span>
+                        <span><b>{p.name || 'Unnamed'}</b>{'. '}EMR: {p.emr || 'N/A'}<PendingDischargeBadge status={p.dischargeStatus} /></span>
                         <span>{p.diagnosis || ''}</span>
                       </div>
                     ))}
@@ -614,7 +633,7 @@ export default function Home() {
             )}
             {patientsLoaded && visiblePatients.length > 0 && !pedGroups && visiblePatients.map(p => (
               <div key={p.id} className="search-result-item" onClick={() => openPatient(p)}>
-                <span><b>{p.name || 'Unnamed'}</b>{'. '}EMR: {p.emr || 'N/A'}{q && p.ward ? '. Ward: ' + p.ward : ''}</span>
+                <span><b>{p.name || 'Unnamed'}</b>{'. '}EMR: {p.emr || 'N/A'}{q && p.ward ? '. Ward: ' + p.ward : ''}<PendingDischargeBadge status={p.dischargeStatus} /></span>
                 <span>{p.diagnosis || ''}</span>
               </div>
             ))}

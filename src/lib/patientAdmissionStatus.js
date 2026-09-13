@@ -33,7 +33,7 @@ function blankChartRows() { return Array(18).fill(null).map(() => defaultRow());
 // a ward transfer already has its own pendingTransfer marker and the
 // patient is expected to keep appearing normally once accepted onto the
 // receiving ward.
-export const ROSTER_TAG_FOR_REASON = { discharged: 'DISCHARGE', referred: 'TRANS OUT' };
+export const ROSTER_TAG_FOR_REASON = { discharged: 'DISCHARGE', referred: 'TRANS OUT', died: 'DEATH' };
 
 // Clears a patient's ward membership once their discharge/trans-out has
 // been given a closing write-up and that Ward Report has been submitted
@@ -193,7 +193,7 @@ export async function applyPatientStatus({ patientId, reason, transferWard, from
   // Discharge Date is locked (readonly) so it can only ever be set here,
   // automatically, the moment the patient is actually discharged.
   let dischargeDate = drugChartData.f_discharge;
-  if (reason === 'discharged' && !dischargeDate) {
+  if ((reason === 'discharged' || reason === 'died') && !dischargeDate) {
     dischargeDate = new Date().toISOString().slice(0, 10);
   }
 

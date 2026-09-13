@@ -62,7 +62,7 @@ function hasActiveData(a) {
 }
 
 function normalizeArchived(data, id) {
-  const STATUS_LABELS = { referred: 'Referred to another hospital', transferred: 'Transferred to another ward', discharged: 'Discharged' };
+  const STATUS_LABELS = { referred: 'Referred to another hospital', transferred: 'Transferred to another ward', discharged: 'Discharged', died: 'Death' };
   return {
     kind: data.archiveReason || 'closed',
     id,

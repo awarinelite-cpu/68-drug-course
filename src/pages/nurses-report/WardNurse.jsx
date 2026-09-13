@@ -796,10 +796,39 @@ function useWardReport(wardKey, isAdmin, profile, user) {
 // patientAdmissionStatus.js) — they stay on this list, tag and all, until
 // a closing report is submitted for them (see submitReport above), so the
 // nurse can still find and tap them to write that closing note.
-function WardPatientPicker({ value, options, onSelect }) {
+//
+// usedIds (optional) — patient ids already picked in one of this report's
+// OTHER write-up cards (see WardPanelRest below). Faded out and
+// unclickable here so a nurse building a second write-up can see at a
+// glance who she's already written on and can't pick them again by
+// mistake — except the option matching this picker's own current value,
+// which stays fully selectable/highlighted since it's this card's pick.
+function WardPatientPicker({ value, options, onSelect, usedIds }) {
   const [open, setOpen] = useState(false);
   const selected = options.find((o) => o.id === value);
   const label = selected ? ((selected.name || 'Unnamed') + (selected.emr ? ' (' + selected.emr + ')' : '')) : '\u2014 Select from ward \u2014';
+
+  // Two separate patient records can end up sharing the same EMR number
+  // (e.g. a name typed/reordered differently on re-entry - "Ernest Ukolio"
+  // vs "Ukolio Enerst", both 139680) — without a flag, both look like
+  // valid options and a nurse can't tell they're the same real patient,
+  // so she might pick either one, or the same person twice across two
+  // write-up cards, without realizing it. Flags every option whose EMR
+  // matches another option's, so she can check with the Overall Nurse/
+  // Admin instead of guessing which record is the live one.
+  const duplicateEmrIds = useMemo(() => {
+    const counts = {};
+    options.forEach((o) => {
+      const k = (o.emr || '').trim().toLowerCase();
+      if (k) counts[k] = (counts[k] || 0) + 1;
+    });
+    const ids = new Set();
+    options.forEach((o) => {
+      const k = (o.emr || '').trim().toLowerCase();
+      if (k && counts[k] > 1) ids.add(o.id);
+    });
+    return ids;
+  }, [options]);
 
   function pick(id) { onSelect(id); setOpen(false); }
 
@@ -817,20 +846,30 @@ function WardPatientPicker({ value, options, onSelect }) {
               <div className="ward-patient-picker-row" onClick={() => pick('')}>
                 <span className={"ward-patient-picker-name" + (!value ? ' is-selected' : '')}>{'\u2014 Select from ward \u2014'}</span>
               </div>
-              {options.map((o) => (
-                <div className="ward-patient-picker-row" key={o.id} onClick={() => pick(o.id)}>
-                  <div>
-                    <span className={"ward-patient-picker-name" + (o.id === value ? ' is-selected' : '')}>
-                      {(o.name || 'Unnamed') + (o.emr ? ' (' + o.emr + ')' : '')}
-                    </span>
-                    {o.dischargeStatus ? (
-                      <div className="ward-patient-picker-tag">{o.dischargeStatus === 'TRANS OUT' ? 'TRANS OUT' : 'Discharged'}</div>
-                    ) : o.admissionTag ? (
-                      <div className="ward-patient-picker-tag admission">{ADMISSION_TAG_LABEL[o.admissionTag] || o.admissionTag}</div>
-                    ) : null}
+              {options.map((o) => {
+                const isUsedElsewhere = !!usedIds && usedIds.has(o.id) && o.id !== value;
+                return (
+                  <div className={"ward-patient-picker-row" + (isUsedElsewhere ? ' is-used' : '')}
+                    key={o.id} onClick={() => { if (!isUsedElsewhere) pick(o.id); }}>
+                    <div>
+                      <span className={"ward-patient-picker-name" + (o.id === value ? ' is-selected' : '')}>
+                        {(o.name || 'Unnamed') + (o.emr ? ' (' + o.emr + ')' : '')}{o.location ? ' \u2014 ' + o.location : ''}
+                      </span>
+                      {isUsedElsewhere && (
+                        <div className="ward-patient-picker-tag used">{'Already selected in another write-up'}</div>
+                      )}
+                      {duplicateEmrIds.has(o.id) && (
+                        <div className="ward-patient-picker-tag duplicate">{'\u26A0\uFE0F Duplicate EMR \u2014 check with Overall Nurse'}</div>
+                      )}
+                      {o.dischargeStatus ? (
+                        <div className="ward-patient-picker-tag">{o.dischargeStatus === 'TRANS OUT' ? 'TRANS OUT' : o.dischargeStatus === 'DEATH' ? 'Death' : 'Discharged'}</div>
+                      ) : o.admissionTag ? (
+                        <div className="ward-patient-picker-tag admission">{ADMISSION_TAG_LABEL[o.admissionTag] || o.admissionTag}</div>
+                      ) : null}
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         </div>
@@ -849,6 +888,22 @@ function WardPanelRest({ h, showLabel, isAdmin, navigate, includeShiftTable = tr
     nightUpdateOpen, openNightUpdate, saveReport, submitReport, pillClass, pillText
   } = h;
 
+  // Quick lookup only, not tied to any write-up — lets the nurse glance at
+  // a patient's roster tag (Discharge/Trans Out/Death/admission tag) right
+  // next to Previous Occ while tallying the Shift Statistics table above,
+  // instead of scrolling all the way down to the Patients section to find
+  // that same tag on a linked write-up.
+  const [quickLookupId, setQuickLookupId] = useState('');
+  const quickLookupRecord = wardPatientOptions.find((o) => o.id === quickLookupId);
+  let quickLookupTag = null;
+  if (quickLookupRecord) {
+    quickLookupTag = quickLookupRecord.dischargeStatus
+      ? (quickLookupRecord.dischargeStatus === 'TRANS OUT' ? 'TRANS OUT' : quickLookupRecord.dischargeStatus === 'DEATH' ? 'Death' : 'Discharged')
+      : quickLookupRecord.admissionTag
+        ? (ADMISSION_TAG_LABEL[quickLookupRecord.admissionTag] || quickLookupRecord.admissionTag)
+        : 'Active \u2014 no status tag';
+  }
+
   return (
     <>
       {includeHeader && topStatus.text && (
@@ -866,19 +921,28 @@ function WardPanelRest({ h, showLabel, isAdmin, navigate, includeShiftTable = tr
 
           {includePreviousOcc && (
             <div className="card-box">
-              <div className="ward-select-row">
-                <h2 style={{ margin: 0 }}>{showLabel && w?.label ? w.label : 'Previous Occ'}</h2>
-                <span className={"status-pill " + pillClass}>{pillText}</span>
-                {includeHeader && w && (
-                  <button className="btn btn-secondary" style={{ padding: '6px 12px' }} type="button"
-                    onClick={() => navigate('/nurses-report/archive-list?type=ward&ward=' + encodeURIComponent(w.key) + '&label=' + encodeURIComponent(w.label))}>
-                    {'\uD83D\uDCC1 Archive'}
-                  </button>
+              <div className="patient-field" style={{ marginTop: 0 }}>
+                {wardPatientOptions && wardPatientOptions.length > 0 && (
+                  <label>Check a patient's status:</label>
                 )}
-              </div>
-              {showLabel && w?.label && <div style={{ fontSize: 13, color: '#6b7280', margin: '6px 0 0' }}>Previous Occ</div>}
-              <div className="patient-field" style={{ maxWidth: 140 }}>
-                <input type="number" inputMode="numeric" disabled={!editable} value={wardDoc.startOcc} onChange={(e) => updateStartOcc(e.target.value)} />
+                <div style={{ display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap' }}>
+                  {wardPatientOptions && wardPatientOptions.length > 0 && (
+                    <div style={{ flex: '1 1 180px', minWidth: 180 }}>
+                      <WardPatientPicker value={quickLookupId} options={wardPatientOptions} onSelect={setQuickLookupId} />
+                      {quickLookupTag && (
+                        <div style={{ fontSize: 12, marginTop: 4, fontWeight: 'bold', color: quickLookupRecord.dischargeStatus ? '#dc2626' : quickLookupRecord.admissionTag ? '#2563eb' : '#6b7280' }}>
+                          {quickLookupTag}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  {includeHeader && w && (
+                    <button className="btn btn-secondary" style={{ padding: '6px 12px' }} type="button"
+                      onClick={() => navigate('/nurses-report/archive-list?type=ward&ward=' + encodeURIComponent(w.key) + '&label=' + encodeURIComponent(w.label))}>
+                      {'\uD83D\uDCC1 Archive'}
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
           )}
@@ -914,7 +978,8 @@ function WardPanelRest({ h, showLabel, isAdmin, navigate, includeShiftTable = tr
                     {wardPatientOptions && wardPatientOptions.length > 0 && (
                       <div className="patient-field">
                         <label>Select Patient:</label>
-                        <WardPatientPicker value={p.sourcePatientId || ''} options={wardPatientOptions} onSelect={(id) => selectPatientFromWard(p.id, id)} />
+                        <WardPatientPicker value={p.sourcePatientId || ''} options={wardPatientOptions} onSelect={(id) => selectPatientFromWard(p.id, id)}
+                          usedIds={new Set(wardDoc.patients.filter((other) => other.id !== p.id && other.sourcePatientId).map((other) => other.sourcePatientId))} />
                       </div>
                     )}
                     {locationOptions && (
@@ -1162,6 +1227,30 @@ function MergedWardReportPanel({ group, isAdmin, profile, user, navigate }) {
   const bothLoaded = hooks.every((h) => h.wardDoc);
   const mergedDemographics = group.demographicsVariant === 'merged';
 
+  // Same idea as WardPanelRest's own Previous Occ card, but merges BOTH
+  // member wards' patients — unlike the "Select Patient" list further
+  // down (which stays hA-only, since every write-up saves under hA's
+  // doc), this is read-only lookup, so there's no reason to hide Cot
+  // patients from it. For Maternity, hB (Cots) never has real patient
+  // records (newborns aren't charted — see wardNameMatch.js), so this is
+  // effectively just hA's list there; for Paed, Bed and Cot are both real
+  // wards with their own patients, tagged here by member label so a nurse
+  // can tell which is which.
+  const [quickLookupId, setQuickLookupId] = useState('');
+  const quickLookupOptions = [
+    ...(hA.wardPatientOptions || []).map((o) => ({ ...o, location: hA.w?.label })),
+    ...(hB.wardPatientOptions || []).map((o) => ({ ...o, location: hB.w?.label }))
+  ].sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+  const quickLookupRecord = quickLookupOptions.find((o) => o.id === quickLookupId);
+  let quickLookupTag = null;
+  if (quickLookupRecord) {
+    quickLookupTag = quickLookupRecord.dischargeStatus
+      ? (quickLookupRecord.dischargeStatus === 'TRANS OUT' ? 'TRANS OUT' : quickLookupRecord.dischargeStatus === 'DEATH' ? 'Death' : 'Discharged')
+      : quickLookupRecord.admissionTag
+        ? (ADMISSION_TAG_LABEL[quickLookupRecord.admissionTag] || quickLookupRecord.admissionTag)
+        : 'Active \u2014 no status tag';
+  }
+
   async function saveBoth() { await Promise.all([hA.saveReport(), hB.saveReport()]); }
   async function submitBoth() { await Promise.all([hA.submitReport(), hB.submitReport()]); }
 
@@ -1171,7 +1260,7 @@ function MergedWardReportPanel({ group, isAdmin, profile, user, navigate }) {
         <div className="card-box">
           <div className="ward-select-row">
             <h2 style={{ margin: 0 }}>{group.label} — Shift Statistics</h2>
-            <button className="btn btn-secondary" style={{ padding: '6px 12px' }} type="button"
+            <button className="btn btn-secondary" style={{ padding: '6px 12px', marginLeft: 'auto' }} type="button"
               onClick={() => navigate('/nurses-report/archive-list?type=ward&ward=' + encodeURIComponent(hA.w.key) + '&label=' + encodeURIComponent(group.label))}>
               {'\uD83D\uDCC1 Archive'}
             </button>
@@ -1183,6 +1272,17 @@ function MergedWardReportPanel({ group, isAdmin, profile, user, navigate }) {
                 <input type="number" inputMode="numeric" disabled={!h.editable} value={h.wardDoc.startOcc} onChange={(e) => h.updateStartOcc(e.target.value)} />
               </div>
             ))}
+            {quickLookupOptions.length > 0 && (
+              <div className="patient-field" style={{ minWidth: 220 }}>
+                <label>Check a patient's status:</label>
+                <WardPatientPicker value={quickLookupId} options={quickLookupOptions} onSelect={setQuickLookupId} />
+                {quickLookupTag && (
+                  <div style={{ fontSize: 12, marginTop: 4, fontWeight: 'bold', color: quickLookupRecord.dischargeStatus ? '#dc2626' : quickLookupRecord.admissionTag ? '#2563eb' : '#6b7280' }}>
+                    {quickLookupTag}{quickLookupRecord.location ? ' \u2014 ' + quickLookupRecord.location : ''}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
           <div className="table-wrap">
             <MergedShiftTable panels={hooks.map((h) => ({

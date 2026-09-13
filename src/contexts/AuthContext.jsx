@@ -21,6 +21,15 @@ export function AuthProvider({ children }) {
         return;
       }
 
+      // A user just signed in, but their profile hasn't loaded yet — mark
+      // this as "loading" (not "signed-out") right away. Otherwise, during
+      // the getDoc() below, status still reads whatever it was a moment
+      // ago (typically "signed-out" from before login), and RequireAuth
+      // reads that stale value and bounces straight back to /login before
+      // the profile fetch below even resolves — wiping the login form the
+      // user just filled in, even though the sign-in itself succeeded.
+      setStatus("loading");
+
       const userRef = doc(db, "users", u.uid);
       let snap;
       try {

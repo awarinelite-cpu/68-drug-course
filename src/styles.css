@@ -685,6 +685,7 @@ table.chart td input { width:100%; border:none; background:transparent; text-ali
 .badge-referred { background:var(--accent-purple); }
 .badge-transferred { background:#d97706; }
 .badge-discharged { background:var(--success); }
+.badge-died { background:#7f1d1d; }
 .empty-msg { color:#777; font-size: 16px; padding:20px; text-align:center; }
 
 /* --- Ward patient count / new-patient-transfer notification badges --- */
@@ -933,6 +934,10 @@ table.ward-shift tr.shift-section-row td { font-weight: bold; text-align: left; 
 .ward-patient-picker-name.is-selected { font-weight: bold; }
 .ward-patient-picker-tag { font-size: 11px; font-weight: bold; color: #dc2626; text-transform: uppercase; letter-spacing: .02em; margin-top: 2px; }
 .ward-patient-picker-tag.admission { color: #2563eb; }
+.ward-patient-picker-tag.duplicate { color: #b45309; text-transform: none; letter-spacing: normal; }
+.ward-patient-picker-tag.used { color: #9ca3af; text-transform: none; letter-spacing: normal; font-weight: normal; }
+.ward-patient-picker-row.is-used { opacity: .45; cursor: not-allowed; }
+.ward-patient-picker-row.is-used:active { background: none; }
 .status-stamp {
   position: absolute; top: 10px; right: 14px;
   color: var(--danger); font-weight: 900; font-size: 16px; text-transform: uppercase;
