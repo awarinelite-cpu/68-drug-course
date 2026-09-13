@@ -347,7 +347,8 @@ export function defaultWardDoc(w, startOcc = 0) {
   const d = {
     label: w.label, beds: w.beds, startOcc: occ, occ: occ, vac: w.beds - occ,
     locked: false, submitted: false,
-    shifts: {}, patients: [], nightUpdate: '', nightUpdateBy: '', nightUpdatedAt: null
+    shifts: {}, patients: [], nightUpdate: '', nightUpdateBy: '', nightUpdatedAt: null,
+    demographicsRemarks: ''
   };
   SHIFTS.forEach(s => { d.shifts[s.key] = blankShift(); });
   SHIFT_STAT_FIELDS.forEach(f => { d[f.key] = 0; });
@@ -369,19 +370,47 @@ export function computeDemographicTotals(wardDoc) {
   return totals;
 }
 
-// Small "Patient Demographics" breakdown — NOT part of STAT_FIELDS, never
-// fed into Occ or any STAT_FIELDS total. Purely descriptive: who was
-// admitted, broken down by sex/age-group/affiliation. Entered per shift on
-// the Ward Nurse page (own small table below Shift Statistics), compiled
-// read-only on the Overall Nurse page, and shown read-only (with admin edit
-// mode) on archived reports.
-export const DEMOGRAPHIC_FIELDS = [
-  { key: 'male',     label: 'Male' },
-  { key: 'female',   label: 'Female' },
-  { key: 'child',    label: 'Children' },
-  { key: 'soldier',  label: 'Soldiers' },
-  { key: 'civilian', label: 'Civilians' }
+// "Patient Demographics" breakdown — NOT part of STAT_FIELDS, never fed
+// into Occ or any STAT_FIELDS total. Purely descriptive, matching the
+// paper "Summary Breakdown of Statistics" form: for each of four patient
+// movement categories (Admission/Disch/Dead/BID), a Military/Civilian
+// split, each further split by sex. Entered per shift on the Ward Nurse
+// page (own table below Shift Statistics), compiled read-only on the
+// Overall Nurse page, and shown read-only (with admin edit mode) on
+// archived reports.
+export const DEMOGRAPHIC_CATEGORIES = [
+  { key: 'adm',   label: 'Admission' },
+  { key: 'disch', label: 'Disch' },
+  { key: 'dead',  label: 'Dead' },
+  { key: 'bid',   label: 'BID' }
 ];
+
+export const DEMOGRAPHIC_AFFILIATIONS = [
+  { key: 'mil', label: 'Military' },
+  { key: 'civ', label: 'Civilian' }
+];
+
+export const DEMOGRAPHIC_SEXES = ['M', 'F'];
+
+// Flat leaf list — one entry per paper-form cell (4 categories x 2
+// affiliations x 2 sexes = 16). Kept as a flat {key,label} array (each
+// entry also carrying its category/affiliation/sex) so every consumer
+// that just needs "all the fields" (blankShift, defaultWardDoc,
+// computeDemographicTotals, isWardDocUntouched) keeps working by
+// iterating this the same way it always has; components that need the
+// paper form's three-row grouped header instead nest by
+// DEMOGRAPHIC_CATEGORIES / DEMOGRAPHIC_AFFILIATIONS directly.
+export const DEMOGRAPHIC_FIELDS = DEMOGRAPHIC_CATEGORIES.flatMap((cat) =>
+  DEMOGRAPHIC_AFFILIATIONS.flatMap((aff) =>
+    DEMOGRAPHIC_SEXES.map((sex) => ({
+      key: `${cat.key}_${aff.key}${sex}`,
+      label: `${cat.label} ${aff.key === 'mil' ? 'Mil' : 'Civ'} ${sex}`,
+      category: cat.key,
+      affiliation: aff.key,
+      sex
+    }))
+  )
+);
 
 // Structured fields for each patient write-up under a ward's report,
 // matching the paper form's per-patient block. EMR sits first (in the

@@ -8,7 +8,8 @@ import ReportContactModal from "../../components/ReportContactModal.jsx";
 import { db } from "../../firebase.js";
 import { useAuth } from "../../contexts/AuthContext.jsx";
 import {
-  WARDS, WARD_GROUPS, STAT_FIELDS, SHIFT_STAT_FIELDS, SHIFTS, PATIENT_FIELDS, DEMOGRAPHIC_FIELDS,
+  WARDS, WARD_GROUPS, STAT_FIELDS, SHIFT_STAT_FIELDS, SHIFTS, PATIENT_FIELDS,
+  DEMOGRAPHIC_FIELDS, DEMOGRAPHIC_CATEGORIES, DEMOGRAPHIC_AFFILIATIONS,
   reportDateId, reportPeriodLabel,
   wardReportPeriodLabel, weekId, occDelta, defaultWardDoc, movementColorClass,
   loadWardNameOverrides, saveWardNameOverride,
@@ -877,8 +878,17 @@ export default function OverallNurse() {
             <table className="report">
               <thead>
                 <tr>
-                  <th>Ward</th>
-                  {DEMOGRAPHIC_FIELDS.filter(f => f.key !== 'child').map(f => <th key={f.key}>{f.label}</th>)}
+                  <th rowSpan={3}>Ward</th>
+                  {DEMOGRAPHIC_CATEGORIES.map((cat) => <th key={cat.key} colSpan={4}>{cat.label}</th>)}
+                  <th rowSpan={3}>Rmks</th>
+                </tr>
+                <tr>
+                  {DEMOGRAPHIC_CATEGORIES.flatMap((cat) =>
+                    DEMOGRAPHIC_AFFILIATIONS.map((aff) => <th key={cat.key + aff.key} colSpan={2}>{aff.label}</th>)
+                  )}
+                </tr>
+                <tr>
+                  {DEMOGRAPHIC_FIELDS.map((f) => <th key={f.key}>{f.sex}</th>)}
                 </tr>
               </thead>
               <tbody>
@@ -887,13 +897,15 @@ export default function OverallNurse() {
                   return (
                     <tr key={w.key}>
                       <td className="ward-name">{w.label}</td>
-                      {DEMOGRAPHIC_FIELDS.filter(f => f.key !== 'child').map((f) => <td key={f.key}>{typeof data[f.key] === 'number' ? data[f.key] : 0}</td>)}
+                      {DEMOGRAPHIC_FIELDS.map((f) => <td key={f.key}>{typeof data[f.key] === 'number' ? data[f.key] : 0}</td>)}
+                      <td>{data.demographicsRemarks || ''}</td>
                     </tr>
                   );
                 })}
                 <tr className="totals-row">
                   <td className="ward-name">TOTAL</td>
-                  {DEMOGRAPHIC_FIELDS.filter(f => f.key !== 'child').map(f => <td key={f.key}>{demoTotals[f.key]}</td>)}
+                  {DEMOGRAPHIC_FIELDS.map(f => <td key={f.key}>{demoTotals[f.key]}</td>)}
+                  <td></td>
                 </tr>
               </tbody>
             </table>

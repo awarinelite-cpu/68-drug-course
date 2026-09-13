@@ -8,7 +8,7 @@ import { useGoBack } from "../../hooks/useGoBack.js";
 import {
   WARDS, SHIFT_STAT_FIELDS, SHIFTS, PATIENT_FIELDS, PATIENT_STATUS_OPTIONS,
   PATIENT_STATUS_ARCHIVE_REASON,
-  DEMOGRAPHIC_FIELDS, computeDemographicTotals, movementColorClass,
+  DEMOGRAPHIC_FIELDS, DEMOGRAPHIC_CATEGORIES, DEMOGRAPHIC_AFFILIATIONS, computeDemographicTotals, movementColorClass,
   reportDateId, occDelta, blankShift, defaultWardDoc, wardSelectorOptions,
   isWardDocUntouched
 } from "../../lib/nurses-report-common.js";
@@ -239,14 +239,35 @@ function ShiftTable({ wardDoc, census, movementTotals, editable, onBeds, onField
   );
 }
 
+// Three-row grouped header matching the paper form: category
+// (Admission/Disch/Dead/BID) spanning 4 columns each, Military/Civilian
+// spanning 2 each within that, then the M/F leaf columns — reused as-is
+// by every demographics table below (Ward Nurse, merged-ward, Overall
+// Nurse compiled view, Archive).
+function DemographicsHeaderRows({ leadCell }) {
+  return (
+    <>
+      <tr>
+        {leadCell}
+        {DEMOGRAPHIC_CATEGORIES.map((cat) => <th key={cat.key} colSpan={4}>{cat.label}</th>)}
+      </tr>
+      <tr>
+        {DEMOGRAPHIC_CATEGORIES.flatMap((cat) =>
+          DEMOGRAPHIC_AFFILIATIONS.map((aff) => <th key={cat.key + aff.key} colSpan={2}>{aff.label}</th>)
+        )}
+      </tr>
+      <tr>
+        {DEMOGRAPHIC_FIELDS.map((f) => <th key={f.key}>{f.sex}</th>)}
+      </tr>
+    </>
+  );
+}
+
 function DemographicsTable({ wardDoc, totals, editable, onField }) {
   return (
     <table className="shift">
       <thead>
-        <tr>
-          <th>Shift</th>
-          {DEMOGRAPHIC_FIELDS.map(f => <th key={f.key}>{f.label}</th>)}
-        </tr>
+        <DemographicsHeaderRows leadCell={<th rowSpan={3}>Shift</th>} />
       </thead>
       <tbody>
         {SHIFTS.map((s) => (
@@ -269,19 +290,17 @@ function DemographicsTable({ wardDoc, totals, editable, onField }) {
   );
 }
 
-// Maternity's own Patient Demographics table: no flat "Children" count —
-// instead a "COT" group header spans Male/Female sub-columns tracking
-// newborns' sex, since every patient on Mothers is an adult woman (a plain
-// Male/Female split wouldn't mean anything there) while the babies' sex is
-// the number actually worth tracking. Soldiers/Civilians sit under their
-// own "MOTHERS" group header alongside it — mirroring the MOTHERS/COTS
-// row labels on the merged Shift Statistics table above (matbed/matcot in
-// WARDS), so both tables read the same way: COT columns = newborns,
-// MOTHERS columns = the adult patients. Uses two dedicated fields
-// (childMale/childFemale) rather than the shared DEMOGRAPHIC_FIELDS'
-// male/female/child keys, so this never mixes into other wards' adult
-// male/female counts or the "All Wards" grand totals — those still only
-// read the shared DEMOGRAPHIC_FIELDS keys.
+// Maternity's own Patient Demographics table: a "COT" group tracking
+// newborns' sex (Male/Female) sits alongside the same
+// Admission/Disch/Dead/BID x Military/Civilian x M/F breakdown every
+// other ward uses for the adult "MOTHERS" side — mirroring the
+// MOTHERS/COTS row labels on the merged Shift Statistics table above
+// (matbed/matcot in WARDS), so both tables read the same way: COT
+// columns = newborns, MOTHERS columns = the adult patients. COT uses
+// two dedicated fields (childMale/childFemale) outside the shared
+// DEMOGRAPHIC_FIELDS, so newborns never mix into other wards' counts or
+// the "All Wards" grand totals — those still only read the shared
+// DEMOGRAPHIC_FIELDS keys.
 function MaternityDemographicsTable({ wardDoc, editable, onField }) {
   const getVal = (shiftKey, key) => {
     const v = (wardDoc.shifts[shiftKey] || {})[key];
@@ -293,11 +312,19 @@ function MaternityDemographicsTable({ wardDoc, editable, onField }) {
     <table className="shift">
       <thead>
         <tr>
-          <th rowSpan={2}>Shift</th>
-          <th colSpan={2}>COT</th>
-          <th colSpan={2}>MOTHERS</th>
+          <th rowSpan={3}>Shift</th>
+          <th colSpan={2} rowSpan={2}>COT</th>
+          {DEMOGRAPHIC_CATEGORIES.map((cat) => <th key={cat.key} colSpan={4}>{cat.label}</th>)}
         </tr>
-        <tr><th>Male</th><th>Female</th><th>Soldiers</th><th>Civilians</th></tr>
+        <tr>
+          {DEMOGRAPHIC_CATEGORIES.flatMap((cat) =>
+            DEMOGRAPHIC_AFFILIATIONS.map((aff) => <th key={cat.key + aff.key} colSpan={2}>{aff.label}</th>)
+          )}
+        </tr>
+        <tr>
+          <th>Male</th><th>Female</th>
+          {DEMOGRAPHIC_FIELDS.map((f) => <th key={f.key}>{f.sex}</th>)}
+        </tr>
       </thead>
       <tbody>
         {SHIFTS.map((s) => (
@@ -311,22 +338,19 @@ function MaternityDemographicsTable({ wardDoc, editable, onField }) {
               <input type="number" inputMode="numeric" disabled={!editable}
                 value={getVal(s.key, 'childFemale')} onChange={(e) => onField(s.key, 'childFemale', e.target.value)} />
             </td>
-            <td>
-              <input type="number" inputMode="numeric" disabled={!editable}
-                value={getVal(s.key, 'soldier')} onChange={(e) => onField(s.key, 'soldier', e.target.value)} />
-            </td>
-            <td>
-              <input type="number" inputMode="numeric" disabled={!editable}
-                value={getVal(s.key, 'civilian')} onChange={(e) => onField(s.key, 'civilian', e.target.value)} />
-            </td>
+            {DEMOGRAPHIC_FIELDS.map((f) => (
+              <td key={f.key}>
+                <input type="number" inputMode="numeric" disabled={!editable}
+                  value={getVal(s.key, f.key)} onChange={(e) => onField(s.key, f.key, e.target.value)} />
+              </td>
+            ))}
           </tr>
         ))}
         <tr className="total-row">
           <td className="shift-name">Total</td>
           <td>{totalFor('childMale')}</td>
           <td>{totalFor('childFemale')}</td>
-          <td>{totalFor('soldier')}</td>
-          <td>{totalFor('civilian')}</td>
+          {DEMOGRAPHIC_FIELDS.map((f) => <td key={f.key}>{totalFor(f.key)}</td>)}
         </tr>
       </tbody>
     </table>
@@ -965,6 +989,10 @@ function WardPanelRest({ h, showLabel, isAdmin, navigate, includeShiftTable = tr
                   ? <MaternityDemographicsTable wardDoc={wardDoc} editable={editable} onField={updateShiftField} />
                   : <DemographicsTable wardDoc={wardDoc} totals={demographicTotals} editable={editable} onField={updateShiftField} />}
               </div>
+              <label className="patient-note-label" htmlFor="demographicsRemarksInput" style={{ marginTop: 10, display: 'block' }}>Remarks</label>
+              <input id="demographicsRemarksInput" type="text" disabled={!editable}
+                value={wardDoc.demographicsRemarks || ''}
+                onChange={(e) => updateWardDoc({ demographicsRemarks: e.target.value })} />
             </div>
           )}
 
@@ -1146,14 +1174,12 @@ function MergedShiftTable({ panels }) {
 
 // One shared, editable Patient Demographics table for a mergedTable
 // group with demographicsVariant: 'merged' (currently just PAED WARD) —
-// same Morning/Night/Total row shape as MergedShiftTable above, but for
-// the shared DEMOGRAPHIC_FIELDS columns minus Children (every patient on
-// Paed is already a child, so a separate Children subcount there is
-// redundant/confusing) — just Male/Female/Soldiers/Civilians. `panels` is
-// one entry per member ward, each still writing to its own wardDoc/
-// Firestore record via its own onField handler.
+// same Morning/Night/Total row shape as MergedShiftTable above, using
+// the full shared DEMOGRAPHIC_FIELDS breakdown. `panels` is one entry
+// per member ward, each still writing to its own wardDoc/Firestore
+// record via its own onField handler.
 function MergedDemographicsTable({ panels }) {
-  const fields = DEMOGRAPHIC_FIELDS.filter(f => f.key !== 'child');
+  const fields = DEMOGRAPHIC_FIELDS;
   const getVal = (p, shiftKey, key) => {
     const v = (p.wardDoc.shifts[shiftKey] || {})[key];
     return typeof v === 'number' ? v : 0;
@@ -1167,10 +1193,7 @@ function MergedDemographicsTable({ panels }) {
   return (
     <table className="shift">
       <thead>
-        <tr>
-          <th>Shift</th>
-          {fields.map(f => <th key={f.key}>{f.label}</th>)}
-        </tr>
+        <DemographicsHeaderRows leadCell={<th rowSpan={3}>Shift</th>} />
       </thead>
       <tbody>
         {SHIFTS.map((s) => (

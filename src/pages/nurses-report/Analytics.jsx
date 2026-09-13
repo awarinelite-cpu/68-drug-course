@@ -338,20 +338,32 @@ export default function Analytics() {
       }
     });
 
+    // Male/Female and Military/Civilian pies now sum across the full
+    // Admission/Disch/Dead/BID breakdown (DEMOGRAPHIC_FIELDS carries
+    // .sex/.affiliation on every entry) rather than reading dedicated
+    // male/female/soldier/civilian keys, which no longer exist.
+    const sexTotals = { M: 0, F: 0 };
+    const affiliationTotals = { mil: 0, civ: 0 };
+    DEMOGRAPHIC_FIELDS.forEach(f => {
+      const v = typeof totals[f.key] === 'number' ? totals[f.key] : 0;
+      sexTotals[f.sex] += v;
+      affiliationTotals[f.affiliation] += v;
+    });
+
     if (sexPieRef.current) sexPieRef.current.destroy();
     sexPieRef.current = new Chart(sexPieCanvasRef.current.getContext('2d'), {
       type: 'pie',
       data: {
-        labels: ['Male', 'Female', 'Children'],
+        labels: ['Male', 'Female'],
         datasets: [{
-          data: [totals.male, totals.female, totals.child],
+          data: [sexTotals.M, sexTotals.F],
           backgroundColor: (c) => {
-            const colors = ['#2563eb', '#db2777', '#f59e0b'];
+            const colors = ['#2563eb', '#db2777'];
             return pieFrontGradient(c.chart.ctx, c.chart.chartArea, colors[c.dataIndex]);
           },
           borderColor: chartSliceBorder, borderWidth: 2,
           offset: 10,
-          _solidColors: ['#2563eb', '#db2777', '#f59e0b']
+          _solidColors: ['#2563eb', '#db2777']
         }]
       },
       plugins: [pieDepthPlugin, dropShadowPlugin],
@@ -366,9 +378,9 @@ export default function Analytics() {
     affiliationPieRef.current = new Chart(affiliationPieCanvasRef.current.getContext('2d'), {
       type: 'pie',
       data: {
-        labels: ['Soldiers', 'Civilians'],
+        labels: ['Military', 'Civilian'],
         datasets: [{
-          data: [totals.soldier, totals.civilian],
+          data: [affiliationTotals.mil, affiliationTotals.civ],
           backgroundColor: (c) => {
             const colors = ['#16a34a', '#6b7280'];
             return pieFrontGradient(c.chart.ctx, c.chart.chartArea, colors[c.dataIndex]);
@@ -567,11 +579,11 @@ export default function Analytics() {
 
               <div className="pie-grid">
                 <div>
-                  <h3>Male / Female / Children</h3>
+                  <h3>Male / Female</h3>
                   <div className="chart-wrap" style={{ height: 220 }}><canvas ref={sexPieCanvasRef}></canvas></div>
                 </div>
                 <div>
-                  <h3>Soldiers / Civilians</h3>
+                  <h3>Military / Civilian</h3>
                   <div className="chart-wrap" style={{ height: 220 }}><canvas ref={affiliationPieCanvasRef}></canvas></div>
                 </div>
               </div>

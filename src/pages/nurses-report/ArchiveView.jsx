@@ -4,7 +4,10 @@ import { doc, getDoc, updateDoc, serverTimestamp } from "firebase/firestore";
 import { db } from "../../firebase.js";
 import { useAuth } from "../../contexts/AuthContext.jsx";
 import { useGoBack } from "../../hooks/useGoBack.js";
-import { WARDS, STAT_FIELDS, SHIFT_STAT_FIELDS, SHIFTS, PATIENT_FIELDS, PATIENT_STATUS_OPTIONS, DEMOGRAPHIC_FIELDS, occDelta, movementColorClass } from "../../lib/nurses-report-common.js";
+import {
+  WARDS, STAT_FIELDS, SHIFT_STAT_FIELDS, SHIFTS, PATIENT_FIELDS, PATIENT_STATUS_OPTIONS,
+  DEMOGRAPHIC_FIELDS, DEMOGRAPHIC_CATEGORIES, DEMOGRAPHIC_AFFILIATIONS, occDelta, movementColorClass
+} from "../../lib/nurses-report-common.js";
 import { useTimeFormat, formatDateTime } from "../../lib/time-format.js";
 import Topbar from "../../components/Topbar.jsx";
 
@@ -158,8 +161,29 @@ function WardShiftTableEdit({ w, data, onChange }) {
   );
 }
 
+// Three-row grouped header matching the paper form — see the same
+// helper in WardNurse.jsx.
+function DemographicsHeaderRows({ leadCell }) {
+  return (
+    <>
+      <tr>
+        {leadCell}
+        {DEMOGRAPHIC_CATEGORIES.map((cat) => <th key={cat.key} colSpan={4}>{cat.label}</th>)}
+      </tr>
+      <tr>
+        {DEMOGRAPHIC_CATEGORIES.flatMap((cat) =>
+          DEMOGRAPHIC_AFFILIATIONS.map((aff) => <th key={cat.key + aff.key} colSpan={2}>{aff.label}</th>)
+        )}
+      </tr>
+      <tr>
+        {DEMOGRAPHIC_FIELDS.map((f) => <th key={f.key}>{f.sex}</th>)}
+      </tr>
+    </>
+  );
+}
+
 function DemographicsTableView({ data, w }) {
-  const fields = w && w.key && w.key.startsWith('paed') ? DEMOGRAPHIC_FIELDS.filter(f => f.key !== 'child') : DEMOGRAPHIC_FIELDS;
+  const fields = DEMOGRAPHIC_FIELDS;
   const shifts = data.shifts || {};
   const totals = {};
   fields.forEach(f => {
@@ -170,7 +194,7 @@ function DemographicsTableView({ data, w }) {
   return (
     <table className="shift">
       <thead>
-        <tr><th>Shift</th>{fields.map(f => <th key={f.key}>{f.label}</th>)}</tr>
+        <DemographicsHeaderRows leadCell={<th rowSpan={3}>Shift</th>} />
       </thead>
       <tbody>
         {SHIFTS.map((s) => {
@@ -192,7 +216,7 @@ function DemographicsTableView({ data, w }) {
 }
 
 function DemographicsTableEdit({ data, onChange, w }) {
-  const fields = w && w.key && w.key.startsWith('paed') ? DEMOGRAPHIC_FIELDS.filter(f => f.key !== 'child') : DEMOGRAPHIC_FIELDS;
+  const fields = DEMOGRAPHIC_FIELDS;
   const shifts = data.shifts || {};
   function setField(shiftKey, fieldKey, raw) {
     const n = parseFloat(raw);
@@ -201,7 +225,7 @@ function DemographicsTableEdit({ data, onChange, w }) {
   return (
     <table className="shift">
       <thead>
-        <tr><th>Shift</th>{fields.map(f => <th key={f.key}>{f.label}</th>)}</tr>
+        <DemographicsHeaderRows leadCell={<th rowSpan={3}>Shift</th>} />
       </thead>
       <tbody>
         {SHIFTS.map((s) => (
@@ -253,6 +277,9 @@ function WardReportBlockView({ w, data }) {
       <div className="table-wrap"><WardShiftTableView w={w} data={data} /></div>
       <h3 className="patient-note-label" style={{ marginTop: 14 }}>Patient Demographics</h3>
       <div className="table-wrap"><DemographicsTableView data={data} w={w} /></div>
+      {data.demographicsRemarks && (
+        <p className="patient-note-text" style={{ marginTop: 4 }}><strong>Remarks:</strong> {data.demographicsRemarks}</p>
+      )}
       {patients.length === 0
         ? <div className="no-patients" style={{ marginTop: 10 }}>No patient write-ups submitted for this ward.</div>
         : patients.map((p, i) => <PatientBlockView p={p} key={p.id || i} />)}
@@ -292,6 +319,11 @@ function WardReportBlockEdit({ w, data, onChange }) {
       <div className="table-wrap"><WardShiftTableEdit w={w} data={data} onChange={onChange} /></div>
       <h3 className="patient-note-label" style={{ marginTop: 14 }}>Patient Demographics</h3>
       <div className="table-wrap"><DemographicsTableEdit data={data} onChange={onChange} w={w} /></div>
+      <div className="patient-field" style={{ marginTop: 8 }}>
+        <label>Remarks:</label>
+        <input type="text" value={data.demographicsRemarks || ''}
+          onChange={(e) => onChange({ ...data, demographicsRemarks: e.target.value })} />
+      </div>
       {patients.map((p, i) => (
         <PatientCardEdit key={p.id || i} p={p} onChange={(next) => updatePatient(i, next)} onRemove={() => removePatient(i)} />
       ))}
@@ -405,13 +437,23 @@ function StatsTableEdit({ wardsMeta, wardsMap, onChange }) {
 }
 
 function DemoStatsTableView({ wardsMeta, wardsMap }) {
-  const fields = DEMOGRAPHIC_FIELDS.filter(f => f.key !== 'child');
+  const fields = DEMOGRAPHIC_FIELDS;
   const totals = {};
   fields.forEach(f => totals[f.key] = 0);
   return (
     <table className="report">
       <thead>
-        <tr><th>Ward</th>{fields.map(f => <th key={f.key}>{f.label}</th>)}</tr>
+        <tr>
+          <th rowSpan={3}>Ward</th>
+          {DEMOGRAPHIC_CATEGORIES.map((cat) => <th key={cat.key} colSpan={4}>{cat.label}</th>)}
+          <th rowSpan={3}>Rmks</th>
+        </tr>
+        <tr>
+          {DEMOGRAPHIC_CATEGORIES.flatMap((cat) =>
+            DEMOGRAPHIC_AFFILIATIONS.map((aff) => <th key={cat.key + aff.key} colSpan={2}>{aff.label}</th>)
+          )}
+        </tr>
+        <tr>{fields.map(f => <th key={f.key}>{f.sex}</th>)}</tr>
       </thead>
       <tbody>
         {wardsMeta.map((w) => {
@@ -424,12 +466,14 @@ function DemoStatsTableView({ wardsMeta, wardsMap }) {
                 totals[f.key] += v;
                 return <td key={f.key}>{v}</td>;
               })}
+              <td>{data.demographicsRemarks || ''}</td>
             </tr>
           );
         })}
         <tr className="totals-row">
           <td className="ward-name">TOTAL</td>
           {fields.map(f => <td key={f.key}>{totals[f.key]}</td>)}
+          <td></td>
         </tr>
       </tbody>
     </table>
@@ -437,7 +481,7 @@ function DemoStatsTableView({ wardsMeta, wardsMap }) {
 }
 
 function DemoStatsTableEdit({ wardsMeta, wardsMap, onChange }) {
-  const fields = DEMOGRAPHIC_FIELDS.filter(f => f.key !== 'child');
+  const fields = DEMOGRAPHIC_FIELDS;
   const totals = {};
   fields.forEach(f => totals[f.key] = 0);
   wardsMeta.forEach(w => fields.forEach(f => {
@@ -447,7 +491,17 @@ function DemoStatsTableEdit({ wardsMeta, wardsMap, onChange }) {
   return (
     <table className="report">
       <thead>
-        <tr><th>Ward</th>{fields.map(f => <th key={f.key}>{f.label}</th>)}</tr>
+        <tr>
+          <th rowSpan={3}>Ward</th>
+          {DEMOGRAPHIC_CATEGORIES.map((cat) => <th key={cat.key} colSpan={4}>{cat.label}</th>)}
+          <th rowSpan={3}>Rmks</th>
+        </tr>
+        <tr>
+          {DEMOGRAPHIC_CATEGORIES.flatMap((cat) =>
+            DEMOGRAPHIC_AFFILIATIONS.map((aff) => <th key={cat.key + aff.key} colSpan={2}>{aff.label}</th>)
+          )}
+        </tr>
+        <tr>{fields.map(f => <th key={f.key}>{f.sex}</th>)}</tr>
       </thead>
       <tbody>
         {wardsMeta.map((w) => {
@@ -461,12 +515,17 @@ function DemoStatsTableEdit({ wardsMeta, wardsMap, onChange }) {
                     onChange={(e) => { const n = parseFloat(e.target.value); onChange(w.key, { ...data, [f.key]: isNaN(n) ? 0 : n }); }} />
                 </td>
               ))}
+              <td>
+                <input type="text" value={data.demographicsRemarks || ''}
+                  onChange={(e) => onChange(w.key, { ...data, demographicsRemarks: e.target.value })} />
+              </td>
             </tr>
           );
         })}
         <tr className="totals-row">
           <td className="ward-name">TOTAL</td>
           {fields.map(f => <td key={f.key}>{totals[f.key]}</td>)}
+          <td></td>
         </tr>
       </tbody>
     </table>
