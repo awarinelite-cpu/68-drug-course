@@ -18,6 +18,7 @@ import {
 } from "../../lib/nurses-report-common.js";
 import { patientWardAndBedTypeForReportKey } from "../../lib/wardNameMatch.js";
 import { wardHeadcount } from "../../lib/wardCensus.js";
+import { loadPatientsForWardLabels } from "../../lib/patientDirectory.js";
 import { useGoBack } from "../../hooks/useGoBack.js";
 import Topbar from "../../components/Topbar.jsx";
 
@@ -293,21 +294,28 @@ export default function OverallNurse() {
 
       setWhoLabel('Overall Nurse this week: ' + (overall ? overall.name : profile.name) + ((isAdmin || isSubadmin) && !isOverall ? ' (viewing as ' + profile.role + ')' : ''));
 
-      await Promise.all([loadWardNameOverrides(db), loadHeaderLabelOverrides(db), loadCustomColumns(db)]);
+      // The overrides fetch, the users list, and the wards snapshot are all
+      // independent of each other (and of the role check above, which only
+      // gates access) — fetching them together instead of one after
+      // another cuts several sequential network round trips down to
+      // whichever one is slowest.
+      const [, usersSnap, wardsSnap] = await Promise.all([
+        Promise.all([loadWardNameOverrides(db), loadHeaderLabelOverrides(db), loadCustomColumns(db)]),
+        getDocsSafe(collection(db, 'users')).catch(() => null),
+        getDocsSafe(wardsCol).catch(() => null)
+      ]);
       setOverridesTick((t) => t + 1);
 
       // Load every staff phone/name once so the "Nurses on Duty" column can
       // pop up contact details for whichever nurse submitted each ward's
       // report, without a per-row Firestore lookup.
-      try {
-        const usersSnap = await getDocsSafe(collection(db, 'users'));
+      if (usersSnap) {
         const map = {};
         usersSnap.forEach((d) => { map[d.id] = d.data(); });
         setUsersByUid(map);
-      } catch (e) {
-        // Non-fatal — the duty column just won't be able to show phone
-        // numbers if this fails (e.g. permissions).
       }
+      // else non-fatal — the duty column just won't be able to show phone
+      // numbers if this fails (e.g. permissions).
 
       // Load and seed ward data BEFORE granting access. Previously access
       // was granted (and the Save to Archive button made clickable) right
@@ -317,7 +325,7 @@ export default function OverallNurse() {
       // submitted reports existed on the server the whole time. wardData
       // is now seeded synchronously from this fetch first, so the report
       // page — and Save to Archive — never render with stale/empty data.
-      await ensureSeeded();
+      await ensureSeeded(wardsSnap);
       setAccess('granted');
 
       unsub = onSnapshot(wardsCol, (snap) => {
@@ -333,13 +341,15 @@ export default function OverallNurse() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, profile]);
 
-  async function ensureSeeded() {
-    let snap;
-    try {
-      snap = await getDocsSafe(wardsCol);
-    } catch (e) {
-      setSaveStatus({ text: "Couldn't load ward data: " + (e.code || e.message || 'unknown error'), error: true });
-      return;
+  async function ensureSeeded(prefetchedSnap) {
+    let snap = prefetchedSnap;
+    if (!snap) {
+      try {
+        snap = await getDocsSafe(wardsCol);
+      } catch (e) {
+        setSaveStatus({ text: "Couldn't load ward data: " + (e.code || e.message || 'unknown error'), error: true });
+        return;
+      }
     }
     const map = {};
     snap.docs.forEach(d => { map[d.id] = d.data(); });
@@ -352,10 +362,18 @@ export default function OverallNurse() {
     const untouchedExisting = WARDS.filter(w => existing.has(w.key) && isWardDocUntouched(map[w.key]));
     if (!missing.length && !untouchedExisting.length) { setWardData(map); return; }
 
+    // Only the wards that actually need a fresh headcount get queried —
+    // one indexed where(ward==label) read per unique label, in parallel,
+    // instead of downloading every patient in the hospital just to
+    // recompute a handful of wards' Occ/Vac (see loadPatientsForWardLabels).
+    const wardsNeedingCount = [...missing, ...untouchedExisting];
     let patients = [];
     try {
-      const patientsSnap = await getDocsSafe(collection(db, 'patients'));
-      patientsSnap.forEach(d => patients.push(d.data()));
+      const labels = wardsNeedingCount
+        .map(w => patientWardAndBedTypeForReportKey(w.key))
+        .filter(Boolean)
+        .map(info => info.wardLabel);
+      patients = await loadPatientsForWardLabels(labels);
     } catch {
       // Fall through with an empty patient list — wards just seed at 0
       // occ below rather than the real census, same as if none of this
@@ -400,9 +418,11 @@ export default function OverallNurse() {
     setSyncBusy(true);
     setSyncStatus({ text: '', error: false });
     try {
-      const patientsSnap = await getDocsSafe(collection(db, 'patients'));
-      const patients = [];
-      patientsSnap.forEach(d => patients.push(d.data()));
+      const relevantLabels = WARDS
+        .map(w => patientWardAndBedTypeForReportKey(w.key))
+        .filter(Boolean)
+        .map(info => info.wardLabel);
+      const patients = await loadPatientsForWardLabels(relevantLabels);
       const batch = writeBatch(db);
       const nextWardData = { ...wardData };
       let touched = 0;
