@@ -10,7 +10,7 @@ import { useChartBack, chartBackTarget } from "../hooks/useChartBack.js";
 import { usePatientHeader } from "../hooks/usePatientHeader.js";
 import Topbar from "../components/Topbar.jsx";
 import {
-  ROUTE_OPTIONS, FREQ_OPTIONS, ACTION_OPTIONS, STATUS_LABELS, WARD_OPTIONS, actionColor, defaultRow,
+  ROUTE_OPTIONS, FREQ_OPTIONS, ACTION_OPTIONS, REMARK_OPTIONS, STATUS_LABELS, WARD_OPTIONS, actionColor, defaultRow,
   dueLabelFor, withDrugCompletionChecked, computeRouteFromSno, parseBulkText,
   parseDoseSequence, administrationTimesFor, flaggedDrugRefs, flaggedDrugMessage, diffFields,
   autoDurationForFrequency, buildSnoSegments, buildSnoText, abbreviateReason,
@@ -1051,7 +1051,11 @@ export default function DrugCourseChart() {
                       <td className="col-dose"><input type="text" value={row.dose || 'AP'} onChange={(e) => updateChartRow(i, { dose: e.target.value })} /></td>
                       <td className="col-route"><input type="text" value={row.route || ''} onChange={(e) => updateChartRow(i, { route: e.target.value })} /></td>
                       <td className="col-nurse"><input type="text" readOnly value={row.nurse || ''} /></td>
-                      <td className="col-remark"><input type="text" value={row.remark || ''} onChange={(e) => updateChartRow(i, { remark: e.target.value })} /></td>
+                      <td className="col-remark">
+                        <select value={row.remark || ''} onChange={(e) => updateChartRow(i, { remark: e.target.value })}>
+                          {REMARK_OPTIONS.map(opt => <option key={opt} value={opt}>{opt || '—'}</option>)}
+                        </select>
+                      </td>
                     </tr>
                   );
                 }
