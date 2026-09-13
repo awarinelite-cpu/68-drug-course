@@ -347,19 +347,19 @@ async function loadAllocatedUidsByPatient() {
 
 // Picks which tokens a given patient's alert should go to: only devices
 // belonging to nurses that patient is currently allocated to. If NO nurse
-// has allocated themselves to that patient, there's no one to scope the
-// alert to — rather than silently dropping a real due-dose/glucose alert
-// (a patient safety gap), it falls back to admin/subadmin devices so an
-// unallocated patient's alert is still seen by someone who can act on it
-// or fix the allocation, and logs a warning so this is visible in the
-// Cloud Function logs too.
+// has allocated themselves to that patient, nobody gets alerted for it —
+// deliberately, per hospital policy: an alert should only ever reach the
+// nurse actually responsible for that patient, never an admin/subadmin
+// device just because they happen to hold that role. Still logs a warning
+// so an unallocated-but-overdue patient is visible in the Cloud Function
+// logs, even though no push goes out.
 function tokensForPatient(patientId, tokenEntries, allocatedUidsByPatient, patientLabel) {
   const allocatedUids = allocatedUidsByPatient[patientId];
   if (allocatedUids && allocatedUids.size > 0) {
     return tokenEntries.filter((t) => allocatedUids.has(t.uid));
   }
-  console.warn(`No nurse allocated to ${patientLabel || patientId} — falling back to admin/subadmin devices for this alert.`);
-  return tokenEntries.filter((t) => t.role === 'admin' || t.role === 'subadmin');
+  console.warn(`No nurse allocated to ${patientLabel || patientId} — no alert sent (allocated-only alerting).`);
+  return [];
 }
 
 exports.checkDueDrugs = onSchedule(
@@ -463,7 +463,7 @@ exports.checkDueDrugs = onSchedule(
       // above — instead of every nurse in the ward.
       const recipientEntries = tokensForPatient(patientId, tokenEntries, allocatedUidsByPatient, name);
       if (recipientEntries.length === 0) {
-        console.log(`No devices to alert for ${name} (no allocated nurse and no admin/subadmin device registered).`);
+        console.log(`No allocated nurse for ${name} — no alert sent.`);
         return;
       }
       const recipientTokens = recipientEntries.map((t) => t.token);
@@ -612,7 +612,7 @@ exports.checkDueGlucoseChecks = onSchedule(
       // Scoped to this patient's allocated nurse(s) — same as checkDueDrugs.
       const recipientEntries = tokensForPatient(patientId, tokenEntries, allocatedUidsByPatient, name);
       if (recipientEntries.length === 0) {
-        console.log(`No devices to alert for ${name} (no allocated nurse and no admin/subadmin device registered).`);
+        console.log(`No allocated nurse for ${name} — no alert sent.`);
         return;
       }
       const recipientTokens = recipientEntries.map((t) => t.token);
