@@ -69,7 +69,17 @@ export async function closeOutDischargedPatient(patientId) {
 // showing, either after 24h or once a write-up for them is submitted
 // through the Ward Report, whichever comes first — see activeAdmissionTag
 // and clearAdmissionTag below.
-export const ADMISSION_TAG_LABEL = { AE_TRANSFER: 'TRANS IN from A&E', NEW_PATIENT: 'NEW PATIENT' };
+//
+// TRANSFER_REJECTED reuses this same field/window/expiry mechanism for a
+// different case: the sending ward has no other way to learn a transfer
+// it started was turned down (see rejectTransfer in wardTransfer.js,
+// which sets this instead of just clearing pendingTransfer). The patient
+// reappears on the sending ward's own list — never left it, ward-wise —
+// so this is a "welcome back" tag rather than an arrival, but the same
+// 24h-or-write-up expiry still fits: the sending nurse just needs to
+// notice it once. transferRejectedByWard (set alongside it) carries
+// which ward rejected it, for AdmissionTagBadge in Home.jsx to show.
+export const ADMISSION_TAG_LABEL = { AE_TRANSFER: 'TRANS IN from A&E', NEW_PATIENT: 'NEW PATIENT', TRANSFER_REJECTED: 'TRANSFER REJECTED' };
 
 // Maps an admissionTag to the matching PATIENT_STATUS_OPTIONS string (see
 // nurses-report-common.js) — these were already options on the write-up's
@@ -106,7 +116,7 @@ export function activeAdmissionTag(data) {
 export async function clearAdmissionTag(patientId) {
   try {
     await updateDoc(doc(db, 'patients', patientId), {
-      admissionSource: '', admissionSourceAt: null, updatedAt: serverTimestamp()
+      admissionSource: '', admissionSourceAt: null, transferRejectedByWard: '', updatedAt: serverTimestamp()
     });
     return { ok: true };
   } catch (e) {

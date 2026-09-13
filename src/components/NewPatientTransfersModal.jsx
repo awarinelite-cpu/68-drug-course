@@ -36,7 +36,7 @@ export default function NewPatientTransfersModal({ ward, transfers, onClose, onR
     setErrMsg('');
     setBusyId(p.id);
     try {
-      await rejectTransfer(p.id);
+      await rejectTransfer(p.id, p.pendingTransfer);
       onResolved(p.id);
     } catch (e) {
       setErrMsg('Could not reject ' + (p.name || 'this patient') + ': ' + (e.code || e.message));

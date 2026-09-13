@@ -59,19 +59,25 @@ function PendingDischargeBadge({ patient, busy, message, onReadmit }) {
 }
 
 // Ward-list badge for a patient's recent-admission tag (NEW PATIENT / TRANS
-// IN from A&E) — see activeAdmissionTag/ADMISSION_TAG_LABEL in
-// patientAdmissionStatus.js. Shown the same way PendingDischargeBadge shows
+// IN from A&E / TRANSFER REJECTED) — see activeAdmissionTag/ADMISSION_TAG_LABEL
+// in patientAdmissionStatus.js. Shown the same way PendingDischargeBadge shows
 // an exit status, so a nurse glancing at the ward list can see both a
-// patient's arrival and their departure at a glance.
-const ADMISSION_TAG_BADGE_CLASS = { AE_TRANSFER: 'badge-active', NEW_PATIENT: 'badge-active' };
+// patient's arrival and their departure at a glance. TRANSFER_REJECTED reuses
+// the existing .badge-transferred color (amber) since it's neither a fresh
+// arrival (blue) nor an exit (the DISCHARGE_BADGE_CLASS colors above) — and
+// appends which ward rejected it, from transferRejectedByWard, when known.
+const ADMISSION_TAG_BADGE_CLASS = { AE_TRANSFER: 'badge-active', NEW_PATIENT: 'badge-active', TRANSFER_REJECTED: 'badge-transferred' };
 function AdmissionTagBadge({ patient }) {
   const tag = activeAdmissionTag(patient);
   if (!tag) return null;
+  const label = tag === 'TRANSFER_REJECTED' && patient.transferRejectedByWard
+    ? `TRANSFER REJECTED by ${patient.transferRejectedByWard}`
+    : (ADMISSION_TAG_LABEL[tag] || tag);
   return (
     <>
       <br />
       <span className={"oi-badge " + (ADMISSION_TAG_BADGE_CLASS[tag] || 'badge-active')} style={{ fontSize: 12, padding: '2px 8px', marginTop: 2 }}>
-        {ADMISSION_TAG_LABEL[tag] || tag}
+        {label}
       </span>
     </>
   );
