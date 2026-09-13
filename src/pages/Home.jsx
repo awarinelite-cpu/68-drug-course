@@ -13,7 +13,7 @@ import { generateCsvTemplate, parsePatientCsv } from "../lib/patientCsv.js";
 import { wardHeadcount } from "../lib/wardCensus.js";
 import { reportWardKeysForPatientWard, patientWardAndBedTypeForReportKey } from "../lib/wardNameMatch.js";
 import { WARDS } from "../lib/nurses-report-common.js";
-import { loadWardPatients, loadIncomingTransfers, searchPatients, findPatientByEmrExact } from "../lib/patientDirectory.js";
+import { loadWardPatients, loadIncomingTransfers, searchPatients, findPatientByEmrExact, nameSearchTokens } from "../lib/patientDirectory.js";
 import { activeAdmissionTag, ADMISSION_TAG_LABEL, readmitLatestAdmission, READMIT_ELIGIBLE_TAGS } from "../lib/patientAdmissionStatus.js";
 
 function normEmr(emr) { return (emr || '').trim().toLowerCase(); }
@@ -261,7 +261,7 @@ export default function Home() {
     const diagnosis = newForm.diagnosis.trim();
     const data = {
       name, emr,
-      nameLower: name.toLowerCase(), emrLower: emr.toLowerCase(),
+      nameLower: name.toLowerCase(), emrLower: emr.toLowerCase(), nameTokens: nameSearchTokens(name),
       diagnosis, ward: newForm.ward.trim(),
       pedBedType: newForm.ward.trim() === 'PEDIATRIC/NICU WARD' ? (newForm.pedBedType || '') : '',
       age: newForm.age.trim(),
@@ -402,7 +402,7 @@ export default function Home() {
       } else {
         const data = {
           name: r.data.name, emr: r.data.emr,
-          nameLower: (r.data.name || '').trim().toLowerCase(), emrLower: (r.data.emr || '').trim().toLowerCase(),
+          nameLower: (r.data.name || '').trim().toLowerCase(), emrLower: (r.data.emr || '').trim().toLowerCase(), nameTokens: nameSearchTokens(r.data.name),
           diagnosis: r.data.diagnosis,
           ward: r.data.ward, pedBedType: r.data.ward === 'PEDIATRIC/NICU WARD' ? r.data.pedBedType : '',
           age: r.data.age, hospNo: r.data.hospNo, admissionDate: r.data.admissionDate,

@@ -8,6 +8,7 @@ import { useBackLock } from "../hooks/useBackLock.js";
 import { usePatientHeader } from "../hooks/usePatientHeader.js";
 import { getDocSafe } from "../lib/firestoreOffline.js";
 import { applyPatientStatus } from "../lib/patientAdmissionStatus.js";
+import { nameSearchTokens } from "../lib/patientDirectory.js";
 import { STATUS_LABELS, WARD_OPTIONS } from "../lib/drugChartHelpers.js";
 import Topbar from "../components/Topbar.jsx";
 import PatientBanner from "../components/PatientBanner.jsx";
@@ -141,6 +142,11 @@ export default function Patient() {
     if (!name || !emr) { setEditMsg('Name and EMR number are required.'); return; }
     const updates = {
       name, emr,
+      // Search (patientDirectory.js's searchPatients) reads these lowercased/
+      // tokenized copies, not name/emr directly — without refreshing them
+      // here, renaming or correcting a patient's EMR silently dropped them
+      // out of search results until an admin ran the reindex.
+      nameLower: name.toLowerCase(), emrLower: emr.toLowerCase(), nameTokens: nameSearchTokens(name),
       diagnosis: editForm.diagnosis.trim(), ward: editForm.ward.trim(),
       pedBedType: editForm.ward.trim() === 'PEDIATRIC/NICU WARD' ? (editForm.pedBedType || '') : '',
       age: editForm.age.trim(),
