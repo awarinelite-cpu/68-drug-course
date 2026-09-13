@@ -57,6 +57,30 @@ function cellValue(row, col) {
   return (row[col.key] !== undefined && row[col.key] !== null && row[col.key] !== '') ? row[col.key] : '';
 }
 
+// A row's chronological sort key. Most charts on this component store a
+// single 'time' field (either a full datetime-local string, or one that's
+// formOnly with separate computed display columns) — for those, row.time
+// alone is already a correct, lexically-sortable "YYYY-MM-DDTHH:MM" key.
+// Vitals is the one chart with a genuinely separate 'date' + 'time' entry
+// pair, so when a row has a 'date' field, combine the two into that same
+// shape instead.
+function sortKeyOf(row) {
+  return row.date ? (row.date + 'T' + (row.time || '')) : (row.time || '');
+}
+
+// Old Vitals readings were saved with a single combined 'time' field (e.g.
+// "2026-09-10T14:30") before Date/Time became separate entry columns. A row
+// like that has no 'date' field of its own — split it out here purely for
+// display/sorting, without touching what's actually stored in Firestore.
+// Harmless no-op for every other chart on this component, since none of
+// them have a 'date' column to begin with.
+function normalizeRow(row) {
+  if (!row.date && typeof row.time === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(row.time)) {
+    return { ...row, date: row.time.slice(0, 10), time: row.time.slice(11, 16) };
+  }
+  return row;
+}
+
 // See BloodGlucose.jsx for why: mobile's date/time inputs always open the
 // full OS picker on tap, but desktop only opens the native dropdown if you
 // click the small calendar/clock icon exactly — clicking elsewhere on the
@@ -80,9 +104,9 @@ function cellClass(col, row) {
 // Sorts oldest→newest, runs deriveRows() to attach computed fields (e.g.
 // balance) and possibly insert period-summary rows, then orders for display.
 function withDerivedRows(rawRows, deriveRows, sortOrder, closeContext) {
-  const asc = rawRows.slice().sort((a, b) => (a.time || '').localeCompare(b.time || ''));
+  const asc = rawRows.slice().sort((a, b) => sortKeyOf(a).localeCompare(sortKeyOf(b)));
   const derived = typeof deriveRows === 'function' ? deriveRows(asc, closeContext) : asc;
-  return sortOrder === 'asc' ? derived : derived.slice().sort((a, b) => (b.time || '').localeCompare(a.time || ''));
+  return sortOrder === 'asc' ? derived : derived.slice().sort((a, b) => sortKeyOf(b).localeCompare(sortKeyOf(a)));
 }
 
 function FieldPopupModal({ label, value, onClose }) {
@@ -142,10 +166,15 @@ export default function EntryChart({ title, collectionName, columns, deriveRows,
   const [entryValues, setEntryValues] = useState(() => {
     const initial = {};
     enterableColumns.forEach(c => {
-      if (c.key === 'time') {
-        const now = new Date();
-        now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
-        initial[c.key] = now.toISOString().slice(0, 16);
+      const now = new Date();
+      if (c.key === 'date' && c.type === 'date') {
+        initial[c.key] = now.toISOString().slice(0, 10);
+      } else if (c.key === 'time' && c.type === 'time') {
+        initial[c.key] = String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0');
+      } else if (c.key === 'time') {
+        const local = new Date(now);
+        local.setMinutes(local.getMinutes() - local.getTimezoneOffset());
+        initial[c.key] = local.toISOString().slice(0, 16);
       } else initial[c.key] = '';
     });
     return initial;
@@ -171,7 +200,7 @@ export default function EntryChart({ title, collectionName, columns, deriveRows,
     const q = query(collection(db, 'patients', patientId, collectionName), orderBy('time', 'desc'));
     const unsub = onSnapshot(q, (snap) => {
       const rows = [];
-      snap.forEach(d => rows.push({ id: d.id, ...d.data() }));
+      snap.forEach(d => rows.push(normalizeRow({ id: d.id, ...d.data() })));
       setRawRows(rows);
     });
     return unsub;
@@ -185,7 +214,7 @@ export default function EntryChart({ title, collectionName, columns, deriveRows,
       const admSnap = await getDoc(doc(db, 'patients', patientId, 'admissions', admissionId));
       const admData = admSnap.exists() ? admSnap.data() : {};
       setArchiveMeta(admData);
-      setArchiveRows(admData[collectionName] || []);
+      setArchiveRows((admData[collectionName] || []).map(normalizeRow));
       setLoadedArchive(true);
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -254,7 +283,8 @@ export default function EntryChart({ title, collectionName, columns, deriveRows,
       if (col.group && !col.groupGate && groupGateValue[col.group] === '') data[col.key] = '';
     });
 
-    if (!data.time) { alert('Please set the time.'); return; }
+    const hasDateColumn = enterableColumns.some(c => c.key === 'date');
+    if (!data.time || (hasDateColumn && !data.date)) { alert('Please set the date and time.'); return; }
     data.createdAt = serverTimestamp();
     data.enteredBy = profile.name;
     // Client-generated ID via setDoc instead of addDoc, fired without
@@ -269,7 +299,7 @@ export default function EntryChart({ title, collectionName, columns, deriveRows,
 
     setEntryValues((v) => {
       const next = { ...v };
-      Object.keys(next).forEach((k) => { if (k !== 'time') next[k] = ''; });
+      Object.keys(next).forEach((k) => { if (k !== 'time' && k !== 'date') next[k] = ''; });
       return next;
     });
     setEntryOtherValues({});
