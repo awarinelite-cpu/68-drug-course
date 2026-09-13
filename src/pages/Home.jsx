@@ -14,7 +14,7 @@ import { wardHeadcount } from "../lib/wardCensus.js";
 import { reportWardKeysForPatientWard, patientWardAndBedTypeForReportKey } from "../lib/wardNameMatch.js";
 import { WARDS } from "../lib/nurses-report-common.js";
 import { loadWardPatients, loadIncomingTransfers, searchPatients, findPatientByEmrExact, nameSearchTokens } from "../lib/patientDirectory.js";
-import { activeAdmissionTag, ADMISSION_TAG_LABEL, readmitLatestAdmission, READMIT_ELIGIBLE_TAGS } from "../lib/patientAdmissionStatus.js";
+import { activeAdmissionTag, ADMISSION_TAG_LABEL, clearAdmissionTag, readmitLatestAdmission, READMIT_ELIGIBLE_TAGS } from "../lib/patientAdmissionStatus.js";
 
 function normEmr(emr) { return (emr || '').trim().toLowerCase(); }
 
@@ -66,7 +66,13 @@ function PendingDischargeBadge({ patient, busy, message, onReadmit }) {
 // its own badge-emergency-blink animation (hard red/amber flash, see
 // styles.css) on top of its base color, so it stands out from the other,
 // static admission tags — appends which ward rejected it, from
-// transferRejectedByWard, when known.
+// transferRejectedByWard, when known. It's also the only one of these tags
+// a nurse can tap to dismiss directly (stopping propagation so the tap
+// doesn't also open the patient's chart) — the other two (NEW PATIENT /
+// TRANS IN) are left tied to their existing write-up-linked clearing, since
+// that's what confirms the arrival was actually acted on; a rejected
+// transfer has no equivalent follow-up action to wait for, so requiring
+// one before it can go away would just leave it blinking for no reason.
 const ADMISSION_TAG_BADGE_CLASS = { AE_TRANSFER: 'badge-active', NEW_PATIENT: 'badge-active', TRANSFER_REJECTED: 'badge-transferred' };
 function AdmissionTagBadge({ patient }) {
   const tag = activeAdmissionTag(patient);
@@ -74,11 +80,17 @@ function AdmissionTagBadge({ patient }) {
   const label = tag === 'TRANSFER_REJECTED' && patient.transferRejectedByWard
     ? `TRANSFER REJECTED by ${patient.transferRejectedByWard}`
     : (ADMISSION_TAG_LABEL[tag] || tag);
-  const blinkClass = tag === 'TRANSFER_REJECTED' ? ' badge-emergency-blink' : '';
+  const dismissible = tag === 'TRANSFER_REJECTED';
+  const blinkClass = dismissible ? ' badge-emergency-blink' : '';
   return (
     <>
       <br />
-      <span className={"oi-badge " + (ADMISSION_TAG_BADGE_CLASS[tag] || 'badge-active') + blinkClass} style={{ fontSize: 12, padding: '2px 8px', marginTop: 2 }}>
+      <span
+        className={"oi-badge " + (ADMISSION_TAG_BADGE_CLASS[tag] || 'badge-active') + blinkClass}
+        style={{ fontSize: 12, padding: '2px 8px', marginTop: 2, cursor: dismissible ? 'pointer' : undefined }}
+        title={dismissible ? 'Tap to dismiss' : undefined}
+        onClick={dismissible ? (e) => { e.stopPropagation(); clearAdmissionTag(patient.id); } : undefined}
+      >
         {label}
       </span>
     </>
