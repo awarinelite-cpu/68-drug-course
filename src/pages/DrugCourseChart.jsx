@@ -406,7 +406,12 @@ export default function DrugCourseChart() {
 
   // --- Drugs table ------------------------------------------------------
   function enterDrugsEditMode() { setDrugsEditMode(true); setEditingDrugRows({}); }
-  function exitDrugsEditMode() { setDrugsEditMode(false); setEditingDrugRows({}); scheduleSave(); }
+  function exitDrugsEditMode() {
+    Object.keys(editingDrugRows).forEach((key) => { if (editingDrugRows[key]) lockDrugRow(Number(key)); });
+    setDrugsEditMode(false);
+    setEditingDrugRows({});
+    scheduleSave();
+  }
   function unlockDrugRow(i) {
     drugRowSnapshots.current[i] = { ...drugs[i] };
     setEditingDrugRows((e) => ({ ...e, [i]: true }));
@@ -463,7 +468,12 @@ export default function DrugCourseChart() {
 
   // --- Chart table --------------------------------------------------------
   function enterChartEditMode() { setChartEditMode(true); setEditingChartRows({}); }
-  function exitChartEditMode() { setChartEditMode(false); setEditingChartRows({}); scheduleSave(); }
+  function exitChartEditMode() {
+    Object.keys(editingChartRows).forEach((key) => { if (editingChartRows[key]) lockChartRow(Number(key)); });
+    setChartEditMode(false);
+    setEditingChartRows({});
+    scheduleSave();
+  }
   function unlockChartRow(i) {
     chartRowSnapshots.current[i] = { ...chartRows[i] };
     setEditingChartRows((e) => ({ ...e, [i]: true }));
