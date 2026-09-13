@@ -7,6 +7,7 @@ import { useChartBack, chartBackTarget } from "../hooks/useChartBack.js";
 import { usePatientHeader } from "../hooks/usePatientHeader.js";
 import Topbar from "../components/Topbar.jsx";
 import PatientBanner from "../components/PatientBanner.jsx";
+import { formatTime } from "../lib/time-format.js";
 
 const STATUS_LABELS = { referred: 'Referred to another hospital', transferred: 'Transferred to another ward', discharged: 'Discharged', died: 'Death' };
 
@@ -165,7 +166,7 @@ export default function BloodGlucose() {
         rows3: toDocRows(rowsCacheRef.current['3point']),
         updatedAt: serverTimestamp()
       }, { merge: true });
-      setSaveStatus('Saved ' + new Date().toLocaleTimeString());
+      setSaveStatus('Saved ' + formatTime(new Date()));
     } catch (e) {
       setSaveStatus('Save failed: ' + (e.code || e.message));
     }

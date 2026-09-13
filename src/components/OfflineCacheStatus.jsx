@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useTimeFormat, formatDateTime } from "../lib/time-format.js";
 
 const STORAGE_KEY = "narhy-cache-status";
 
@@ -19,6 +20,7 @@ function saveStored(data) {
 // is offline-safe (OfflineBanner already covers that) but whether the app
 // shell itself (the code needed to run at all) is fully cached yet.
 export default function OfflineCacheStatus() {
+  useTimeFormat(); // re-render if admin changes the system time format elsewhere
   // phase: 'unsupported' | 'checking' | 'caching' | 'ready' | 'error'
   const [phase, setPhase] = useState(() => (
     'serviceWorker' in navigator ? (loadStored()?.phase === 'ready' ? 'ready' : 'checking') : 'unsupported'
@@ -105,7 +107,7 @@ export default function OfflineCacheStatus() {
       type="button"
       className={"gnav-cache-status no-print" + (expanded ? " gnav-cache-expanded" : "")}
       onClick={() => setExpanded(true)}
-      title={readyAt ? label + ' · last cached ' + new Date(readyAt).toLocaleString() : label}
+      title={readyAt ? label + ' · last cached ' + formatDateTime(new Date(readyAt), { year: true }) : label}
     >
       <span className={"gnav-cache-dot " + dot} aria-hidden="true" />
       {expanded && <span className="gnav-cache-label">{label}</span>}

@@ -14,6 +14,7 @@ import {
   SOUND_OPTIONS, APPEARANCE_OPTIONS, REPEAT_OPTIONS, ALL_FREQUENCIES, GLUCOSE_INTERVAL_OPTIONS,
   OVERDUE_REPEAT_OPTIONS, loadAlarmSettings, saveAlarmSettings as persistAlarmSettings
 } from "../lib/alarm-settings.js";
+import { useTimeFormat, getTimeFormat, setTimeFormat } from "../lib/time-format.js";
 import Topbar from "../components/Topbar.jsx";
 
 // Every chart type and archived-admission record a patient can accumulate.
@@ -57,6 +58,24 @@ export default function Admin() {
   const [deleteInput, setDeleteInput] = useState('');
   const [deleteError, setDeleteError] = useState('');
   const [userDeletingId, setUserDeletingId] = useState(null);
+
+  const timeFormat = useTimeFormat();
+  const [timeFormatSaving, setTimeFormatSaving] = useState(false);
+  const [timeFormatMsg, setTimeFormatMsg] = useState(null);
+
+  async function setSystemTimeFormat(next) {
+    if (next === getTimeFormat() || timeFormatSaving) return;
+    setTimeFormatSaving(true);
+    setTimeFormatMsg(null);
+    try {
+      await setTimeFormat(next);
+      setTimeFormatMsg({ type: "info", text: "System time format saved." });
+    } catch (e) {
+      setTimeFormatMsg({ type: "error", text: e.message || "Failed to save time format." });
+    } finally {
+      setTimeFormatSaving(false);
+    }
+  }
 
   const [alarm, setAlarm] = useState(null); // null while loading
   const [freqChecked, setFreqChecked] = useState({});
@@ -360,6 +379,31 @@ export default function Admin() {
                 ))}
               </tbody>
             </table>
+          </div>
+        </div>
+
+        <div className="card-box">
+          <h3 style={{ marginTop: 0 }}>System Time Format</h3>
+          <p style={{ fontSize: 12, color: '#666', marginTop: -6 }}>
+            Controls how every clock and timestamp in the system is displayed — drug due-times, vitals, audit
+            logs, nurses reports, exports, everywhere. Applies to every user's device instantly, no reload needed.
+          </p>
+          <div className="field">
+            <div style={{ display: 'flex', gap: 8 }} role="group" aria-label="System time format">
+              <button type="button" className={"btn " + (timeFormat === "24" ? "btn-primary" : "")}
+                aria-pressed={timeFormat === "24"} disabled={timeFormatSaving}
+                onClick={() => setSystemTimeFormat("24")}>
+                24-Hour (e.g. 14:30)
+              </button>
+              <button type="button" className={"btn " + (timeFormat === "12" ? "btn-primary" : "")}
+                aria-pressed={timeFormat === "12"} disabled={timeFormatSaving}
+                onClick={() => setSystemTimeFormat("12")}>
+                12-Hour, AM/PM (e.g. 2:30 PM)
+              </button>
+            </div>
+            {timeFormatMsg && (
+              <div className={timeFormatMsg.type === "error" ? "error-msg" : "info-msg"}>{timeFormatMsg.text}</div>
+            )}
           </div>
         </div>
 

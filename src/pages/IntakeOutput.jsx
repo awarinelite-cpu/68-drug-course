@@ -1,4 +1,5 @@
 import EntryChart from "../components/EntryChart.jsx";
+import { formatDateTime } from "../lib/time-format.js";
 
 // 24-hour I&O periods run 6:00 AM to 6:00 AM the following day (standard
 // nursing shift convention) rather than midnight to midnight.
@@ -28,7 +29,7 @@ function periodKeyOf(row) {
 function periodRangeLabel(start) {
   const end = new Date(start);
   end.setDate(end.getDate() + 1);
-  const fmt = d => d.toLocaleDateString([], { month: 'short', day: 'numeric' }) + ' ' + d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  const fmt = d => formatDateTime(d);
   return '24-Hour Balance (' + fmt(start) + ' – ' + fmt(end) + ')';
 }
 
@@ -57,7 +58,7 @@ function deriveIOBalance(ascRows, closeContext) {
     const closedByDischarge = isLast && closedAt;
     if (!closedByClock && !closedByDischarge) return;
     const rangeLabel = closedByDischarge
-      ? '24-Hour Balance (' + currentStart.toLocaleDateString([], { month: 'short', day: 'numeric' }) + ' ' + currentStart.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) + ' – ' + (closeContext.closedAtDisplay || closedAt.toLocaleString()) + ', admission closed)'
+      ? '24-Hour Balance (' + formatDateTime(currentStart) + ' – ' + (closeContext.closedAtDisplay || formatDateTime(closedAt)) + ', admission closed)'
       : periodRangeLabel(currentStart);
     out.push({
       isPeriodSummary: true,

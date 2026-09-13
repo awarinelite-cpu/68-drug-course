@@ -17,6 +17,7 @@ import {
   parseWeeklyFrequency, weeklyDosesGivenThisWeek
 } from "../lib/drugChartHelpers.js";
 import { ROSTER_TAG_FOR_REASON, clearAllocationsForPatient } from "../lib/patientAdmissionStatus.js";
+import { useTimeFormat, formatTime, formatDateTime } from "../lib/time-format.js";
 
 const FIELD_IDS = ['f_admission', 'f_discharge', 'f_diagnosis'];
 
@@ -117,6 +118,7 @@ function SkipReasonPopup({ nums, reason, onClose }) {
 }
 
 export default function DrugCourseChart() {
+  useTimeFormat(); // re-render if admin changes the system time format elsewhere
   const { profile } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -361,7 +363,7 @@ export default function DrugCourseChart() {
     setDoc(chartRefPath.current, data, { merge: true }).catch((e) => {
       setSaveStatus('Save failed: ' + (e.code || e.message));
     });
-    setSaveStatus('Saved ' + new Date().toLocaleTimeString());
+    setSaveStatus('Saved ' + formatTime(new Date()));
   }
 
   function scheduleSave() {
@@ -746,7 +748,7 @@ export default function DrugCourseChart() {
             fromWard: patient?.ward || '',
             transferredByName: profile?.name || '',
             transferredAt: serverTimestamp(),
-            transferredAtDisplay: new Date().toLocaleString()
+            transferredAtDisplay: formatDateTime(new Date(), { year: true })
           },
           updatedAt: serverTimestamp()
         });
@@ -827,7 +829,7 @@ export default function DrugCourseChart() {
       archiveReason: reason,
       archiveReasonLabel: label,
       archivedAt: serverTimestamp(),
-      archivedAtDisplay: new Date().toLocaleString(),
+      archivedAtDisplay: formatDateTime(new Date(), { year: true }),
       drugCourseChart: drugChartData,
       bloodGlucose: bgData,
       vitals: vitalsArr,
@@ -1152,7 +1154,7 @@ export default function DrugCourseChart() {
                     </>
                   ) : (
                     <>
-                      <div className="verbal-meta">{(o.nurse || 'Unknown') + ' · ' + (o.at ? new Date(o.at).toLocaleString() : '') + (o.editedAt ? ' (edited)' : '')}</div>
+                      <div className="verbal-meta">{(o.nurse || 'Unknown') + ' · ' + (o.at ? formatDateTime(o.at, { year: true }) : '') + (o.editedAt ? ' (edited)' : '')}</div>
                       <div className="verbal-text">{o.text}</div>
                       {!isArchived && <>
                         <button className="btn btn-secondary" style={{ padding: '3px 9px', fontSize: 11, marginTop: 6 }} onClick={() => { setEditingVerbalIndex(i); setVerbalEditText(o.text); }}>Edit</button>
@@ -1195,7 +1197,7 @@ export default function DrugCourseChart() {
                         <span className="care-dot">•</span>
                         <div className="care-text">{o.text}</div>
                       </div>
-                      <div className="care-meta">{(o.nurse || 'Unknown') + ' · ' + (o.at ? new Date(o.at).toLocaleString() : '') + (o.editedAt ? ' (edited)' : '')}</div>
+                      <div className="care-meta">{(o.nurse || 'Unknown') + ' · ' + (o.at ? formatDateTime(o.at, { year: true }) : '') + (o.editedAt ? ' (edited)' : '')}</div>
                       {!isArchived && <>
                         <button className="btn btn-secondary" style={{ padding: '3px 9px', fontSize: 11, marginTop: 6 }} onClick={() => { setEditingCareIndex(i); setCareEditText(o.text); }}>Edit</button>
                         <button className="btn btn-danger" style={{ padding: '3px 9px', fontSize: 11, marginTop: 6, marginLeft: 6 }} onClick={() => deleteCareInstruction(i)}>Delete</button>
@@ -1274,7 +1276,7 @@ export default function DrugCourseChart() {
               {!auditLog.length && <p style={{ color: '#777', fontSize: 13, margin: 0 }}>No changes logged yet.</p>}
               {auditLog.slice().reverse().map((entry, i) => (
                 <div className="audit-entry" key={i}>
-                  <div className="audit-meta">{(entry.nurse || 'Unknown') + ' · ' + (entry.at ? new Date(entry.at).toLocaleString() : '')}</div>
+                  <div className="audit-meta">{(entry.nurse || 'Unknown') + ' · ' + (entry.at ? formatDateTime(entry.at, { year: true }) : '')}</div>
                   <div className="audit-text">{entry.text}</div>
                 </div>
               ))}

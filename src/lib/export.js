@@ -6,6 +6,7 @@ import { doc, getDoc, collection, getDocs, query, orderBy } from "firebase/fires
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 import { db } from "../firebase.js";
+import { formatDateTime } from "./time-format.js";
 
 // ---------- data gathering ----------
 
@@ -230,7 +231,7 @@ function addPatientHeader(pdf, record) {
   pdf.setFont(undefined, 'bold'); pdf.setFontSize(15);
   pdf.text('68 NARHY Ward Charts — Patient Record', PAGE_LEFT, 42);
   pdf.setFont(undefined, 'normal'); pdf.setFontSize(8.5); pdf.setTextColor(90);
-  pdf.text('Exported ' + record.exportedAt.toLocaleString() + (record.exportedBy ? ' by ' + record.exportedBy : ''), PAGE_LEFT, 55);
+  pdf.text('Exported ' + formatDateTime(record.exportedAt, { year: true }) + (record.exportedBy ? ' by ' + record.exportedBy : ''), PAGE_LEFT, 55);
   pdf.setTextColor(0);
 
   const rows = [
@@ -270,7 +271,7 @@ function addDrugChartSection(pdf, y, dc) {
   const adminRows = (dc.rows || []).filter(r => r && (r.date || r.sno || r.time)).map(r => [r.date, r.sno, r.time, r.dose, r.route, r.nurse, r.remark]);
   y = addTable(pdf, y, ['Date', 'Drug S/N', 'Time', 'Dose', 'Route', 'Nurse', 'Remark'], adminRows);
 
-  const voRows = (dc.verbalOrders || []).map(o => [o.at ? new Date(o.at).toLocaleString() : '', o.text || '', o.nurse || '']);
+  const voRows = (dc.verbalOrders || []).map(o => [o.at ? formatDateTime(o.at, { year: true }) : '', o.text || '', o.nurse || '']);
   if (voRows.length) {
     y = ensureSpace(pdf, y, 16);
     pdf.setFont(undefined, 'bold'); pdf.text('Verbal / Emergency Orders', PAGE_LEFT, y); pdf.setFont(undefined, 'normal');

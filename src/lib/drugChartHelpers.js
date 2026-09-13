@@ -1,3 +1,5 @@
+import { formatTime } from './time-format.js';
+
 export const ROUTE_OPTIONS = ['', 'Oral', 'IV', 'IM', 'SC', 'Sublingual', 'Topical', 'Rectal', 'Suppository', 'Inhalation', 'NG Tube', 'Other'];
 export const FREQ_OPTIONS = ['', 'OD', 'Daily', 'Mane', 'Nocte', 'AM', 'PM', 'HS', 'BD', 'TDS', 'Premeal TDS', 'QDS', 'QOD', 'STAT', 'STAT then Q4H', 'STAT then Q6H', 'STAT then Q8H', 'STAT then Q12H', 'PRN', 'Q4H', 'Q6H', '8hrly', 'Q8H', '12hrly', 'Q12H', 'Weekly', 'Twice Weekly', 'Thrice Weekly', '0,12,24hr', 'Other'];
 export const ACTION_OPTIONS = ['', 'Ongoing', 'Completed', 'Discontinued', 'Withheld', 'Other'];
@@ -261,7 +263,7 @@ export function dueLabelFor(d, i, chartRows, now) {
   const lastEvent = lastDrugEventFor(chartRows, i);
   const skippedPending = !!(lastEvent && lastEvent.skipped) && dueAt > now;
   const sameDay = dueAt.toDateString() === now.toDateString();
-  const hhmm = dueAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  const hhmm = formatTime(dueAt);
   const dayPart = sameDay ? '' : (dueAt.toDateString() === new Date(now.getTime() + 86400000).toDateString() ? 'Tmrw ' : dueAt.toLocaleDateString([], { weekday: 'short' }) + ' ');
   if (dueAt <= now) return { text: 'Overdue ' + dayPart + hhmm, overdue: true, skippedPending: false };
   return { text: dayPart + hhmm, overdue: false, skippedPending };

@@ -5,6 +5,7 @@ import { db } from "../../firebase.js";
 import { useAuth } from "../../contexts/AuthContext.jsx";
 import { useGoBack } from "../../hooks/useGoBack.js";
 import { WARDS, STAT_FIELDS, SHIFT_STAT_FIELDS, SHIFTS, PATIENT_FIELDS, PATIENT_STATUS_OPTIONS, DEMOGRAPHIC_FIELDS, occDelta, movementColorClass } from "../../lib/nurses-report-common.js";
+import { useTimeFormat, formatDateTime } from "../../lib/time-format.js";
 import Topbar from "../../components/Topbar.jsx";
 
 const movementFields = SHIFT_STAT_FIELDS;
@@ -17,8 +18,7 @@ const ORDERED_MOVEMENT = [...SOLO_BEFORE, ...TRANSFER_PAIR, ...EXT_PAIR, ...SOLO
 
 function fmtTimestamp(ts) {
   if (!ts || !ts.toDate) return '';
-  const d = ts.toDate();
-  return d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  return formatDateTime(ts.toDate());
 }
 
 function isNoteHeadingLine(line) {
@@ -474,6 +474,7 @@ function DemoStatsTableEdit({ wardsMeta, wardsMap, onChange }) {
 }
 
 export default function ArchiveView() {
+  useTimeFormat(); // re-render if admin changes the system time format elsewhere
   const { user, profile } = useAuth();
   const goBack = useGoBack('/nurses-report/role-select');
   const [searchParams] = useSearchParams();

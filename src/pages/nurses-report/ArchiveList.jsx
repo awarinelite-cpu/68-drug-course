@@ -3,15 +3,16 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { collection, query, where, getDocs } from "firebase/firestore";
 import { db } from "../../firebase.js";
 import { useGoBack } from "../../hooks/useGoBack.js";
+import { useTimeFormat, formatDateTime } from "../../lib/time-format.js";
 import Topbar from "../../components/Topbar.jsx";
 
 function fmtTimestamp(ts) {
   if (!ts || !ts.toDate) return '';
-  const d = ts.toDate();
-  return d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  return formatDateTime(ts.toDate());
 }
 
 export default function ArchiveList() {
+  useTimeFormat(); // re-render if admin changes the system time format elsewhere
   const navigate = useNavigate();
   const goBack = useGoBack('/nurses-report/role-select');
   const [searchParams] = useSearchParams();

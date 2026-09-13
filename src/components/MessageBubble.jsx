@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useTimeFormat, formatTime } from "../lib/time-format.js";
 
 const REACTION_EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '🙏'];
 const LONG_PRESS_MS = 300;
@@ -6,13 +7,14 @@ const LONG_PRESS_MOVE_TOLERANCE = 10; // px of finger drift still allowed mid-pr
 
 function fmtTime(ts) {
   if (!ts || typeof ts.toDate !== 'function') return '';
-  return ts.toDate().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+  return formatTime(ts.toDate());
 }
 
 export default function MessageBubble({
   message: m, isMine, isGroup, senderName, readByAll, currentUid,
   onToggleReaction, onReply, onToggleStar, onForward, onEdit, onDelete
 }) {
+  useTimeFormat(); // re-render if admin changes the system time format elsewhere
   const [pickerOpen, setPickerOpen] = useState(false);
   const wrapRef = useRef(null);
   const dragState = useRef({ startX: 0, startY: 0, dx: 0, dragging: false, claimed: false, longPressTimer: null });

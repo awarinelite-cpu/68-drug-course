@@ -5,16 +5,18 @@ import { db } from "../firebase.js";
 import { useAuth } from "../contexts/AuthContext.jsx";
 import { useGoBack } from "../hooks/useGoBack.js";
 import Topbar from "../components/Topbar.jsx";
+import { useTimeFormat, formatTime } from "../lib/time-format.js";
 
 function fmtWhen(ts, shift) {
   if (!ts || typeof ts.toDate !== 'function') return shift || '';
   const d = ts.toDate();
   const dateStr = d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
-  const timeStr = d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+  const timeStr = formatTime(d);
   return dateStr + ', ' + timeStr + (shift ? ' \u00b7 ' + shift + ' shift' : '');
 }
 
 export default function MyPatients() {
+  useTimeFormat(); // re-render if admin changes the system time format elsewhere
   const { user } = useAuth();
   const navigate = useNavigate();
   const goBack = useGoBack('/');

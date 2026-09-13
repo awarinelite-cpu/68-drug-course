@@ -10,16 +10,18 @@ import { getDocSafe, getDocsSafe } from "../lib/firestoreOffline.js";
 import { buildExportRecord, downloadRecordAsPdf, downloadRecordAsJson } from "../lib/export.js";
 import Topbar from "../components/Topbar.jsx";
 import PatientBanner from "../components/PatientBanner.jsx";
+import { useTimeFormat, formatDateTime } from "../lib/time-format.js";
 
 const STATUS_LABELS = { referred: 'Referred to another hospital', transferred: 'Transferred to another ward', discharged: 'Discharged', died: 'Death' };
 const BADGE_CLASS = { referred: 'badge-referred', transferred: 'badge-transferred', discharged: 'badge-discharged', died: 'badge-died' };
 
 function formatTimestamp(ts) {
   if (!ts) return '';
-  try { return ts.toDate().toLocaleString(); } catch (e) { return ''; }
+  try { return formatDateTime(ts.toDate(), { year: true }); } catch (e) { return ''; }
 }
 
 export default function Overview() {
+  useTimeFormat(); // re-render if admin changes the system time format elsewhere
   const { profile } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();

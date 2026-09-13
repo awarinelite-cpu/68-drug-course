@@ -1,6 +1,7 @@
 import { collection, doc, getDoc, getDocs, addDoc, query, where, orderBy, limit, updateDoc, setDoc, deleteDoc, serverTimestamp } from "firebase/firestore";
 import { db } from "../firebase.js";
 import { STATUS_LABELS, defaultRow } from "./drugChartHelpers.js";
+import { formatDateTime } from "./time-format.js";
 
 // Every "Allocate to Me" doc is keyed by uid+patientId with no ward or
 // admission tie-in (see Patient.jsx's allocationDocRef), so nothing ever
@@ -157,7 +158,7 @@ export async function applyPatientStatus({ patientId, reason, transferWard, from
           fromWard: fromWard || '',
           transferredByName: transferredByName || '',
           transferredAt: serverTimestamp(),
-          transferredAtDisplay: new Date().toLocaleString()
+          transferredAtDisplay: formatDateTime(new Date(), { year: true })
         },
         updatedAt: serverTimestamp()
       });
@@ -234,7 +235,7 @@ export async function applyPatientStatus({ patientId, reason, transferWard, from
     archiveReason: reason,
     archiveReasonLabel: label,
     archivedAt: serverTimestamp(),
-    archivedAtDisplay: new Date().toLocaleString(),
+    archivedAtDisplay: formatDateTime(new Date(), { year: true }),
     drugCourseChart: { ...drugChartData, f_discharge: dischargeDate },
     bloodGlucose: bgData,
     vitals: vitalsArr,
