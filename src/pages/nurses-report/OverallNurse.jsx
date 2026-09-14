@@ -31,9 +31,6 @@ const TRANSFER_PAIR = [byKey('transferIn'), byKey('transferOut')];
 const EXT_PAIR = [byKey('ext'), byKey('extOut')];
 const ORDERED_MOVEMENT = [...SOLO_BEFORE, ...TRANSFER_PAIR, ...EXT_PAIR, ...SOLO_AFTER];
 
-const wk = weekId();
-const dateId = reportDateId();
-
 function isNoteHeadingLine(line) {
   const t = line.trim();
   if (!t || t.length > 60) return false;
@@ -266,6 +263,13 @@ export default function OverallNurse() {
 
   const isAdmin = profile?.role === 'admin';
   const isSubadmin = profile?.role === 'subadmin';
+
+  // Recomputed on every render (not a module-level constant) so a tab left
+  // open across the Monday week rollover or the 9 AM daily rollover picks
+  // up the new week/day instead of continuing to check access against a
+  // stale one — see RoleSelect.jsx, which already does this per-mount.
+  const wk = weekId();
+  const dateId = reportDateId();
 
   const roleRef = doc(db, 'nurseReportRoles', wk);
   const wardsCol = collection(db, 'nurseReports', dateId, 'wards');
