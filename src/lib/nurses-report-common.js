@@ -310,7 +310,6 @@ export function occDelta(shiftData) {
 export function blankShift() {
   const s = {};
   SHIFT_STAT_FIELDS.forEach(f => { s[f.key] = 0; });
-  DEMOGRAPHIC_FIELDS.forEach(f => { s[f.key] = 0; });
   s.nurseOnDuty = '';
   return s;
 }
@@ -327,12 +326,17 @@ export function blankShift() {
 export function isWardDocUntouched(wardDoc) {
   if (!wardDoc || wardDoc.submitted || wardDoc.locked) return false;
   const shifts = wardDoc.shifts || {};
-  return SHIFTS.every(s => {
+  const shiftsUntouched = SHIFTS.every(s => {
     const shift = shifts[s.key] || {};
     if (shift.nurseOnDuty) return false;
-    return SHIFT_STAT_FIELDS.every(f => !shift[f.key]) &&
-      DEMOGRAPHIC_FIELDS.every(f => !shift[f.key]);
+    return SHIFT_STAT_FIELDS.every(f => !shift[f.key]);
   });
+  // Demographics are entered directly on the ward doc (one daily total per
+  // ward, matching the paper "Summary Breakdown of Statistics" form) rather
+  // than per shift, so they're checked at the top level here.
+  const demographicsUntouched = DEMOGRAPHIC_FIELDS.every(f => !wardDoc[f.key]) &&
+    !wardDoc.demographicsRemarks && !wardDoc.childMale && !wardDoc.childFemale;
+  return shiftsUntouched && demographicsUntouched;
 }
 
 // The empty-state shape for one ward's live report: no shifts entered,
@@ -348,7 +352,7 @@ export function defaultWardDoc(w, startOcc = 0) {
     label: w.label, beds: w.beds, startOcc: occ, occ: occ, vac: w.beds - occ,
     locked: false, submitted: false,
     shifts: {}, patients: [], nightUpdate: '', nightUpdateBy: '', nightUpdatedAt: null,
-    demographicsRemarks: ''
+    demographicsRemarks: '', childMale: 0, childFemale: 0
   };
   SHIFTS.forEach(s => { d.shifts[s.key] = blankShift(); });
   SHIFT_STAT_FIELDS.forEach(f => { d[f.key] = 0; });
@@ -356,28 +360,15 @@ export function defaultWardDoc(w, startOcc = 0) {
   return d;
 }
 
-// Net totals across shifts for the demographic breakdown, mirroring
-// computeMovementTotals()'s shape for STAT_FIELDS. Used by the Ward Nurse
-// Total row, and to persist the day's ward-level demographic totals so the
-// Overall Nurse / archive views can compile them without re-summing shifts.
-export function computeDemographicTotals(wardDoc) {
-  const totals = {};
-  DEMOGRAPHIC_FIELDS.forEach(f => {
-    let sum = 0;
-    SHIFTS.forEach(s => { const v = wardDoc.shifts[s.key]?.[f.key]; sum += typeof v === 'number' ? v : 0; });
-    totals[f.key] = sum;
-  });
-  return totals;
-}
-
 // "Patient Demographics" breakdown — NOT part of STAT_FIELDS, never fed
 // into Occ or any STAT_FIELDS total. Purely descriptive, matching the
 // paper "Summary Breakdown of Statistics" form: for each of four patient
 // movement categories (Admission/Disch/Dead/BID), a Military/Civilian
-// split, each further split by sex. Entered per shift on the Ward Nurse
-// page (own table below Shift Statistics), compiled read-only on the
-// Overall Nurse page, and shown read-only (with admin edit mode) on
-// archived reports.
+// split, each further split by sex. One daily total per ward, entered
+// directly (no shift breakdown, mirroring the paper form's single row
+// per ward) on the Ward Nurse page, compiled read-only on the Overall
+// Nurse page, and shown read-only (with admin edit mode) on archived
+// reports.
 export const DEMOGRAPHIC_CATEGORIES = [
   { key: 'adm',   label: 'Admission' },
   { key: 'disch', label: 'Disch' },
@@ -396,7 +387,7 @@ export const DEMOGRAPHIC_SEXES = ['M', 'F'];
 // affiliations x 2 sexes = 16). Kept as a flat {key,label} array (each
 // entry also carrying its category/affiliation/sex) so every consumer
 // that just needs "all the fields" (blankShift, defaultWardDoc,
-// computeDemographicTotals, isWardDocUntouched) keeps working by
+// isWardDocUntouched) keeps working by
 // iterating this the same way it always has; components that need the
 // paper form's three-row grouped header instead nest by
 // DEMOGRAPHIC_CATEGORIES / DEMOGRAPHIC_AFFILIATIONS directly.

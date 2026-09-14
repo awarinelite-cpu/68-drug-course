@@ -163,12 +163,13 @@ function WardShiftTableEdit({ w, data, onChange }) {
 
 // Three-row grouped header matching the paper form — see the same
 // helper in WardNurse.jsx.
-function DemographicsHeaderRows({ leadCell }) {
+function DemographicsHeaderRows({ leadCell, trailingCell }) {
   return (
     <>
       <tr>
         {leadCell}
         {DEMOGRAPHIC_CATEGORIES.map((cat) => <th key={cat.key} colSpan={4}>{cat.label}</th>)}
+        {trailingCell}
       </tr>
       <tr>
         {DEMOGRAPHIC_CATEGORIES.flatMap((cat) =>
@@ -182,33 +183,20 @@ function DemographicsHeaderRows({ leadCell }) {
   );
 }
 
+// One daily total per ward, read directly off the archived doc — matches
+// the paper "Summary Breakdown of Statistics" form's single row per ward
+// (see the same shape in WardNurse.jsx's DemographicsTable).
 function DemographicsTableView({ data, w }) {
   const fields = DEMOGRAPHIC_FIELDS;
-  const shifts = data.shifts || {};
-  const totals = {};
-  fields.forEach(f => {
-    let sum = 0;
-    SHIFTS.forEach(s => { const v = (shifts[s.key] || {})[f.key]; sum += typeof v === 'number' ? v : 0; });
-    totals[f.key] = sum;
-  });
   return (
     <table className="shift">
       <thead>
-        <DemographicsHeaderRows leadCell={<th rowSpan={3}>Shift</th>} />
+        <DemographicsHeaderRows trailingCell={<th rowSpan={3}>Rmks</th>} />
       </thead>
       <tbody>
-        {SHIFTS.map((s) => {
-          const sData = shifts[s.key] || {};
-          return (
-            <tr key={s.key}>
-              <td className="shift-name">{s.label}</td>
-              {fields.map(f => <td key={f.key}>{typeof sData[f.key] === 'number' ? sData[f.key] : 0}</td>)}
-            </tr>
-          );
-        })}
-        <tr className="total-row">
-          <td className="shift-name">Total</td>
-          {fields.map(f => <td key={f.key}>{totals[f.key]}</td>)}
+        <tr>
+          {fields.map(f => <td key={f.key}>{typeof data[f.key] === 'number' ? data[f.key] : 0}</td>)}
+          <td>{data.demographicsRemarks || ''}</td>
         </tr>
       </tbody>
     </table>
@@ -217,28 +205,28 @@ function DemographicsTableView({ data, w }) {
 
 function DemographicsTableEdit({ data, onChange, w }) {
   const fields = DEMOGRAPHIC_FIELDS;
-  const shifts = data.shifts || {};
-  function setField(shiftKey, fieldKey, raw) {
+  function setField(fieldKey, raw) {
     const n = parseFloat(raw);
-    onChange({ ...data, shifts: { ...shifts, [shiftKey]: { ...shifts[shiftKey], [fieldKey]: isNaN(n) ? 0 : n } } });
+    onChange({ ...data, [fieldKey]: isNaN(n) ? 0 : n });
   }
   return (
     <table className="shift">
       <thead>
-        <DemographicsHeaderRows leadCell={<th rowSpan={3}>Shift</th>} />
+        <DemographicsHeaderRows trailingCell={<th rowSpan={3}>Rmks</th>} />
       </thead>
       <tbody>
-        {SHIFTS.map((s) => (
-          <tr key={s.key}>
-            <td className="shift-name">{s.label}</td>
-            {fields.map((f) => (
-              <td key={f.key}>
-                <input type="number" inputMode="numeric" value={(shifts[s.key] || {})[f.key] || 0}
-                  onChange={(e) => setField(s.key, f.key, e.target.value)} />
-              </td>
-            ))}
-          </tr>
-        ))}
+        <tr>
+          {fields.map((f) => (
+            <td key={f.key}>
+              <input type="number" inputMode="numeric" value={data[f.key] || 0}
+                onChange={(e) => setField(f.key, e.target.value)} />
+            </td>
+          ))}
+          <td>
+            <input type="text" value={data.demographicsRemarks || ''}
+              onChange={(e) => onChange({ ...data, demographicsRemarks: e.target.value })} />
+          </td>
+        </tr>
       </tbody>
     </table>
   );
@@ -277,9 +265,6 @@ function WardReportBlockView({ w, data }) {
       <div className="table-wrap"><WardShiftTableView w={w} data={data} /></div>
       <h3 className="patient-note-label" style={{ marginTop: 14 }}>Patient Demographics</h3>
       <div className="table-wrap"><DemographicsTableView data={data} w={w} /></div>
-      {data.demographicsRemarks && (
-        <p className="patient-note-text" style={{ marginTop: 4 }}><strong>Remarks:</strong> {data.demographicsRemarks}</p>
-      )}
       {patients.length === 0
         ? <div className="no-patients" style={{ marginTop: 10 }}>No patient write-ups submitted for this ward.</div>
         : patients.map((p, i) => <PatientBlockView p={p} key={p.id || i} />)}
@@ -319,11 +304,6 @@ function WardReportBlockEdit({ w, data, onChange }) {
       <div className="table-wrap"><WardShiftTableEdit w={w} data={data} onChange={onChange} /></div>
       <h3 className="patient-note-label" style={{ marginTop: 14 }}>Patient Demographics</h3>
       <div className="table-wrap"><DemographicsTableEdit data={data} onChange={onChange} w={w} /></div>
-      <div className="patient-field" style={{ marginTop: 8 }}>
-        <label>Remarks:</label>
-        <input type="text" value={data.demographicsRemarks || ''}
-          onChange={(e) => onChange({ ...data, demographicsRemarks: e.target.value })} />
-      </div>
       {patients.map((p, i) => (
         <PatientCardEdit key={p.id || i} p={p} onChange={(next) => updatePatient(i, next)} onRemove={() => removePatient(i)} />
       ))}

@@ -8,7 +8,7 @@ import { useGoBack } from "../../hooks/useGoBack.js";
 import {
   WARDS, SHIFT_STAT_FIELDS, SHIFTS, PATIENT_FIELDS, PATIENT_STATUS_OPTIONS,
   PATIENT_STATUS_ARCHIVE_REASON,
-  DEMOGRAPHIC_FIELDS, DEMOGRAPHIC_CATEGORIES, DEMOGRAPHIC_AFFILIATIONS, computeDemographicTotals, movementColorClass,
+  DEMOGRAPHIC_FIELDS, DEMOGRAPHIC_CATEGORIES, DEMOGRAPHIC_AFFILIATIONS, movementColorClass,
   reportDateId, occDelta, blankShift, defaultWardDoc, wardSelectorOptions,
   isWardDocUntouched
 } from "../../lib/nurses-report-common.js";
@@ -244,12 +244,13 @@ function ShiftTable({ wardDoc, census, movementTotals, editable, onBeds, onField
 // spanning 2 each within that, then the M/F leaf columns — reused as-is
 // by every demographics table below (Ward Nurse, merged-ward, Overall
 // Nurse compiled view, Archive).
-function DemographicsHeaderRows({ leadCell }) {
+function DemographicsHeaderRows({ leadCell, trailingCell }) {
   return (
     <>
       <tr>
         {leadCell}
         {DEMOGRAPHIC_CATEGORIES.map((cat) => <th key={cat.key} colSpan={4}>{cat.label}</th>)}
+        {trailingCell}
       </tr>
       <tr>
         {DEMOGRAPHIC_CATEGORIES.flatMap((cat) =>
@@ -263,27 +264,27 @@ function DemographicsHeaderRows({ leadCell }) {
   );
 }
 
-function DemographicsTable({ wardDoc, totals, editable, onField }) {
+// One daily total per ward, entered directly — matches the paper
+// "Summary Breakdown of Statistics" form's single row per ward, rather
+// than a per-shift entry table.
+function DemographicsTable({ wardDoc, editable, onField, onRemarks }) {
   return (
     <table className="shift">
       <thead>
-        <DemographicsHeaderRows leadCell={<th rowSpan={3}>Shift</th>} />
+        <DemographicsHeaderRows trailingCell={<th rowSpan={3}>Rmks</th>} />
       </thead>
       <tbody>
-        {SHIFTS.map((s) => (
-          <tr key={s.key}>
-            <td className="shift-name">{s.label}</td>
-            {DEMOGRAPHIC_FIELDS.map((f) => (
-              <td key={f.key}>
-                <input type="number" inputMode="numeric" disabled={!editable}
-                  value={wardDoc.shifts[s.key][f.key]} onChange={(e) => onField(s.key, f.key, e.target.value)} />
-              </td>
-            ))}
-          </tr>
-        ))}
-        <tr className="total-row">
-          <td className="shift-name">Total</td>
-          {DEMOGRAPHIC_FIELDS.map(f => <td key={f.key}>{totals[f.key]}</td>)}
+        <tr>
+          {DEMOGRAPHIC_FIELDS.map((f) => (
+            <td key={f.key}>
+              <input type="number" inputMode="numeric" disabled={!editable}
+                value={wardDoc[f.key]} onChange={(e) => onField(f.key, e.target.value)} />
+            </td>
+          ))}
+          <td>
+            <input type="text" disabled={!editable}
+              value={wardDoc.demographicsRemarks || ''} onChange={(e) => onRemarks(e.target.value)} />
+          </td>
         </tr>
       </tbody>
     </table>
@@ -301,20 +302,16 @@ function DemographicsTable({ wardDoc, totals, editable, onField }) {
 // DEMOGRAPHIC_FIELDS, so newborns never mix into other wards' counts or
 // the "All Wards" grand totals — those still only read the shared
 // DEMOGRAPHIC_FIELDS keys.
-function MaternityDemographicsTable({ wardDoc, editable, onField }) {
-  const getVal = (shiftKey, key) => {
-    const v = (wardDoc.shifts[shiftKey] || {})[key];
-    return typeof v === 'number' ? v : 0;
-  };
-  const totalFor = (key) => SHIFTS.reduce((sum, s) => sum + getVal(s.key, key), 0);
+function MaternityDemographicsTable({ wardDoc, editable, onField, onRemarks }) {
+  const getVal = (key) => (typeof wardDoc[key] === 'number' ? wardDoc[key] : 0);
 
   return (
     <table className="shift">
       <thead>
         <tr>
-          <th rowSpan={3}>Shift</th>
           <th colSpan={2} rowSpan={2}>COT</th>
           {DEMOGRAPHIC_CATEGORIES.map((cat) => <th key={cat.key} colSpan={4}>{cat.label}</th>)}
+          <th rowSpan={3}>Rmks</th>
         </tr>
         <tr>
           {DEMOGRAPHIC_CATEGORIES.flatMap((cat) =>
@@ -327,30 +324,25 @@ function MaternityDemographicsTable({ wardDoc, editable, onField }) {
         </tr>
       </thead>
       <tbody>
-        {SHIFTS.map((s) => (
-          <tr key={s.key}>
-            <td className="shift-name">{s.label}</td>
-            <td>
+        <tr>
+          <td>
+            <input type="number" inputMode="numeric" disabled={!editable}
+              value={getVal('childMale')} onChange={(e) => onField('childMale', e.target.value)} />
+          </td>
+          <td>
+            <input type="number" inputMode="numeric" disabled={!editable}
+              value={getVal('childFemale')} onChange={(e) => onField('childFemale', e.target.value)} />
+          </td>
+          {DEMOGRAPHIC_FIELDS.map((f) => (
+            <td key={f.key}>
               <input type="number" inputMode="numeric" disabled={!editable}
-                value={getVal(s.key, 'childMale')} onChange={(e) => onField(s.key, 'childMale', e.target.value)} />
+                value={getVal(f.key)} onChange={(e) => onField(f.key, e.target.value)} />
             </td>
-            <td>
-              <input type="number" inputMode="numeric" disabled={!editable}
-                value={getVal(s.key, 'childFemale')} onChange={(e) => onField(s.key, 'childFemale', e.target.value)} />
-            </td>
-            {DEMOGRAPHIC_FIELDS.map((f) => (
-              <td key={f.key}>
-                <input type="number" inputMode="numeric" disabled={!editable}
-                  value={getVal(s.key, f.key)} onChange={(e) => onField(s.key, f.key, e.target.value)} />
-              </td>
-            ))}
-          </tr>
-        ))}
-        <tr className="total-row">
-          <td className="shift-name">Total</td>
-          <td>{totalFor('childMale')}</td>
-          <td>{totalFor('childFemale')}</td>
-          {DEMOGRAPHIC_FIELDS.map((f) => <td key={f.key}>{totalFor(f.key)}</td>)}
+          ))}
+          <td>
+            <input type="text" disabled={!editable}
+              value={wardDoc.demographicsRemarks || ''} onChange={(e) => onRemarks(e.target.value)} />
+          </td>
         </tr>
       </tbody>
     </table>
@@ -652,7 +644,6 @@ function useWardReport(wardKey, isAdmin, profile, user) {
 
   const census = useMemo(() => wardDoc ? computeCensus(wardDoc) : null, [wardDoc]);
   const movementTotals = useMemo(() => wardDoc ? computeMovementTotals(wardDoc) : null, [wardDoc]);
-  const demographicTotals = useMemo(() => wardDoc ? computeDemographicTotals(wardDoc) : null, [wardDoc]);
 
   const editable = wardDoc ? ((isAdmin && adminEditOverride) || !wardDoc.locked) : false;
 
@@ -664,7 +655,7 @@ function useWardReport(wardKey, isAdmin, profile, user) {
       setWardDoc(doc_);
     }
     const ref = doc(db, 'nurseReports', dateId, 'wards', wardKey);
-    const finalDoc = { ...doc_, occ: census.occ, vac: census.vac, ...movementTotals, ...demographicTotals };
+    const finalDoc = { ...doc_, occ: census.occ, vac: census.vac, ...movementTotals };
     try {
       await setDoc(ref, { ...finalDoc, updatedAt: serverTimestamp(), updatedBy: profile.name || 'Unknown' }, { merge: true });
       setSaveStatus({ text: 'Saved.', error: false });
@@ -746,7 +737,7 @@ function useWardReport(wardKey, isAdmin, profile, user) {
       doc_ = { ...doc_, patients: doc_.patients.map((p) => okIds.has(p.id) ? { ...p, archivedFromReport: true } : p) };
     }
 
-    const finalDoc = { ...doc_, occ: census.occ, vac: census.vac, ...movementTotals, ...demographicTotals };
+    const finalDoc = { ...doc_, occ: census.occ, vac: census.vac, ...movementTotals };
     const ref = doc(db, 'nurseReports', dateId, 'wards', wardKey);
     const payload = {
       ...finalDoc, submitted: true, locked: true,
@@ -787,7 +778,7 @@ function useWardReport(wardKey, isAdmin, profile, user) {
   return {
     w, wardDoc, adminEditOverride, setAdminEditOverride, nightUpdateOpen, topStatus, saveStatus, emrLookup,
     wardPatientOptions,
-    census, movementTotals, demographicTotals, editable,
+    census, movementTotals, editable,
     updateWardDoc, updateShiftField, updateDuty, updateBeds, updateStartOcc,
     addPatient, removePatient, updatePatientField, updateDiagnosisField, updateVitalsSnapshotField,
     updatePatientStatus, lookupPatientByEmr, selectPatientFromWard,
@@ -905,7 +896,7 @@ function WardPatientPicker({ value, options, onSelect, usedIds }) {
 function WardPanelRest({ h, showLabel, isAdmin, navigate, includeShiftTable = true, includePreviousOcc = true, includeHeader = true, includeDemographics = true, onSave, onSubmit, useMaternityDemographics = false, locationOptions }) {
   const {
     w, wardDoc, topStatus, saveStatus, editable, adminEditOverride, setAdminEditOverride,
-    census, movementTotals, demographicTotals, emrLookup, wardPatientOptions,
+    census, movementTotals, emrLookup, wardPatientOptions,
     updateWardDoc, updateShiftField, updateDuty, updateBeds, updateStartOcc,
     addPatient, removePatient, updatePatientField, updateDiagnosisField, updateVitalsSnapshotField,
     updatePatientStatus, lookupPatientByEmr, selectPatientFromWard,
@@ -986,13 +977,13 @@ function WardPanelRest({ h, showLabel, isAdmin, navigate, includeShiftTable = tr
               <h2>Patient Demographics</h2>
               <div className="table-wrap">
                 {useMaternityDemographics
-                  ? <MaternityDemographicsTable wardDoc={wardDoc} editable={editable} onField={updateShiftField} />
-                  : <DemographicsTable wardDoc={wardDoc} totals={demographicTotals} editable={editable} onField={updateShiftField} />}
+                  ? <MaternityDemographicsTable wardDoc={wardDoc} editable={editable}
+                      onField={(key, raw) => { const n = parseFloat(raw); updateWardDoc({ [key]: isNaN(n) ? 0 : n }); }}
+                      onRemarks={(v) => updateWardDoc({ demographicsRemarks: v })} />
+                  : <DemographicsTable wardDoc={wardDoc} editable={editable}
+                      onField={(key, raw) => { const n = parseFloat(raw); updateWardDoc({ [key]: isNaN(n) ? 0 : n }); }}
+                      onRemarks={(v) => updateWardDoc({ demographicsRemarks: v })} />}
               </div>
-              <label className="patient-note-label" htmlFor="demographicsRemarksInput" style={{ marginTop: 10, display: 'block' }}>Remarks</label>
-              <input id="demographicsRemarksInput" type="text" disabled={!editable}
-                value={wardDoc.demographicsRemarks || ''}
-                onChange={(e) => updateWardDoc({ demographicsRemarks: e.target.value })} />
             </div>
           )}
 
@@ -1172,50 +1163,39 @@ function MergedShiftTable({ panels }) {
   );
 }
 
-// One shared, editable Patient Demographics table for a mergedTable
-// group with demographicsVariant: 'merged' (currently just PAED WARD) —
-// same Morning/Night/Total row shape as MergedShiftTable above, using
-// the full shared DEMOGRAPHIC_FIELDS breakdown. `panels` is one entry
-// per member ward, each still writing to its own wardDoc/Firestore
-// record via its own onField handler.
+// One shared Patient Demographics table for a mergedTable group with
+// demographicsVariant: 'merged' (currently just PAED WARD) — one row per
+// member ward (Bed, Cot), same one-daily-total-per-ward shape as the
+// standalone DemographicsTable above, kept as separate rows (not combined
+// into one) since Bed and Cot each keep their own figures, same as every
+// other ward. `panels` is one entry per member ward, each still writing
+// to its own wardDoc/Firestore record via its own onField/onRemarks
+// handler.
 function MergedDemographicsTable({ panels }) {
   const fields = DEMOGRAPHIC_FIELDS;
-  const getVal = (p, shiftKey, key) => {
-    const v = (p.wardDoc.shifts[shiftKey] || {})[key];
-    return typeof v === 'number' ? v : 0;
-  };
-  const totals = {};
-  fields.forEach((f) => {
-    totals[f.key] = panels.reduce((sum, p) => sum + SHIFTS.reduce((s, sh) => s + getVal(p, sh.key, f.key), 0), 0);
-  });
-  const colSpanAll = 1 + fields.length;
+  const getVal = (p, key) => (typeof p.wardDoc[key] === 'number' ? p.wardDoc[key] : 0);
 
   return (
     <table className="shift">
       <thead>
-        <DemographicsHeaderRows leadCell={<th rowSpan={3}>Shift</th>} />
+        <DemographicsHeaderRows leadCell={<th rowSpan={3}>Ward</th>} trailingCell={<th rowSpan={3}>Rmks</th>} />
       </thead>
       <tbody>
-        {SHIFTS.map((s) => (
-          <Fragment key={s.key}>
-            <tr className="shift-section-row"><td colSpan={colSpanAll}>{s.label === 'Am' ? 'Morning' : 'Night'}</td></tr>
-            {panels.map((p) => (
-              <tr key={p.w.key}>
-                <td className="shift-name">{p.w.label}</td>
-                {fields.map((f) => (
-                  <td key={f.key}>
-                    <input type="number" inputMode="numeric" disabled={!p.editable}
-                      value={getVal(p, s.key, f.key)} onChange={(e) => p.onField(s.key, f.key, e.target.value)} />
-                  </td>
-                ))}
-              </tr>
+        {panels.map((p) => (
+          <tr key={p.w.key}>
+            <td className="shift-name">{p.w.label}</td>
+            {fields.map((f) => (
+              <td key={f.key}>
+                <input type="number" inputMode="numeric" disabled={!p.editable}
+                  value={getVal(p, f.key)} onChange={(e) => p.onField(f.key, e.target.value)} />
+              </td>
             ))}
-          </Fragment>
+            <td>
+              <input type="text" disabled={!p.editable}
+                value={p.wardDoc.demographicsRemarks || ''} onChange={(e) => p.onRemarks(e.target.value)} />
+            </td>
+          </tr>
         ))}
-        <tr className="total-row">
-          <td className="shift-name">Total</td>
-          {fields.map(f => <td key={f.key}>{totals[f.key]}</td>)}
-        </tr>
       </tbody>
     </table>
   );
@@ -1319,7 +1299,11 @@ function MergedWardReportPanel({ group, isAdmin, profile, user, navigate }) {
         <div className="card-box">
           <h2>Patient Demographics</h2>
           <div className="table-wrap">
-            <MergedDemographicsTable panels={hooks.map((h) => ({ w: h.w, wardDoc: h.wardDoc, editable: h.editable, onField: h.updateShiftField }))} />
+            <MergedDemographicsTable panels={hooks.map((h) => ({
+              w: h.w, wardDoc: h.wardDoc, editable: h.editable,
+              onField: (key, raw) => { const n = parseFloat(raw); h.updateWardDoc({ [key]: isNaN(n) ? 0 : n }); },
+              onRemarks: (v) => h.updateWardDoc({ demographicsRemarks: v })
+            }))} />
           </div>
         </div>
       )}
