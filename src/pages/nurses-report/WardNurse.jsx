@@ -1213,25 +1213,27 @@ function MergedWardReportPanel({ group, isAdmin, profile, user, navigate }) {
     <>
       {bothLoaded && (
         <div className="card-box">
-          <div className="ward-select-row">
-            <h2 style={{ margin: 0 }}>{group.label} — Shift Statistics</h2>
-            <button className="btn btn-secondary" style={{ padding: '6px 12px', marginLeft: 'auto' }} type="button"
-              onClick={() => navigate('/nurses-report/archive-list?type=ward&ward=' + encodeURIComponent(hA.w.key) + '&label=' + encodeURIComponent(group.label))}>
-              {'\uD83D\uDCC1 Archive'}
-            </button>
-          </div>
-          <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginTop: 12, marginBottom: 12 }}>
+          <h2 style={{ margin: 0 }}>{group.label} — Shift Statistics</h2>
+          <div className="patient-field" style={{ marginTop: 12, marginBottom: 12 }}>
             {quickLookupOptions.length > 0 && (
-              <div className="patient-field" style={{ minWidth: 220 }}>
-                <label>Check a patient's status:</label>
-                <WardPatientPicker value={quickLookupId} options={quickLookupOptions} onSelect={setQuickLookupId} />
-                {quickLookupTag && (
-                  <div style={{ fontSize: 12, marginTop: 4, fontWeight: 'bold', color: quickLookupRecord.dischargeStatus ? '#dc2626' : quickLookupRecord.admissionTag ? '#2563eb' : '#6b7280' }}>
-                    {quickLookupTag}{quickLookupRecord.location ? ' \u2014 ' + quickLookupRecord.location : ''}
-                  </div>
-                )}
-              </div>
+              <label>Check a patient's status:</label>
             )}
+            <div style={{ display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap' }}>
+              {quickLookupOptions.length > 0 && (
+                <div style={{ flex: '1 1 180px', minWidth: 180 }}>
+                  <WardPatientPicker value={quickLookupId} options={quickLookupOptions} onSelect={setQuickLookupId} />
+                  {quickLookupTag && (
+                    <div style={{ fontSize: 12, marginTop: 4, fontWeight: 'bold', color: quickLookupRecord.dischargeStatus ? '#dc2626' : quickLookupRecord.admissionTag ? '#2563eb' : '#6b7280' }}>
+                      {quickLookupTag}{quickLookupRecord.location ? ' \u2014 ' + quickLookupRecord.location : ''}
+                    </div>
+                  )}
+                </div>
+              )}
+              <button className="btn btn-secondary" style={{ padding: '6px 12px' }} type="button"
+                onClick={() => navigate('/nurses-report/archive-list?type=ward&ward=' + encodeURIComponent(hA.w.key) + '&label=' + encodeURIComponent(group.label))}>
+                {'\uD83D\uDCC1 Archive'}
+              </button>
+            </div>
           </div>
           <div className="table-wrap">
             <MergedShiftTable panels={hooks.map((h) => ({
