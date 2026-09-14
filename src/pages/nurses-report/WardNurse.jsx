@@ -1221,12 +1221,6 @@ function MergedWardReportPanel({ group, isAdmin, profile, user, navigate }) {
             </button>
           </div>
           <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginTop: 12, marginBottom: 12 }}>
-            {hooks.map((h) => (
-              <div className="patient-field" style={{ maxWidth: 140 }} key={h.w.key}>
-                <label>{'Previous Occ (' + h.w.label + ')'}</label>
-                <input type="number" inputMode="numeric" disabled={!h.editable} value={h.wardDoc.startOcc} onChange={(e) => h.updateStartOcc(e.target.value)} />
-              </div>
-            ))}
             {quickLookupOptions.length > 0 && (
               <div className="patient-field" style={{ minWidth: 220 }}>
                 <label>Check a patient's status:</label>
