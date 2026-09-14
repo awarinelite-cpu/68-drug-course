@@ -5,7 +5,7 @@ import { db } from "../../firebase.js";
 import { useGoBack } from "../../hooks/useGoBack.js";
 import { useTheme } from "../../contexts/ThemeContext.jsx";
 import {
-  WARDS, DEMOGRAPHIC_FIELDS, STAT_FIELDS, OCC_INCREASE_KEYS, OCC_DECREASE_KEYS,
+  WARDS, DEMOGRAPHIC_FIELDS, DEMOGRAPHIC_CATEGORIES, DEMOGRAPHIC_AFFILIATIONS, STAT_FIELDS, OCC_INCREASE_KEYS, OCC_DECREASE_KEYS,
   reportDateId, weekId
 } from "../../lib/nurses-report-common.js";
 import Topbar from "../../components/Topbar.jsx";
@@ -563,13 +563,35 @@ export default function Analytics() {
                 })}
               </div>
               <h3>Patient Demographics</h3>
-              <div className="stat-grid">
-                {DEMOGRAPHIC_FIELDS.map(f => (
-                  <div className="stat-box demo" key={f.key}>
-                    <div className="n">{totals[f.key]}</div>
-                    <div className="l">{f.label}</div>
-                  </div>
-                ))}
+              <div className="table-wrap">
+                <table className="report">
+                  <thead>
+                    <tr>
+                      <th rowSpan={3}>Ward</th>
+                      {DEMOGRAPHIC_CATEGORIES.map((cat) => <th key={cat.key} colSpan={4}>{cat.label}</th>)}
+                    </tr>
+                    <tr>
+                      {DEMOGRAPHIC_CATEGORIES.flatMap((cat) =>
+                        DEMOGRAPHIC_AFFILIATIONS.map((aff) => <th key={cat.key + aff.key} colSpan={2}>{aff.label}</th>)
+                      )}
+                    </tr>
+                    <tr>
+                      {DEMOGRAPHIC_FIELDS.map((f) => <th key={f.key}>{f.sex}</th>)}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {WARDS.map((w) => (
+                      <tr key={w.key}>
+                        <td className="ward-name">{w.label}</td>
+                        {DEMOGRAPHIC_FIELDS.map((f) => <td key={f.key}>{(perWard[w.key] && perWard[w.key][f.key]) || 0}</td>)}
+                      </tr>
+                    ))}
+                    <tr className="totals-row">
+                      <td className="ward-name">TOTAL</td>
+                      {DEMOGRAPHIC_FIELDS.map(f => <td key={f.key}>{totals[f.key]}</td>)}
+                    </tr>
+                  </tbody>
+                </table>
               </div>
             </div>
 
