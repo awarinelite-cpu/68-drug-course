@@ -18,6 +18,13 @@ import { applyPatientStatus, closeOutDischargedPatient, activeAdmissionTag, clea
 import Topbar from "../../components/Topbar.jsx";
 import wardSelectBg from "../../assets/ward-select-bg.svg";
 
+// Row-label overrides for MergedDemographicsTable only — Maternity's
+// Shift Statistics table and every other display still use WARDS'
+// shared "MOTHERS"/"COTS" labels (matching the paper Minute Book); the
+// Patient Demographics table alone shows "MAT BED"/"MAT COT" so it reads
+// the same way as PAED WARD's "PAED BED"/"PAED COT" rows.
+const DEMOGRAPHICS_ROW_LABEL = { matbed: 'MAT BED', matcot: 'MAT COT' };
+
 const movementFields = SHIFT_STAT_FIELDS;
 const byKey = k => movementFields.find(f => f.key === k);
 const SOLO_BEFORE = ['adm', 'disch', 'dama'].map(byKey);
@@ -291,63 +298,12 @@ function DemographicsTable({ wardDoc, editable, onField, onRemarks }) {
   );
 }
 
-// Maternity's own Patient Demographics table: a "COT" group tracking
-// newborns' sex (Male/Female) sits alongside the same
-// Admission/Disch/Dead/BID x Military/Civilian x M/F breakdown every
-// other ward uses for the adult "MOTHERS" side — mirroring the
-// MOTHERS/COTS row labels on the merged Shift Statistics table above
-// (matbed/matcot in WARDS), so both tables read the same way: COT
-// columns = newborns, MOTHERS columns = the adult patients. COT uses
-// two dedicated fields (childMale/childFemale) outside the shared
-// DEMOGRAPHIC_FIELDS, so newborns never mix into other wards' counts or
-// the "All Wards" grand totals — those still only read the shared
-// DEMOGRAPHIC_FIELDS keys.
-function MaternityDemographicsTable({ wardDoc, editable, onField, onRemarks }) {
-  const getVal = (key) => (typeof wardDoc[key] === 'number' ? wardDoc[key] : 0);
-
-  return (
-    <table className="shift">
-      <thead>
-        <tr>
-          <th colSpan={2} rowSpan={2}>COT</th>
-          {DEMOGRAPHIC_CATEGORIES.map((cat) => <th key={cat.key} colSpan={4}>{cat.label}</th>)}
-          <th rowSpan={3}>Rmks</th>
-        </tr>
-        <tr>
-          {DEMOGRAPHIC_CATEGORIES.flatMap((cat) =>
-            DEMOGRAPHIC_AFFILIATIONS.map((aff) => <th key={cat.key + aff.key} colSpan={2}>{aff.label}</th>)
-          )}
-        </tr>
-        <tr>
-          <th>Male</th><th>Female</th>
-          {DEMOGRAPHIC_FIELDS.map((f) => <th key={f.key}>{f.sex}</th>)}
-        </tr>
-      </thead>
-      <tbody>
-        <tr>
-          <td>
-            <input type="number" inputMode="numeric" disabled={!editable}
-              value={getVal('childMale')} onChange={(e) => onField('childMale', e.target.value)} />
-          </td>
-          <td>
-            <input type="number" inputMode="numeric" disabled={!editable}
-              value={getVal('childFemale')} onChange={(e) => onField('childFemale', e.target.value)} />
-          </td>
-          {DEMOGRAPHIC_FIELDS.map((f) => (
-            <td key={f.key}>
-              <input type="number" inputMode="numeric" disabled={!editable}
-                value={getVal(f.key)} onChange={(e) => onField(f.key, e.target.value)} />
-            </td>
-          ))}
-          <td>
-            <input type="text" disabled={!editable}
-              value={wardDoc.demographicsRemarks || ''} onChange={(e) => onRemarks(e.target.value)} />
-          </td>
-        </tr>
-      </tbody>
-    </table>
-  );
-}
+// Maternity's Patient Demographics now reuses MergedDemographicsTable
+// below (see WARD_GROUPS' matward entry: demographicsVariant 'merged'),
+// same as PAED WARD — one row for MAT BED, one row for MAT COT, instead
+// of a single combined row with a separate newborn COT Male/Female
+// count. Removed the bespoke childMale/childFemale-based table this used
+// to be.
 
 // All of one ward's report state/logic — loading, editing, saving,
 // submitting — with no rendering. Extracted out of WardReportPanel so
@@ -893,7 +849,7 @@ function WardPatientPicker({ value, options, onSelect, usedIds }) {
   );
 }
 
-function WardPanelRest({ h, showLabel, isAdmin, navigate, includeShiftTable = true, includePreviousOcc = true, includeHeader = true, includeDemographics = true, onSave, onSubmit, useMaternityDemographics = false, locationOptions }) {
+function WardPanelRest({ h, showLabel, isAdmin, navigate, includeShiftTable = true, includePreviousOcc = true, includeHeader = true, includeDemographics = true, onSave, onSubmit, locationOptions }) {
   const {
     w, wardDoc, topStatus, saveStatus, editable, adminEditOverride, setAdminEditOverride,
     census, movementTotals, emrLookup, wardPatientOptions,
@@ -976,13 +932,9 @@ function WardPanelRest({ h, showLabel, isAdmin, navigate, includeShiftTable = tr
             <div className="card-box">
               <h2>Patient Demographics</h2>
               <div className="table-wrap">
-                {useMaternityDemographics
-                  ? <MaternityDemographicsTable wardDoc={wardDoc} editable={editable}
-                      onField={(key, raw) => { const n = parseFloat(raw); updateWardDoc({ [key]: isNaN(n) ? 0 : n }); }}
-                      onRemarks={(v) => updateWardDoc({ demographicsRemarks: v })} />
-                  : <DemographicsTable wardDoc={wardDoc} editable={editable}
-                      onField={(key, raw) => { const n = parseFloat(raw); updateWardDoc({ [key]: isNaN(n) ? 0 : n }); }}
-                      onRemarks={(v) => updateWardDoc({ demographicsRemarks: v })} />}
+                <DemographicsTable wardDoc={wardDoc} editable={editable}
+                  onField={(key, raw) => { const n = parseFloat(raw); updateWardDoc({ [key]: isNaN(n) ? 0 : n }); }}
+                  onRemarks={(v) => updateWardDoc({ demographicsRemarks: v })} />
               </div>
             </div>
           )}
@@ -1300,7 +1252,8 @@ function MergedWardReportPanel({ group, isAdmin, profile, user, navigate }) {
           <h2>Patient Demographics</h2>
           <div className="table-wrap">
             <MergedDemographicsTable panels={hooks.map((h) => ({
-              w: h.w, wardDoc: h.wardDoc, editable: h.editable,
+              w: { ...h.w, label: DEMOGRAPHICS_ROW_LABEL[h.w.key] || h.w.label },
+              wardDoc: h.wardDoc, editable: h.editable,
               onField: (key, raw) => { const n = parseFloat(raw); h.updateWardDoc({ [key]: isNaN(n) ? 0 : n }); },
               onRemarks: (v) => h.updateWardDoc({ demographicsRemarks: v })
             }))} />
@@ -1309,7 +1262,7 @@ function MergedWardReportPanel({ group, isAdmin, profile, user, navigate }) {
       )}
       <WardPanelRest h={hA} showLabel={false} isAdmin={isAdmin} navigate={navigate}
         includeShiftTable={false} includePreviousOcc={false} includeHeader={false}
-        includeDemographics={!mergedDemographics} useMaternityDemographics={group.demographicsVariant === 'maternity'}
+        includeDemographics={!mergedDemographics}
         locationOptions={group.patientLocationOptions}
         onSave={saveBoth} onSubmit={submitBoth} />
     </>
