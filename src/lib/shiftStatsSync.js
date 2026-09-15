@@ -1,7 +1,29 @@
-import { doc, runTransaction, serverTimestamp } from "firebase/firestore";
+import { doc, runTransaction, serverTimestamp, collection, getDocs } from "firebase/firestore";
 import { db } from "../firebase.js";
 import { WARDS, reportDateId, defaultWardDoc } from "./nurses-report-common.js";
-import { reportWardKeysForPatientWard } from "./wardNameMatch.js";
+import { reportWardKeysForPatientWard, patientWardAndBedTypeForReportKey } from "./wardNameMatch.js";
+import { wardHeadcount } from "./wardCensus.js";
+
+// Best-effort live headcount for a report ward key, used only to seed a
+// brand-new day's doc (see bumpShiftStat below) with the real starting
+// occupancy instead of a bare zero. Mirrors the same lookup WardNurse.jsx
+// does for its own Previous-Occ auto-fill. Read outside any transaction,
+// same as that page does — a plain collection read isn't something a
+// Firestore transaction can do, and it doesn't need to be transactional:
+// worst case it's a shift stale by the couple of patient events that
+// might land in the same instant, far better than defaulting to 0.
+async function liveHeadcountForWardKey(wardKey) {
+  const patientWardInfo = patientWardAndBedTypeForReportKey(wardKey);
+  if (!patientWardInfo) return null;
+  try {
+    const patientsSnap = await getDocs(collection(db, 'patients'));
+    const patients = [];
+    patientsSnap.forEach(d => patients.push(d.data()));
+    return wardHeadcount(patients, patientWardInfo.wardLabel, patientWardInfo.bedType);
+  } catch (e) {
+    return null;
+  }
+}
 
 // Ward-local (WAT, UTC+1) hour — same convention as reportDateId in
 // nurses-report-common.js — used only to decide which shift ("am"/"pm")
@@ -43,11 +65,17 @@ export async function bumpShiftStat(wardKey, statKey, delta = 1, { dateId, shift
   const useShiftKey = shiftKey || currentShiftKey();
   const ref = doc(db, 'nurseReports', useDateId, 'wards', wardKey);
   const fieldPath = 'shifts.' + useShiftKey + '.' + statKey;
+  // Looked up before the transaction starts (see liveHeadcountForWardKey) so
+  // a brand-new day's doc, if we end up creating one below, seeds Occ from
+  // the real patient census rather than 0. Only actually used if the doc
+  // turns out not to exist yet once the transaction runs.
+  const seedHeadcount = await liveHeadcountForWardKey(wardKey);
   try {
     await runTransaction(db, async (tx) => {
       const snap = await tx.get(ref);
       if (!snap.exists()) {
-        const seed = defaultWardDoc(w);
+        const startOcc = typeof seedHeadcount === 'number' ? seedHeadcount : 0;
+        const seed = defaultWardDoc(w, startOcc);
         seed.shifts[useShiftKey][statKey] = Math.max(0, delta);
         tx.set(ref, { ...seed, updatedAt: serverTimestamp() });
         return;
