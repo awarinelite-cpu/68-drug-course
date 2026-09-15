@@ -7,7 +7,7 @@ import { useGoBack } from "../hooks/useGoBack.js";
 import { useBackLock } from "../hooks/useBackLock.js";
 import { usePatientHeader } from "../hooks/usePatientHeader.js";
 import { getDocSafe } from "../lib/firestoreOffline.js";
-import { applyPatientStatus } from "../lib/patientAdmissionStatus.js";
+import { applyPatientStatus, admitPatient } from "../lib/patientAdmissionStatus.js";
 import { nameSearchTokens } from "../lib/patientDirectory.js";
 import { STATUS_LABELS, WARD_OPTIONS } from "../lib/drugChartHelpers.js";
 import Topbar from "../components/Topbar.jsx";
@@ -177,7 +177,11 @@ export default function Patient() {
     // rather than made offline-tolerant like the rest of this page's edits.
     // Transferring wards no longer touches any of that — it's just a single
     // pendingTransfer write — so it doesn't need this gate.
-    if (reason !== 'transferred' && !navigator.onLine) {
+    // Admitting is just a roster tag + stat bump (see admitPatient), same
+    // as a transfer being just a single pendingTransfer write — neither
+    // needs the online gate that discharge/refer/death/DAMA/absconded do
+    // for safely archiving several chart collections at once.
+    if (reason !== 'transferred' && reason !== 'admitted' && !navigator.onLine) {
       setStatusMsg({ color: '#dc2626', text: "This needs an internet connection — referring or discharging archives records from several charts at once and then clears them, and doing that safely requires reading the real data rather than whatever's cached locally. Please try again once online." });
       return;
     }
@@ -185,13 +189,20 @@ export default function Patient() {
     const label = reason === 'transferred' ? ('Transferred to ' + transferWard) : STATUS_LABELS[reason];
     const confirmBody = reason === 'transferred'
       ? 'The patient moves to ' + transferWard + '\u2019s New Patient queue \u2014 a nurse there still has to accept them before they show up on that ward\u2019s patient list. Their drug chart, vitals, glycemic chart, intake & output, and seizure chart all stay exactly as they are; care just continues on the new ward.'
+      : reason === 'admitted'
+      ? 'The patient will be tagged \u201cNew Patient\u201d on this ward\u2019s patient list for 24 hours, or until a Ward Report write-up is submitted for them \u2014 whichever comes first. Today\u2019s Ward Report Shift Statistics Adm column goes up by one. Their existing charts are left exactly as they are.'
       : 'All care records for this admission (drug chart, vitals, glycemic chart, intake & output, seizure chart) will be saved together to Overview, and fresh charts will open for this patient.';
     if (!confirm('Confirm: ' + label + '?\n\n' + confirmBody)) return;
 
     setStatusApplying(true);
-    setStatusMsg({ color: '#555', text: reason === 'transferred' ? 'Sending transfer…' : 'Saving all charts for this admission…' });
+    setStatusMsg({
+      color: '#555',
+      text: reason === 'transferred' ? 'Sending transfer…' : reason === 'admitted' ? 'Tagging patient as admitted…' : 'Saving all charts for this admission…'
+    });
 
-    const result = await applyPatientStatus({ patientId: patient.id, reason, transferWard, fromWard: patient.ward, transferredByName: profile?.name });
+    const result = reason === 'admitted'
+      ? await admitPatient({ patientId: patient.id })
+      : await applyPatientStatus({ patientId: patient.id, reason, transferWard, fromWard: patient.ward, transferredByName: profile?.name });
     if (!result.ok) {
       setStatusMsg({ color: '#dc2626', text: result.message });
       setStatusApplying(false);
@@ -202,6 +213,8 @@ export default function Patient() {
       color: '#16a34a',
       text: reason === 'transferred'
         ? 'Sent to ' + transferWard + ' \u2014 awaiting acceptance there. Redirecting…'
+        : reason === 'admitted'
+        ? 'Patient tagged as admitted. Redirecting…'
         : 'Saved to Overview. Redirecting…'
     });
     setTimeout(() => navigate('/'), 900);
@@ -254,6 +267,7 @@ export default function Patient() {
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
                   <select style={{ width: 'auto', minWidth: 220 }} value={statusAction} onChange={(e) => setStatusAction(e.target.value)}>
                     <option value="">Select action…</option>
+                    <option value="admitted">{STATUS_LABELS.admitted}</option>
                     <option value="discharged">{STATUS_LABELS.discharged}</option>
                     <option value="transferred">{STATUS_LABELS.transferred}</option>
                     <option value="referred">{STATUS_LABELS.referred}</option>

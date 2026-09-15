@@ -320,6 +320,47 @@ export async function applyPatientStatus({ patientId, reason, transferWard, from
   return { ok: true, label, wardChosen };
 }
 
+// Tags a patient "NEW PATIENT" (blue, see ADMISSION_TAG_LABEL) on their
+// current ward's roster picker for 24h, or until a Ward Report write-up
+// is submitted for them — whichever comes first (see activeAdmissionTag/
+// clearAdmissionTag above) — and bumps that ward's Shift Statistics "Adm"
+// column by one, exactly like a brand-new registration already does in
+// Home.jsx's createPatient/saveBulkPatients. Used by Patient.jsx's own
+// Status control ("Admit Patient") so a patient already on file can be
+// (re-)tagged as freshly admitted without going through the New Patient
+// form again. Purely a roster tag + stat bump: unlike applyPatientStatus's
+// exit reasons, nothing here archives or resets any of the patient's
+// existing charts (drug course chart, vitals, glycemic chart, intake &
+// output, seizure all stay exactly as they are).
+export async function admitPatient({ patientId }) {
+  let patientWard = '', patientPedBedType = '';
+  try {
+    const patientSnap = await getDoc(doc(db, 'patients', patientId));
+    if (patientSnap.exists()) {
+      patientWard = patientSnap.data().ward || '';
+      patientPedBedType = patientSnap.data().pedBedType || '';
+    }
+  } catch (e) {
+    return { ok: false, message: 'Could not look up the patient record: ' + (e.code || e.message) };
+  }
+
+  try {
+    await updateDoc(doc(db, 'patients', patientId), {
+      admissionSource: 'NEW_PATIENT', admissionSourceAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
+    });
+  } catch (e) {
+    return { ok: false, message: 'Could not tag the patient as admitted: ' + (e.code || e.message) };
+  }
+
+  // Best-effort, same as Home.jsx's createPatient — never blocks the
+  // admit tag itself over a Shift Statistics write failure.
+  bumpShiftStatForPatientWard(patientWard, patientPedBedType, 'adm', 1)
+    .catch((e) => console.warn('Could not bump Adm stat after Admit Patient:', e));
+
+  return { ok: true };
+}
+
 // Exit reasons a nurse can walk back via Readmit — the patient's stay
 // continues, so the archived chart data is restorable. 'died' is
 // permanent, and 'transferred' never archives anything in the first
