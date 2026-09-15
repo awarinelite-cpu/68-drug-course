@@ -352,6 +352,41 @@ export async function hasActiveAdmissionData(patientId) {
   return hasDrugData || hasBgData || !vitalsSnap.empty || !ioSnap.empty || !seizureSnap.empty;
 }
 
+// Admits an existing patient record onto a ward — the "Admit Patient"
+// status action on the Patient page (bringing someone already in the
+// system, e.g. found via search, onto the admitting nurse's own ward),
+// and reusable anywhere else that needs the same "does this patient
+// already have a real admission in progress?" guard before moving them
+// onto a ward. Refuses if the patient is genuinely on an active
+// admission somewhere else right now (same hasActiveAdmissionData check
+// Readmit uses) — admitting here would silently pull them off that
+// ward's live roster instead. The correct move for an already-admitted
+// patient is Transfer, not this.
+export async function admitExistingPatientToWard({ patientId, currentWard, nurseWard, pedBedType }) {
+  if (currentWard && await hasActiveAdmissionData(patientId)) {
+    return { ok: false, message: 'Patient on admission in ' + currentWard + '. You can transfer the patient to the ward if need be.' };
+  }
+  const nextPedBedType = nurseWard === 'PEDIATRIC/NICU WARD' ? (pedBedType || '') : '';
+  try {
+    await updateDoc(doc(db, 'patients', patientId), {
+      ward: nurseWard || '', pedBedType: nextPedBedType,
+      // Clears any stale exit tag/lock left over from a previous stay —
+      // same fields readmitLatestAdmission clears on a normal readmit —
+      // and tags this as a fresh admission for the roster picker, same
+      // as a brand-new registration (see ADMISSION_TAG_LABEL above).
+      dischargeStatus: '', dischargeStatusAt: null, dischargeStatShiftRef: null,
+      admissionSource: 'NEW_PATIENT', admissionSourceAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
+    });
+  } catch (e) {
+    return { ok: false, message: 'Could not admit the patient: ' + (e.code || e.message) };
+  }
+  // Shift Statistics: counts the same as a brand-new registration would —
+  // best-effort, never blocks the admission itself.
+  bumpShiftStatForPatientWard(nurseWard, nextPedBedType, 'adm', 1).catch(() => {});
+  return { ok: true };
+}
+
 // Cancels a patient's most recent exit (discharge/refer/DAMA/absconded)
 // and restores the drug chart, vitals, glycemic chart, intake & output,
 // and seizure chart from that archived admission back to active — care

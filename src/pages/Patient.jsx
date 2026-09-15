@@ -7,7 +7,7 @@ import { useGoBack } from "../hooks/useGoBack.js";
 import { useBackLock } from "../hooks/useBackLock.js";
 import { usePatientHeader } from "../hooks/usePatientHeader.js";
 import { getDocSafe } from "../lib/firestoreOffline.js";
-import { applyPatientStatus } from "../lib/patientAdmissionStatus.js";
+import { applyPatientStatus, admitExistingPatientToWard } from "../lib/patientAdmissionStatus.js";
 import { nameSearchTokens } from "../lib/patientDirectory.js";
 import { STATUS_LABELS, WARD_OPTIONS } from "../lib/drugChartHelpers.js";
 import Topbar from "../components/Topbar.jsx";
@@ -171,6 +171,35 @@ export default function Patient() {
       return;
     }
 
+    // "Admit Patient" isn't a discharge/transfer at all — it's the
+    // opposite direction: bringing an already-existing patient (found
+    // via search, possibly with no ward or a stale one left from a past
+    // stay) onto the admitting nurse's own ward. Handled separately from
+    // applyPatientStatus below, which only knows how to end/move an
+    // admission that's already active.
+    if (reason === 'admitted') {
+      if (!navigator.onLine) {
+        setStatusMsg({ color: '#dc2626', text: 'This needs an internet connection to safely check whether the patient is already on admission elsewhere. Please try again once online.' });
+        return;
+      }
+      const destWard = profile?.ward || '';
+      if (!confirm('Admit ' + (patient.name || 'this patient') + ' to ' + (destWard || 'your ward') + '?')) return;
+
+      setStatusApplying(true);
+      setStatusMsg({ color: '#555', text: 'Admitting…' });
+      const result = await admitExistingPatientToWard({ patientId: patient.id, currentWard: patient.ward, nurseWard: destWard, pedBedType: patient.pedBedType });
+      if (!result.ok) {
+        setStatusMsg({ color: '#dc2626', text: result.message });
+        setStatusApplying(false);
+        return;
+      }
+      setPatient((p) => ({ ...p, ward: destWard, pedBedType: destWard === 'PEDIATRIC/NICU WARD' ? p.pedBedType : '' }));
+      setStatusMsg({ color: '#16a34a', text: 'Admitted to ' + (destWard || 'your ward') + '. Redirecting…' });
+      setStatusApplying(false);
+      setTimeout(() => navigate('/'), 900);
+      return;
+    }
+
     // Same as the Drug Course Chart's own Patient Status control: discharging
     // or referring reads across five collections and then deletes the live
     // entries once archived, so those two are blocked until back online
@@ -254,6 +283,7 @@ export default function Patient() {
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
                   <select style={{ width: 'auto', minWidth: 220 }} value={statusAction} onChange={(e) => setStatusAction(e.target.value)}>
                     <option value="">Select action…</option>
+                    <option value="admitted">{STATUS_LABELS.admitted}</option>
                     <option value="discharged">{STATUS_LABELS.discharged}</option>
                     <option value="transferred">{STATUS_LABELS.transferred}</option>
                     <option value="referred">{STATUS_LABELS.referred}</option>
