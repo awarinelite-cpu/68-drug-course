@@ -379,14 +379,22 @@ async function hasActiveAdmissionData(patientId) {
 //      really does mean restoring that old archived chart data back to
 //      live, so the active-admission guard below still applies: if the
 //      patient has since started an unrelated new admission somewhere,
-//      refuse rather than overwrite it.
-export async function readmitLatestAdmission({ patientId, nurseName }) {
-  let dischargeStatus = '', dischargeStatShiftRef = null;
+//      refuse — with a message naming that ward — rather than overwrite
+//      it (transferring is the correct move for a patient who's already
+//      on a ward). Otherwise the patient isn't on any ward right now, so
+//      this readmit lands them on the admitting nurse's own ward
+//      (`nurseWard`) rather than silently reusing whatever ward they
+//      were discharged from — a nurse on Ward B readmitting someone
+//      last discharged from Ward A should bring that patient onto
+//      Ward B, not quietly re-park them back on Ward A.
+export async function readmitLatestAdmission({ patientId, nurseName, nurseWard }) {
+  let dischargeStatus = '', dischargeStatShiftRef = null, currentWard = '';
   try {
     const patientSnap = await getDoc(doc(db, 'patients', patientId));
     if (patientSnap.exists()) {
       dischargeStatus = patientSnap.data().dischargeStatus || '';
       dischargeStatShiftRef = patientSnap.data().dischargeStatShiftRef || null;
+      currentWard = patientSnap.data().ward || '';
     }
   } catch (e) {
     return { ok: false, message: 'Could not look up the patient record: ' + (e.code || e.message) };
@@ -397,7 +405,9 @@ export async function readmitLatestAdmission({ patientId, nurseName }) {
     // admission is already live. Just cancel the stale exit tag — and,
     // if that exit had bumped a Shift Statistics column, undo that exact
     // count too (a no-op if that day's report has since been submitted;
-    // see bumpShiftStat).
+    // see bumpShiftStat). This is cancelling a still-open exit on an
+    // admission that's already live on this same ward, not bringing the
+    // patient in from outside — so the ward stays as it is.
     if (dischargeStatShiftRef) {
       bumpShiftStat(dischargeStatShiftRef.wardKey, dischargeStatShiftRef.statKey, -1, dischargeStatShiftRef).catch(() => {});
     }
@@ -425,7 +435,12 @@ export async function readmitLatestAdmission({ patientId, nurseName }) {
   }
 
   if (await hasActiveAdmissionData(patientId)) {
-    return { ok: false, message: 'This patient already has an active admission in progress \u2014 readmitting would overwrite it. Close out or resolve the current admission first, or contact an admin.' };
+    // Genuinely on admission elsewhere right now — readmitting here would
+    // silently pull them off that ward and overwrite live charts.
+    // Refuse and point at the actual ward instead: transferring is the
+    // correct way to move a patient who's already admitted, not a fresh
+    // admission/readmit from another ward.
+    return { ok: false, message: 'Patient on admission in ' + (currentWard || 'another ward') + '. You can transfer the patient to the ward if need be.' };
   }
 
   try {
@@ -455,8 +470,17 @@ export async function readmitLatestAdmission({ patientId, nurseName }) {
       // Discharge is cancelled, so the roster's exit badge and the
       // readonly discharge-date lock both need to clear too — otherwise
       // a readmitted patient would still show DISCHARGE/DAMA/etc. on the
-      // ward list even though they're active again.
-      updateDoc(doc(db, 'patients', patientId), { dischargeStatus: '', dischargeStatusAt: null, dischargeStatShiftRef: null, updatedAt: serverTimestamp() })
+      // ward list even though they're active again. This branch only
+      // runs once we know the patient has no active admission anywhere
+      // (guard above), so they're by definition not currently "on" any
+      // ward's live roster — land them on whichever ward the admitting
+      // nurse belongs to, rather than leaving (or reusing) whatever ward
+      // they happened to be discharged from, which may well be a
+      // different ward from the one actually readmitting them.
+      updateDoc(doc(db, 'patients', patientId), {
+        dischargeStatus: '', dischargeStatusAt: null, dischargeStatShiftRef: null,
+        ward: nurseWard || currentWard, updatedAt: serverTimestamp()
+      })
     ]);
 
     // Undo the Shift Statistics count this admission's exit made at the

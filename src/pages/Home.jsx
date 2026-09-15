@@ -215,7 +215,7 @@ export default function Home() {
     }
     setReadmitBusyId(p.id);
     setReadmitMsgs((m) => ({ ...m, [p.id]: { color: '#555', text: 'Working\u2026' } }));
-    const result = await readmitLatestAdmission({ patientId: p.id, nurseName: profile?.name });
+    const result = await readmitLatestAdmission({ patientId: p.id, nurseName: profile?.name, nurseWard: profile?.ward });
     setReadmitBusyId(null);
     if (!result.ok) {
       setReadmitMsgs((m) => ({ ...m, [p.id]: { color: '#b91c1c', text: result.message } }));
