@@ -425,6 +425,7 @@ export const PATIENT_STATUS_OPTIONS = [
   'TRANS OUT',
   'NEW PATIENT',
   'TRANS IN FROM A&E',
+  'TRANS IN',
   'DEATH',
   'DAMA',
   'ABSC',

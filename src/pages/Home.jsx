@@ -73,13 +73,15 @@ function PendingDischargeBadge({ patient, busy, message, onReadmit }) {
 // that's what confirms the arrival was actually acted on; a rejected
 // transfer has no equivalent follow-up action to wait for, so requiring
 // one before it can go away would just leave it blinking for no reason.
-const ADMISSION_TAG_BADGE_CLASS = { AE_TRANSFER: 'badge-active', NEW_PATIENT: 'badge-active', TRANSFER_REJECTED: 'badge-transferred' };
+const ADMISSION_TAG_BADGE_CLASS = { AE_TRANSFER: 'badge-active', WARD_TRANSFER: 'badge-active', NEW_PATIENT: 'badge-active', TRANSFER_REJECTED: 'badge-transferred' };
 function AdmissionTagBadge({ patient }) {
   const tag = activeAdmissionTag(patient);
   if (!tag) return null;
   const label = tag === 'TRANSFER_REJECTED' && patient.transferRejectedByWard
     ? `TRANSFER REJECTED by ${patient.transferRejectedByWard}`
-    : (ADMISSION_TAG_LABEL[tag] || tag);
+    : tag === 'WARD_TRANSFER' && patient.transferFromWard
+      ? `TRANS IN from ${patient.transferFromWard}`
+      : (ADMISSION_TAG_LABEL[tag] || tag);
   const dismissible = tag === 'TRANSFER_REJECTED';
   const blinkClass = dismissible ? ' badge-emergency-blink' : '';
   return (

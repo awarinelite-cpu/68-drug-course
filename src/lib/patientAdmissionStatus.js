@@ -80,7 +80,7 @@ export async function closeOutDischargedPatient(patientId) {
 // 24h-or-write-up expiry still fits: the sending nurse just needs to
 // notice it once. transferRejectedByWard (set alongside it) carries
 // which ward rejected it, for AdmissionTagBadge in Home.jsx to show.
-export const ADMISSION_TAG_LABEL = { AE_TRANSFER: 'TRANS IN from A&E', NEW_PATIENT: 'NEW PATIENT', TRANSFER_REJECTED: 'TRANSFER REJECTED' };
+export const ADMISSION_TAG_LABEL = { AE_TRANSFER: 'TRANS IN from A&E', WARD_TRANSFER: 'TRANS IN', NEW_PATIENT: 'NEW PATIENT', TRANSFER_REJECTED: 'TRANSFER REJECTED' };
 
 // Maps an admissionTag to the matching PATIENT_STATUS_OPTIONS string (see
 // nurses-report-common.js) — these were already options on the write-up's
@@ -89,7 +89,7 @@ export const ADMISSION_TAG_LABEL = { AE_TRANSFER: 'TRANS IN from A&E', NEW_PATIE
 // same way it already does for dischargeStatus, so picking a tagged
 // patient stamps their write-up correctly without the nurse having to
 // pick it by hand.
-export const ADMISSION_TAG_STATUS_STAMP = { AE_TRANSFER: 'TRANS IN FROM A&E', NEW_PATIENT: 'NEW PATIENT' };
+export const ADMISSION_TAG_STATUS_STAMP = { AE_TRANSFER: 'TRANS IN FROM A&E', WARD_TRANSFER: 'TRANS IN', NEW_PATIENT: 'NEW PATIENT' };
 const ADMISSION_TAG_WINDOW_MS = 24 * 60 * 60 * 1000;
 
 function toMillis(v) {

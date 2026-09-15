@@ -25,15 +25,17 @@ export async function acceptTransfer(patientId, pendingTransfer, pedBedType) {
     updatedAt: serverTimestamp()
   };
   if (pendingTransfer.toWard === 'PEDIATRIC/NICU WARD') updates.pedBedType = pedBedType || '';
-  // Tag the receiving ward's roster picker blue for 24h — see
-  // ADMISSION_TAG_LABEL/activeAdmissionTag in patientAdmissionStatus.js —
-  // when this transfer originated on Accident & Emergency. An ordinary
-  // ward-to-ward transfer (fromWard anything else) gets no admission tag;
-  // the patient just reappears on the new ward's list normally.
-  if (pendingTransfer.fromWard === AE_WARD_LABEL) {
-    updates.admissionSource = 'AE_TRANSFER';
-    updates.admissionSourceAt = serverTimestamp();
-  }
+  // Tag the receiving ward's roster blue for 24h so the accepting nurse
+  // actually notices a new arrival — see ADMISSION_TAG_LABEL/
+  // activeAdmissionTag in patientAdmissionStatus.js. Every accepted
+  // transfer gets tagged now, not just ones originating on A&E: AE
+  // origin keeps the existing 'AE_TRANSFER' tag (labelled "TRANS IN
+  // from A&E"), and any other origin ward gets the generic
+  // 'WARD_TRANSFER' tag, with transferFromWard recording which ward it
+  // came from so the badge can say "TRANS IN from <ward>".
+  updates.admissionSource = pendingTransfer.fromWard === AE_WARD_LABEL ? 'AE_TRANSFER' : 'WARD_TRANSFER';
+  updates.admissionSourceAt = serverTimestamp();
+  updates.transferFromWard = pendingTransfer.fromWard || '';
   await updateDoc(doc(db, 'patients', patientId), updates);
 }
 
