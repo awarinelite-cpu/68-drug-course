@@ -15,6 +15,7 @@ import { reportWardKeysForPatientWard, patientWardAndBedTypeForReportKey } from 
 import { WARDS } from "../lib/nurses-report-common.js";
 import { loadWardPatients, loadIncomingTransfers, searchPatients, findPatientByEmrExact, nameSearchTokens } from "../lib/patientDirectory.js";
 import { activeAdmissionTag, ADMISSION_TAG_LABEL, clearAdmissionTag, readmitLatestAdmission, READMIT_ELIGIBLE_TAGS } from "../lib/patientAdmissionStatus.js";
+import { bumpShiftStatForPatientWard } from "../lib/shiftStatsSync.js";
 
 function normEmr(emr) { return (emr || '').trim().toLowerCase(); }
 
@@ -310,6 +311,13 @@ export default function Home() {
       console.warn('Patient write queued locally; will retry once back online:', e);
     });
 
+    // Shift Statistics: a brand-new registration counts as an Admission
+    // on whichever ward the patient lands on, the moment it happens —
+    // the automatic counterpart to a nurse typing this into
+    // WardNurse.jsx's ShiftTable by hand. Best-effort; never blocks
+    // registration.
+    bumpShiftStatForPatientWard(data.ward, data.pedBedType, 'adm', 1).catch(() => {});
+
     // Update the in-memory ward list directly instead of re-querying —
     // we already have the new patient's data, so this needs no round
     // trip while offline. Only shown here if it lands on the ward
@@ -440,6 +448,9 @@ export default function Home() {
         setDoc(ref, data).catch((e) => {
           console.warn('Bulk patient write queued locally; will retry once back online:', e);
         });
+        // Shift Statistics — same automatic Admission bump as the single
+        // Add Patient form above, one per newly-created row.
+        bumpShiftStatForPatientWard(data.ward, data.pedBedType, 'adm', 1).catch(() => {});
         created.push({ id: ref.id, ...data });
         patientId = ref.id;
         newCount++;

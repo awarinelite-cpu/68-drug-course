@@ -16,7 +16,8 @@ import {
   autoDurationForFrequency, buildSnoSegments, buildSnoText, abbreviateReason,
   parseWeeklyFrequency, weeklyDosesGivenThisWeek
 } from "../lib/drugChartHelpers.js";
-import { ROSTER_TAG_FOR_REASON, clearAllocationsForPatient } from "../lib/patientAdmissionStatus.js";
+import { ROSTER_TAG_FOR_REASON, clearAllocationsForPatient, EXIT_STAT_KEY } from "../lib/patientAdmissionStatus.js";
+import { bumpShiftStatForPatientWard } from "../lib/shiftStatsSync.js";
 import { useTimeFormat, formatTime, formatDateTime } from "../lib/time-format.js";
 
 const FIELD_IDS = ['f_admission', 'f_discharge', 'f_diagnosis'];
@@ -821,6 +822,14 @@ export default function DrugCourseChart() {
       }
     } catch (e) { /* fine to archive without the summary snapshot — derivable from intakeOutput entries */ }
 
+    // Shift Statistics: count this exit the instant it actually happens
+    // — same automatic column bump as applyPatientStatus in
+    // patientAdmissionStatus.js (this is the Drug Course Chart's own
+    // inline duplicate of that flow). The exact target written is saved
+    // below so a later Readmit reverses this exact count.
+    const statKey = EXIT_STAT_KEY[reason];
+    const exitStatRef = statKey ? await bumpShiftStatForPatientWard(patient?.ward, patient?.pedBedType, statKey, 1) : null;
+
     const { fields: f, drugs: d, chartRows: c, verbalOrders: v, careInstructions: ci, auditLog: al } = latestRef.current;
     const drugChartData = { ...f, f_discharge: dischargeDate, rows: c, drugs: d, verbalOrders: v, careInstructions: ci, auditLog: al };
 
@@ -835,7 +844,8 @@ export default function DrugCourseChart() {
       vitals: vitalsArr,
       intakeOutput: ioArr,
       intakeOutputSummary: ioSummary,
-      seizure: seizureArr
+      seizure: seizureArr,
+      exitStatRef
     };
 
     try {
@@ -863,7 +873,10 @@ export default function DrugCourseChart() {
         // picker can flag them DISCHARGE/TRANS OUT for the nurse — they
         // stay on that ward's roster until a closing report is submitted
         // for them (see closeOutDischargedPatient in patientAdmissionStatus.js).
-        updateDoc(doc(db, 'patients', patientId), { dischargeStatus: ROSTER_TAG_FOR_REASON[reason] || '', dischargeStatusAt: serverTimestamp() })
+        updateDoc(doc(db, 'patients', patientId), {
+          dischargeStatus: ROSTER_TAG_FOR_REASON[reason] || '', dischargeStatusAt: serverTimestamp(),
+          dischargeStatShiftRef: exitStatRef
+        })
       ]);
     } catch (e) {
       setStatusMsg({ color: '#dc2626', text: 'Archived, but could not fully reset the new charts: ' + (e.code || e.message) });

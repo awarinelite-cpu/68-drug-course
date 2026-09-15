@@ -1,6 +1,7 @@
-import { doc, updateDoc, deleteField, serverTimestamp } from "firebase/firestore";
+import { doc, getDoc, updateDoc, deleteField, serverTimestamp } from "firebase/firestore";
 import { db } from "../firebase.js";
 import { AE_WARD_LABEL } from "./drugChartHelpers.js";
+import { bumpShiftStatForPatientWard } from "./shiftStatsSync.js";
 
 // Returns the patients (from a caller's already-fetched patients list)
 // currently pending transfer INTO the given ward — the "New Patient" queue
@@ -19,6 +20,17 @@ export function pendingTransfersFor(patients, ward) {
 // only relevant when accepting into PEDIATRIC/NICU WARD — see
 // NewPatientTransfersModal, which is the only caller that passes it.
 export async function acceptTransfer(patientId, pendingTransfer, pedBedType) {
+  // Needed to resolve the *sending* ward's Shift Statistics key below —
+  // pedBedType (the function argument) only ever describes the
+  // *receiving* ward's Bed/Cot split (see the caller comment above), so
+  // if the patient was leaving PAED BED/COT the sending side needs their
+  // pre-transfer bed type, read here before it's overwritten.
+  let priorPedBedType = '';
+  try {
+    const snap = await getDoc(doc(db, 'patients', patientId));
+    if (snap.exists()) priorPedBedType = snap.data().pedBedType || '';
+  } catch (e) { /* fine to skip the automatic stat bump below if this fails */ }
+
   const updates = {
     ward: pendingTransfer.toWard,
     pendingTransfer: deleteField(),
@@ -37,6 +49,16 @@ export async function acceptTransfer(patientId, pendingTransfer, pedBedType) {
   updates.admissionSourceAt = serverTimestamp();
   updates.transferFromWard = pendingTransfer.fromWard || '';
   await updateDoc(doc(db, 'patients', patientId), updates);
+
+  // Shift Statistics: acceptance is the moment the patient actually
+  // leaves the sending ward's roster and joins the receiving ward's, so
+  // that's when the internal Transfer Out / Transfer In columns count it
+  // — not when the transfer was merely started (see applyPatientStatus
+  // in patientAdmissionStatus.js, which deliberately doesn't bump
+  // anything for reason: 'transferred'). Best-effort; the transfer
+  // itself already succeeded above.
+  bumpShiftStatForPatientWard(pendingTransfer.fromWard, priorPedBedType, 'transferOut', 1).catch(() => {});
+  bumpShiftStatForPatientWard(pendingTransfer.toWard, pedBedType, 'transferIn', 1).catch(() => {});
 }
 
 // Rejecting (e.g. no bed space) clears the pending transfer. The

@@ -334,6 +334,16 @@ function useWardReport(wardKey, isAdmin, profile, user) {
   const [wardPatientOptions, setWardPatientOptions] = useState([]);
   const patientCounter = useRef(0);
   const w = WARDS.find(x => x.key === wardKey);
+  // Movement figures (Adm/Disch/Dama/Transfer In-Out/Ext In-Out/Absc/
+  // Death/S-C/VS-C/BID) can now also change in the background while this
+  // report is open — see shiftStatsSync.js, fired the instant a patient
+  // is registered, discharged, transferred, or readmitted from anywhere
+  // in the app. Save/Submit below re-reads the live doc and takes those
+  // background figures as-is for anything the nurse hasn't personally
+  // edited in this session; only fields actually typed into here (this
+  // set) override the live figure with what's on screen. Keyed
+  // 'shiftKey.fieldKey'.
+  const touchedShiftFieldsRef = useRef(new Set());
 
   useEffect(() => {
     let cancelled = false;
@@ -439,7 +449,36 @@ function useWardReport(wardKey, isAdmin, profile, user) {
   function updateWardDoc(patch) { setWardDoc((d) => ({ ...d, ...patch })); }
   function updateShiftField(shiftKey, fieldKey, raw) {
     const num = parseFloat(raw);
+    touchedShiftFieldsRef.current.add(shiftKey + '.' + fieldKey);
     setWardDoc((d) => ({ ...d, shifts: { ...d.shifts, [shiftKey]: { ...d.shifts[shiftKey], [fieldKey]: isNaN(num) ? 0 : num } } }));
+  }
+
+  // Re-reads the live report doc and builds the `shifts` object Save/
+  // Submit should actually persist: the live/background figure for
+  // every field, except any field the nurse has personally edited in
+  // this session (touchedShiftFieldsRef), which keeps whatever's on
+  // screen. Falls back to the given local doc's own shifts untouched if
+  // the re-read fails (e.g. offline) — same as before this reconciliation
+  // existed.
+  async function reconcileShiftsBeforeSave(localDoc) {
+    let liveShifts = null;
+    try {
+      const snap = await getDocSafe(doc(db, 'nurseReports', dateId, 'wards', wardKey));
+      if (snap.exists()) liveShifts = snap.data().shifts || null;
+    } catch (e) { /* offline or otherwise unreachable — just save local as-is */ }
+    if (!liveShifts) return localDoc.shifts;
+    const merged = {};
+    SHIFTS.forEach((s) => {
+      merged[s.key] = { ...(liveShifts[s.key] || {}), ...(localDoc.shifts[s.key] || {}) };
+      movementFields.forEach((f) => {
+        const key = s.key + '.' + f.key;
+        if (!touchedShiftFieldsRef.current.has(key)) {
+          const liveVal = (liveShifts[s.key] || {})[f.key];
+          if (typeof liveVal === 'number') merged[s.key][f.key] = liveVal;
+        }
+      });
+    });
+    return merged;
   }
   function updateDuty(shiftKey, value) {
     setWardDoc((d) => ({ ...d, shifts: { ...d.shifts, [shiftKey]: { ...d.shifts[shiftKey], nurseOnDuty: value } } }));
@@ -611,7 +650,17 @@ function useWardReport(wardKey, isAdmin, profile, user) {
       setWardDoc(doc_);
     }
     const ref = doc(db, 'nurseReports', dateId, 'wards', wardKey);
-    const finalDoc = { ...doc_, occ: census.occ, vac: census.vac, ...movementTotals };
+    // Take the live/background movement figures for anything the nurse
+    // hasn't personally edited this session — see shiftStatsSync.js and
+    // reconcileShiftsBeforeSave above — so a patient status change
+    // elsewhere while this report is open doesn't get overwritten by a
+    // stale on-screen count.
+    const reconciledShifts = await reconcileShiftsBeforeSave(doc_);
+    doc_ = { ...doc_, shifts: reconciledShifts };
+    setWardDoc(doc_);
+    const reconciledCensus = computeCensus(doc_);
+    const reconciledTotals = computeMovementTotals(doc_);
+    const finalDoc = { ...doc_, occ: reconciledCensus.occ, vac: reconciledCensus.vac, ...reconciledTotals };
     try {
       await setDoc(ref, { ...finalDoc, updatedAt: serverTimestamp(), updatedBy: profile.name || 'Unknown' }, { merge: true });
       setSaveStatus({ text: 'Saved.', error: false });
@@ -693,7 +742,16 @@ function useWardReport(wardKey, isAdmin, profile, user) {
       doc_ = { ...doc_, patients: doc_.patients.map((p) => okIds.has(p.id) ? { ...p, archivedFromReport: true } : p) };
     }
 
-    const finalDoc = { ...doc_, occ: census.occ, vac: census.vac, ...movementTotals };
+    // Take the live/background movement figures for anything the nurse
+    // hasn't personally edited this session (see reconcileShiftsBeforeSave
+    // above) — this also naturally picks up the exit bumps applyPatientStatus
+    // just made for toFinalize above, since those already landed in
+    // Firestore by this point.
+    const reconciledShifts = await reconcileShiftsBeforeSave(doc_);
+    doc_ = { ...doc_, shifts: reconciledShifts };
+    const reconciledCensus = computeCensus(doc_);
+    const reconciledTotals = computeMovementTotals(doc_);
+    const finalDoc = { ...doc_, occ: reconciledCensus.occ, vac: reconciledCensus.vac, ...reconciledTotals };
     const ref = doc(db, 'nurseReports', dateId, 'wards', wardKey);
     const payload = {
       ...finalDoc, submitted: true, locked: true,

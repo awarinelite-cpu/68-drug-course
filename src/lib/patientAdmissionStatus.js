@@ -2,6 +2,17 @@ import { collection, doc, getDoc, getDocs, addDoc, query, where, orderBy, limit,
 import { db } from "../firebase.js";
 import { STATUS_LABELS, defaultRow } from "./drugChartHelpers.js";
 import { formatDateTime } from "./time-format.js";
+import { bumpShiftStat, bumpShiftStatForPatientWard } from "./shiftStatsSync.js";
+
+// Which Shift Statistics column each exit reason feeds — 'referred' is
+// an external hand-off to another hospital, so it counts as Ext Out, not
+// the internal Transfer Out column (that one's reserved for a ward-to-
+// ward move, counted separately when the receiving ward actually
+// accepts — see acceptTransfer in wardTransfer.js). 'transferred' isn't
+// listed here: starting a transfer doesn't move the patient off this
+// ward's live roster yet (see the early-return branch below), so nothing
+// is counted until acceptance.
+export const EXIT_STAT_KEY = { discharged: 'disch', referred: 'extOut', died: 'death', dama: 'dama', absconded: 'absc' };
 
 // Every "Allocate to Me" doc is keyed by uid+patientId with no ward or
 // admission tie-in (see Patient.jsx's allocationDocRef), so nothing ever
@@ -173,6 +184,19 @@ export async function applyPatientStatus({ patientId, reason, transferWard, from
     return { ok: true, label, wardChosen };
   }
 
+  // Read here (rather than requiring every caller to pass it) so this one
+  // function stays the single source of truth for the Shift Statistics
+  // side effect below — Patient.jsx, WardNurse.jsx's submitReport, and any
+  // future caller all get it automatically just by calling applyPatientStatus.
+  let patientWard = '', patientPedBedType = '';
+  try {
+    const patientSnap = await getDoc(doc(db, 'patients', patientId));
+    if (patientSnap.exists()) {
+      patientWard = patientSnap.data().ward || '';
+      patientPedBedType = patientSnap.data().pedBedType || '';
+    }
+  } catch (e) { /* fine to skip the automatic stat bump if this fails */ }
+
   async function fetchEntries(collName) {
     const snap = await getDocs(collection(db, 'patients', patientId, collName));
     const arr = [];
@@ -230,6 +254,17 @@ export async function applyPatientStatus({ patientId, reason, transferWard, from
     }
   } catch (e) { /* fine to archive without the summary snapshot — derivable from intakeOutput entries */ }
 
+  // Shift Statistics: count this exit the instant it actually happens,
+  // on whichever ward the patient is leaving right now — the automatic
+  // counterpart to a nurse typing this into WardNurse.jsx's ShiftTable
+  // by hand. Best-effort and never blocks the archive itself; the exact
+  // target written (or null, if this ward has no report-side equivalent)
+  // is saved on both the patient doc and the archived admission record
+  // so a later Readmit (see readmitLatestAdmission below) can reverse
+  // this exact count instead of guessing.
+  const statKey = EXIT_STAT_KEY[reason];
+  const exitStatRef = statKey ? await bumpShiftStatForPatientWard(patientWard, patientPedBedType, statKey, 1) : null;
+
   const admissionDoc = {
     diagnosis: drugChartData.f_diagnosis,
     archiveReason: reason,
@@ -241,7 +276,8 @@ export async function applyPatientStatus({ patientId, reason, transferWard, from
     vitals: vitalsArr,
     intakeOutput: ioArr,
     intakeOutputSummary: ioSummary,
-    seizure: seizureArr
+    seizure: seizureArr,
+    exitStatRef
   };
 
   try {
@@ -267,7 +303,10 @@ export async function applyPatientStatus({ patientId, reason, transferWard, from
       // picker can flag them DISCHARGE/TRANS OUT for the nurse, even
       // though they stay on the roster (still keyed by `ward`) until a
       // closing report is submitted for them — see closeOutDischargedPatient.
-      updateDoc(doc(db, 'patients', patientId), { dischargeStatus: ROSTER_TAG_FOR_REASON[reason] || '', dischargeStatusAt: serverTimestamp() })
+      updateDoc(doc(db, 'patients', patientId), {
+        dischargeStatus: ROSTER_TAG_FOR_REASON[reason] || '', dischargeStatusAt: serverTimestamp(),
+        dischargeStatShiftRef: exitStatRef
+      })
     ]);
   } catch (e) {
     return { ok: false, archived: true, message: 'Archived, but could not fully reset the new charts: ' + (e.code || e.message) };
@@ -342,19 +381,28 @@ async function hasActiveAdmissionData(patientId) {
 //      patient has since started an unrelated new admission somewhere,
 //      refuse rather than overwrite it.
 export async function readmitLatestAdmission({ patientId, nurseName }) {
-  let dischargeStatus = '';
+  let dischargeStatus = '', dischargeStatShiftRef = null;
   try {
     const patientSnap = await getDoc(doc(db, 'patients', patientId));
-    if (patientSnap.exists()) dischargeStatus = patientSnap.data().dischargeStatus || '';
+    if (patientSnap.exists()) {
+      dischargeStatus = patientSnap.data().dischargeStatus || '';
+      dischargeStatShiftRef = patientSnap.data().dischargeStatShiftRef || null;
+    }
   } catch (e) {
     return { ok: false, message: 'Could not look up the patient record: ' + (e.code || e.message) };
   }
 
   if (dischargeStatus && await hasActiveAdmissionData(patientId)) {
     // Situation 1 above: the old exit was never closed out and a new
-    // admission is already live. Just cancel the stale exit tag.
+    // admission is already live. Just cancel the stale exit tag — and,
+    // if that exit had bumped a Shift Statistics column, undo that exact
+    // count too (a no-op if that day's report has since been submitted;
+    // see bumpShiftStat).
+    if (dischargeStatShiftRef) {
+      bumpShiftStat(dischargeStatShiftRef.wardKey, dischargeStatShiftRef.statKey, -1, dischargeStatShiftRef).catch(() => {});
+    }
     try {
-      await updateDoc(doc(db, 'patients', patientId), { dischargeStatus: '', dischargeStatusAt: null, updatedAt: serverTimestamp() });
+      await updateDoc(doc(db, 'patients', patientId), { dischargeStatus: '', dischargeStatusAt: null, dischargeStatShiftRef: null, updatedAt: serverTimestamp() });
       return { ok: true, cancelledPendingExit: true };
     } catch (e) {
       return { ok: false, message: 'Could not cancel the exit: ' + (e.code || e.message) };
@@ -408,8 +456,15 @@ export async function readmitLatestAdmission({ patientId, nurseName }) {
       // readonly discharge-date lock both need to clear too — otherwise
       // a readmitted patient would still show DISCHARGE/DAMA/etc. on the
       // ward list even though they're active again.
-      updateDoc(doc(db, 'patients', patientId), { dischargeStatus: '', dischargeStatusAt: null, updatedAt: serverTimestamp() })
+      updateDoc(doc(db, 'patients', patientId), { dischargeStatus: '', dischargeStatusAt: null, dischargeStatShiftRef: null, updatedAt: serverTimestamp() })
     ]);
+
+    // Undo the Shift Statistics count this admission's exit made at the
+    // time (see exitStatRef, saved by applyPatientStatus above) — a
+    // no-op if that day's report has since been submitted.
+    if (admData.exitStatRef) {
+      bumpShiftStat(admData.exitStatRef.wardKey, admData.exitStatRef.statKey, -1, admData.exitStatRef).catch(() => {});
+    }
 
     await deleteDoc(doc(db, 'patients', patientId, 'admissions', admSnap.id));
 
