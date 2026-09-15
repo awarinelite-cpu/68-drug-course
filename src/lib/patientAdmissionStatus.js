@@ -333,8 +333,10 @@ export const READMIT_ELIGIBLE_TAGS = READMIT_ELIGIBLE_REASONS.map(r => ROSTER_TA
 
 // Same check Admission.jsx's own Readmit button uses: don't restore an
 // archived record on top of a newer admission that's already in progress
-// on the live charts.
-async function hasActiveAdmissionData(patientId) {
+// on the live charts. Exported so Home.jsx's "Register New Patient" flow
+// can run the same check before reusing an existing EMR-matched record —
+// see createPatient in Home.jsx.
+export async function hasActiveAdmissionData(patientId) {
   const [drugSnap, bgSnap, vitalsSnap, ioSnap, seizureSnap] = await Promise.all([
     getDoc(doc(db, 'patients', patientId, 'drugCourseChart', 'main')),
     getDoc(doc(db, 'patients', patientId, 'bloodGlucose', 'main')),

@@ -14,7 +14,7 @@ import { wardHeadcount } from "../lib/wardCensus.js";
 import { reportWardKeysForPatientWard, patientWardAndBedTypeForReportKey } from "../lib/wardNameMatch.js";
 import { WARDS } from "../lib/nurses-report-common.js";
 import { loadWardPatients, loadIncomingTransfers, searchPatients, findPatientByEmrExact, nameSearchTokens } from "../lib/patientDirectory.js";
-import { activeAdmissionTag, ADMISSION_TAG_LABEL, clearAdmissionTag, readmitLatestAdmission, READMIT_ELIGIBLE_TAGS } from "../lib/patientAdmissionStatus.js";
+import { activeAdmissionTag, ADMISSION_TAG_LABEL, clearAdmissionTag, readmitLatestAdmission, READMIT_ELIGIBLE_TAGS, hasActiveAdmissionData } from "../lib/patientAdmissionStatus.js";
 import { bumpShiftStatForPatientWard } from "../lib/shiftStatsSync.js";
 
 function normEmr(emr) { return (emr || '').trim().toLowerCase(); }
@@ -257,18 +257,28 @@ export default function Home() {
     setEmrParseMsg('');
     if (!emrPasteText.trim()) { setEmrParseMsg('Paste the patient\u2019s EMR text first.'); return; }
     const fields = parsePatientFields(emrPasteText);
+    // Ward is deliberately never taken from the paste, even though
+    // parsePatientFields extracts one: a "Ward:" line in a hospital
+    // EMR page reflects that outside system's own on-file ward (often
+    // the patient's last/formal ward from a previous stay), not which
+    // ward this admission actually belongs to. The Ward field already
+    // defaults to the admitting nurse's own ward the moment this form
+    // opens (see the "+ New Patient" button below) — a paste silently
+    // overwriting that with a stale ward from elsewhere is exactly how
+    // a patient ends up admitted to the wrong ward.
     setNewForm((f) => ({
       name: fields.name || f.name,
       emr: fields.emr || f.emr,
       diagnosis: fields.diagnosis || f.diagnosis,
-      ward: fields.ward || f.ward,
+      ward: f.ward,
       age: fields.age || f.age,
       hospNo: fields.hospNo || f.hospNo,
       admissionDate: fields.admissionDate || f.admissionDate,
       allergies: fields.allergies || f.allergies,
       insurance: fields.insurance || f.insurance
     }));
-    const foundCount = Object.values(fields).filter(Boolean).length;
+    const { ward: _unusedWard, ...countedFields } = fields;
+    const foundCount = Object.values(countedFields).filter(Boolean).length;
     setEmrParseMsg(
       (foundCount ? 'Filled ' + foundCount + ' patient field(s).' : 'Could not find patient details in that text.') +
       ' Please review everything before saving.'
@@ -281,33 +291,69 @@ export default function Home() {
     const emr = newForm.emr.trim();
     setNewMsg('');
     if (!name || !emr) { setNewMsg('Name and EMR number are required.'); return; }
+
+    // A patient already in the system under this EMR number shouldn't get
+    // a second, duplicate record just because a different ward's nurse is
+    // registering her as if new. Look up an existing record by EMR first:
+    // - Genuinely on an active admission somewhere else right now →
+    //   refuse and point at Transfer instead (same rule, and same
+    //   message, as Readmit's own guard — see readmitLatestAdmission).
+    // - No ward, or a ward left over from an admission that's already
+    //   been closed out → not a duplicate in any way that matters; reuse
+    //   that record and land it on this ward instead of creating a new
+    //   one, so the same person doesn't end up as two separate patients
+    //   in the system.
+    // Best-effort: if the lookup itself fails (offline, etc.), fall
+    // through and create normally rather than block registration on a
+    // network hiccup.
+    let existing = null;
+    try {
+      existing = await findPatientByEmrExact(emr);
+    } catch (e) { /* fall through */ }
+
+    if (existing && existing.ward && await hasActiveAdmissionData(existing.id)) {
+      setNewMsg('Patient on admission in ' + existing.ward + '. You can transfer the patient to the ward if need be.');
+      return;
+    }
+
     const diagnosis = newForm.diagnosis.trim();
+    const ward = newForm.ward.trim();
     const data = {
       name, emr,
       nameLower: name.toLowerCase(), emrLower: emr.toLowerCase(), nameTokens: nameSearchTokens(name),
-      diagnosis, ward: newForm.ward.trim(),
-      pedBedType: newForm.ward.trim() === 'PEDIATRIC/NICU WARD' ? (newForm.pedBedType || '') : '',
+      diagnosis, ward,
+      pedBedType: ward === 'PEDIATRIC/NICU WARD' ? (newForm.pedBedType || '') : '',
       age: newForm.age.trim(),
       hospNo: newForm.hospNo.trim(), admissionDate: newForm.admissionDate.trim(), allergies: newForm.allergies.trim(),
       insurance: newForm.insurance.trim(),
-      createdAt: serverTimestamp(), createdBy: user ? user.uid : null,
+      updatedAt: serverTimestamp(),
       // Brand-new record, no transfer involved — tags this patient "NEW
       // PATIENT" (blue) on the ward's roster picker for 24h. See
       // ADMISSION_TAG_LABEL/activeAdmissionTag in patientAdmissionStatus.js.
       admissionSource: 'NEW_PATIENT', admissionSourceAt: serverTimestamp()
     };
+    if (existing) {
+      // Reusing an existing record: clear out anything left over from
+      // its last exit so it reads as a clean, active admission again —
+      // same fields readmitLatestAdmission clears on a normal readmit.
+      data.dischargeStatus = ''; data.dischargeStatusAt = null; data.dischargeStatShiftRef = null;
+    } else {
+      data.createdAt = serverTimestamp();
+      data.createdBy = user ? user.uid : null;
+    }
 
-    // Client-generated ID — doc() needs no network round trip, so the patient
-    // is usable immediately even offline. We deliberately do NOT await
-    // setDoc(): with offline persistence enabled, the write lands in the
-    // local IndexedDB cache synchronously, but the returned Promise itself
-    // only resolves once the device is back online and the backend
-    // acknowledges the write (documented Firestore SDK behavior). Awaiting
-    // it here is exactly what made "Save Patient" hang forever while
-    // offline — it queues fine locally and syncs automatically on
-    // reconnect, so there's nothing to wait for.
-    const ref = doc(collection(db, 'patients'));
-    setDoc(ref, data).catch((e) => {
+    // Client-generated ID for a brand-new record — doc() needs no network
+    // round trip, so the patient is usable immediately even offline. We
+    // deliberately do NOT await setDoc(): with offline persistence
+    // enabled, the write lands in the local IndexedDB cache
+    // synchronously, but the returned Promise itself only resolves once
+    // the device is back online and the backend acknowledges the write
+    // (documented Firestore SDK behavior). Awaiting it here is exactly
+    // what made "Save Patient" hang forever while offline — it queues
+    // fine locally and syncs automatically on reconnect, so there's
+    // nothing to wait for.
+    const ref = existing ? doc(db, 'patients', existing.id) : doc(collection(db, 'patients'));
+    setDoc(ref, data, { merge: !!existing }).catch((e) => {
       console.warn('Patient write queued locally; will retry once back online:', e);
     });
 
