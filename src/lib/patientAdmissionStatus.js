@@ -392,6 +392,20 @@ export async function admitExistingPatientToWard({ patientId, currentWard, nurse
   // Shift Statistics: counts the same as a brand-new registration would —
   // best-effort, never blocks the admission itself.
   bumpShiftStatForPatientWard(nurseWard, nextPedBedType, 'adm', 1).catch(() => {});
+  // If she genuinely had a real (known, different) ward on file — even
+  // though it wasn't an active admission (the guard above would have
+  // refused this otherwise) — that ward's headcount has been carrying
+  // her this whole time via its live census, and its own Shift
+  // Statistics running Occ won't notice she's gone until that ward's
+  // report next reconciles against the headcount (see WardNurse.jsx's
+  // per-load Occ reconciliation). Bump transferOut there right now
+  // instead of waiting for that: same field a normal ward-to-ward
+  // Transfer uses to record a patient leaving, and it decreases Occ the
+  // same way (see OCC_DECREASE_KEYS in nurses-report-common.js) — so the
+  // old ward's count corrects immediately, not just eventually.
+  if (onKnownWard && currentWard !== nurseWard) {
+    bumpShiftStatForPatientWard(currentWard, pedBedType, 'transferOut', 1).catch(() => {});
+  }
   return { ok: true };
 }
 

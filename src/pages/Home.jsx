@@ -365,6 +365,19 @@ export default function Home() {
     // registration.
     bumpShiftStatForPatientWard(data.ward, data.pedBedType, 'adm', 1).catch(() => {});
 
+    // Reusing an existing record that had a real, different ward on file
+    // (even though it wasn't an active admission — the guard above would
+    // have refused this otherwise): that old ward's headcount has been
+    // carrying her this whole time, so bump transferOut there right now
+    // rather than waiting for that ward's report to next reconcile
+    // against the live headcount (see WardNurse.jsx's per-load Occ
+    // reconciliation) — same field, and same immediate correction, as
+    // admitExistingPatientToWard uses for the Patient page's own Admit
+    // Patient action.
+    if (existing && existing.ward && WARD_OPTIONS.includes(existing.ward) && existing.ward !== data.ward) {
+      bumpShiftStatForPatientWard(existing.ward, existing.pedBedType, 'transferOut', 1).catch(() => {});
+    }
+
     // Update the in-memory ward list directly instead of re-querying —
     // we already have the new patient's data, so this needs no round
     // trip while offline. Only shown here if it lands on the ward
