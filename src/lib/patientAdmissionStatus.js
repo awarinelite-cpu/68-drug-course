@@ -1,6 +1,6 @@
 import { collection, doc, getDoc, getDocs, addDoc, query, where, orderBy, limit, updateDoc, setDoc, deleteDoc, serverTimestamp } from "firebase/firestore";
 import { db } from "../firebase.js";
-import { STATUS_LABELS, defaultRow } from "./drugChartHelpers.js";
+import { STATUS_LABELS, WARD_OPTIONS, defaultRow } from "./drugChartHelpers.js";
 import { formatDateTime } from "./time-format.js";
 import { bumpShiftStat, bumpShiftStatForPatientWard } from "./shiftStatsSync.js";
 
@@ -363,7 +363,15 @@ export async function hasActiveAdmissionData(patientId) {
 // ward's live roster instead. The correct move for an already-admitted
 // patient is Transfer, not this.
 export async function admitExistingPatientToWard({ patientId, currentWard, nurseWard, pedBedType }) {
-  if (currentWard && await hasActiveAdmissionData(patientId)) {
+  // Only treat currentWard as a real, active ward assignment if it's
+  // actually one of the known wards. Patient records can carry stray
+  // ward text from older data (bad imports, a stale placeholder value
+  // that got saved as real data instead of used purely as display text,
+  // manual edits, etc.) — treating any non-empty string as "on a ward
+  // somewhere" produces false "already admitted" refusals for patients
+  // who aren't really on any ward.
+  const onKnownWard = !!currentWard && WARD_OPTIONS.includes(currentWard);
+  if (onKnownWard && await hasActiveAdmissionData(patientId)) {
     return { ok: false, message: 'Patient on admission in ' + currentWard + '. You can transfer the patient to the ward if need be.' };
   }
   const nextPedBedType = nurseWard === 'PEDIATRIC/NICU WARD' ? (pedBedType || '') : '';
@@ -476,8 +484,12 @@ export async function readmitLatestAdmission({ patientId, nurseName, nurseWard }
     // silently pull them off that ward and overwrite live charts.
     // Refuse and point at the actual ward instead: transferring is the
     // correct way to move a patient who's already admitted, not a fresh
-    // admission/readmit from another ward.
-    return { ok: false, message: 'Patient on admission in ' + (currentWard || 'another ward') + '. You can transfer the patient to the ward if need be.' };
+    // admission/readmit from another ward. Only name the ward if it's a
+    // real, known one — a patient record can carry stray ward text from
+    // older/bad data, and showing that verbatim in the message would be
+    // more confusing than just saying "another ward".
+    const wardName = (currentWard && WARD_OPTIONS.includes(currentWard)) ? currentWard : 'another ward';
+    return { ok: false, message: 'Patient on admission in ' + wardName + '. You can transfer the patient to the ward if need be.' };
   }
 
   try {

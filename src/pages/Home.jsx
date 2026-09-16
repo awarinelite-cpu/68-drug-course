@@ -16,6 +16,7 @@ import { WARDS } from "../lib/nurses-report-common.js";
 import { loadWardPatients, loadIncomingTransfers, searchPatients, findPatientByEmrExact, nameSearchTokens } from "../lib/patientDirectory.js";
 import { activeAdmissionTag, ADMISSION_TAG_LABEL, clearAdmissionTag, readmitLatestAdmission, READMIT_ELIGIBLE_TAGS, hasActiveAdmissionData } from "../lib/patientAdmissionStatus.js";
 import { bumpShiftStatForPatientWard } from "../lib/shiftStatsSync.js";
+import { WARD_OPTIONS } from "../lib/drugChartHelpers.js";
 
 function normEmr(emr) { return (emr || '').trim().toLowerCase(); }
 
@@ -311,7 +312,7 @@ export default function Home() {
       existing = await findPatientByEmrExact(emr);
     } catch (e) { /* fall through */ }
 
-    if (existing && existing.ward && await hasActiveAdmissionData(existing.id)) {
+    if (existing && existing.ward && WARD_OPTIONS.includes(existing.ward) && await hasActiveAdmissionData(existing.id)) {
       setNewMsg('Patient on admission in ' + existing.ward + '. You can transfer the patient to the ward if need be.');
       return;
     }
