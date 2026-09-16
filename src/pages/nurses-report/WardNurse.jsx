@@ -1312,16 +1312,17 @@ function MergedWardReportPanel({ group, isAdmin, profile, user, navigate }) {
     ...(hA.wardPatientOptions || []).map((o) => ({ ...o, location: hA.w?.label })),
     ...(hB.wardPatientOptions || []).map((o) => ({ ...o, location: hB.w?.label }))
   ].sort((a, b) => (a.name || '').localeCompare(b.name || ''));
-  // Only PAED WARD sets patientLocationOptions (Maternity's Cots member
-  // has no real patient records — see the WARD_GROUPS comment above), so
-  // only there does a two-column Bed/Cot table make sense; Maternity keeps
-  // the flat list.
-  const quickLookupColumns = group.patientLocationOptions
-    ? group.patientLocationOptions.map((loc) => ({
-      label: loc,
-      options: quickLookupOptions.filter((o) => o.location === loc)
-    }))
-    : null;
+  // Two-column split by member ward for every merged group (both PAED and
+  // Maternity), not just wherever patientLocationOptions is set — that flag
+  // only controls the "Located" dropdown on write-up cards, which is a
+  // separate concern from how this read-only lookup is laid out. For
+  // Maternity, the right (COTS) column will just always read "No
+  // patients", since newborns aren't charted (see wardNameMatch.js) — that
+  // empty state is accurate, not a bug.
+  const quickLookupColumns = [
+    { label: hA.w?.label, options: quickLookupOptions.filter((o) => o.location === hA.w?.label) },
+    { label: hB.w?.label, options: quickLookupOptions.filter((o) => o.location === hB.w?.label) }
+  ];
   const quickLookupRecord = quickLookupOptions.find((o) => o.id === quickLookupId);
   let quickLookupTag = null;
   if (quickLookupRecord) {
