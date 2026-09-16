@@ -16,6 +16,10 @@ export default function RoleSelect() {
   const wk = weekId();
   const roleRef = doc(db, 'nurseReportRoles', wk);
 
+  const isAdmin = profile?.role === 'admin';
+  const isSubadmin = profile?.role === 'subadmin';
+  const canViewDirectly = isAdmin || isSubadmin;
+
   const [status, setStatus] = useState({ text: 'Checking…', className: 'status' });
 
   async function refreshStatus() {
@@ -29,9 +33,14 @@ export default function RoleSelect() {
     const data = snap.exists() ? snap.data() : null;
     const overall = data && data.overallNurse;
     if (!overall) {
-      setStatus({ text: 'Unassigned this week — tap to take the role.', className: 'status status-open' });
+      setStatus({
+        text: canViewDirectly ? 'Unassigned this week — tap to view.' : 'Unassigned this week — tap to take the role.',
+        className: 'status status-open'
+      });
     } else if (user && overall.uid === user.uid) {
       setStatus({ text: "You're the Overall Nurse this week.", className: 'status status-you' });
+    } else if (canViewDirectly) {
+      setStatus({ text: (overall.name || 'Another nurse') + ' is the Overall Nurse this week — tap to view.', className: 'status status-taken' });
     } else {
       setStatus({ text: (overall.name || 'Another nurse') + ' is the Overall Nurse this week.', className: 'status status-taken' });
     }
@@ -43,6 +52,17 @@ export default function RoleSelect() {
 
   async function assumeOverall() {
     if (!user) return;
+
+    // Admins and subadmins can always reach the Overall Nurse page — it's
+    // their job to monitor every ward — but doing so must never write them
+    // in as the Overall Nurse and bump whoever actually holds the role this
+    // week. OverallNurse.jsx already grants them read/edit access without
+    // requiring the role doc, so just navigate straight there.
+    if (canViewDirectly) {
+      navigate('/nurses-report/overall-nurse');
+      return;
+    }
+
     const overall = await refreshStatus();
     if (overall && overall.uid !== user.uid) {
       const ok = confirm((overall.name || 'Another nurse') + ' is currently the Overall Nurse for this week. Take over this role?');
@@ -70,8 +90,12 @@ export default function RoleSelect() {
         <div className="role-grid">
           <button className="role-card" onClick={assumeOverall}>
             <span className="icon">🗂️</span>
-            <span className="title">ASSUME OVERALL</span>
-            <span className="desc">Become the Overall Nurse for this week — monitor and manage every ward's 24-hour report.</span>
+            <span className="title">{canViewDirectly ? 'OVERALL NURSE PAGE' : 'ASSUME OVERALL'}</span>
+            <span className="desc">
+              {canViewDirectly
+                ? "View every ward's 24-hour report as " + (isAdmin ? 'admin' : 'subadmin') + " — you won't take over the Overall Nurse role from whoever holds it."
+                : "Become the Overall Nurse for this week — monitor and manage every ward's 24-hour report."}
+            </span>
             <div className={status.className}>{status.text}</div>
           </button>
           <button className="role-card" onClick={() => navigate('/nurses-report/ward-nurse')}>
