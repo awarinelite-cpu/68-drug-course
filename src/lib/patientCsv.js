@@ -8,7 +8,7 @@ import { WARD_OPTIONS, PED_BED_TYPES, parseBulkText } from "./drugChartHelpers.j
 // parsePatientCsv below).
 export const CSV_HEADERS = [
   'Name', 'EMR Number', 'Diagnosis', 'Ward', 'Bed/Cot', 'Age',
-  'Hospital No', 'Date of Admission', 'Allergies', 'Insurance', 'Drugs'
+  'Hospital Bed No', 'Date of Admission', 'Allergies', 'Insurance', 'Drugs'
 ];
 
 const SAMPLE_ROWS = [
@@ -101,6 +101,15 @@ export function parsePatientCsv(text) {
 
   const header = table[0].map(h => h.trim().toLowerCase());
   const idx = (name) => header.indexOf(name.toLowerCase());
+  // Accepts either the current "Hospital Bed No" header or the older
+  // "Hospital No" header, so previously-saved CSV templates still parse.
+  const idxAny = (...names) => {
+    for (const n of names) {
+      const i = idx(n);
+      if (i !== -1) return i;
+    }
+    return -1;
+  };
   const col = {
     name: idx('name'),
     emr: idx('emr number'),
@@ -108,7 +117,7 @@ export function parsePatientCsv(text) {
     ward: idx('ward'),
     pedBedType: idx('bed/cot'),
     age: idx('age'),
-    hospNo: idx('hospital no'),
+    hospNo: idxAny('hospital bed no', 'hospital no'),
     admissionDate: idx('date of admission'),
     allergies: idx('allergies'),
     insurance: idx('insurance'),

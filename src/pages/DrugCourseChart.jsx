@@ -924,7 +924,7 @@ export default function DrugCourseChart() {
             <div className="info-row"><label>NAME:</label><span className="val">{patient?.name || ''}</span></div>
             <div className="info-row"><label>EMR:</label><span className="val">{patient?.emr || ''}</span></div>
             <div className="info-row"><label>WARD:</label><span className="val">{patient?.ward || ''}</span></div>
-            <div className="info-row"><label>Hospital No:</label><span className="val">{patient?.hospNo || ''}</span></div>
+            <div className="info-row"><label>Hospital Bed No:</label><span className="val">{patient?.hospNo || ''}</span></div>
             <div className="info-row"><label>AGE:</label><span className="val">{patient?.age || ''}</span></div>
             <div className="info-row"><label>Date of Admission:</label>
               <input type="date" readOnly={isArchived} value={fields.f_admission} onChange={(e) => updateField('f_admission', e.target.value)} />

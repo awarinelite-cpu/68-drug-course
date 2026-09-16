@@ -101,6 +101,18 @@ function AdmissionTagBadge({ patient }) {
   );
 }
 
+// Small tag shown just under a patient's diagnosis in the ward list so a
+// nurse who doesn't yet know a patient by name can find them by bed number.
+// hospNo is the same field edited as "Hospital Bed No" on PatientForm.
+function BedTag({ patient }) {
+  const bed = (patient.hospNo || '').trim();
+  return (
+    <span className={"patient-bed-tag" + (bed ? '' : ' patient-bed-tag-missing')}>
+      Bed: {bed || 'not set'}
+    </span>
+  );
+}
+
 const EMPTY_FORM = { name: '', emr: '', diagnosis: '', ward: '', pedBedType: '', age: '', hospNo: '', admissionDate: '', allergies: '', insurance: '' };
 
 // Wards are stored/compared in ALL CAPS (matches WARD_OPTIONS); this is
@@ -772,7 +784,10 @@ export default function Home() {
                     {g.patients.map(p => (
                       <div key={p.id} className="search-result-item" onClick={() => openPatient(p)}>
                         <span><b>{p.name || 'Unnamed'}</b>{'. '}EMR: {p.emr || 'N/A'}<AdmissionTagBadge patient={p} /><PendingDischargeBadge patient={p} busy={readmitBusyId === p.id} message={readmitMsgs[p.id]} onReadmit={handleReadmit} /></span>
-                        <span>{p.diagnosis || ''}</span>
+                        <span className="patient-diagnosis-col">
+                          <span>{p.diagnosis || ''}</span>
+                          <BedTag patient={p} />
+                        </span>
                       </div>
                     ))}
                   </div>
@@ -785,7 +800,10 @@ export default function Home() {
                     {pedGroups.unassigned.map(p => (
                       <div key={p.id} className="search-result-item" onClick={() => openPatient(p)}>
                         <span><b>{p.name || 'Unnamed'}</b>{'. '}EMR: {p.emr || 'N/A'}<AdmissionTagBadge patient={p} /><PendingDischargeBadge patient={p} busy={readmitBusyId === p.id} message={readmitMsgs[p.id]} onReadmit={handleReadmit} /></span>
-                        <span>{p.diagnosis || ''}</span>
+                        <span className="patient-diagnosis-col">
+                          <span>{p.diagnosis || ''}</span>
+                          <BedTag patient={p} />
+                        </span>
                       </div>
                     ))}
                   </div>
@@ -795,7 +813,10 @@ export default function Home() {
             {patientsLoaded && visiblePatients.length > 0 && !pedGroups && visiblePatients.map(p => (
               <div key={p.id} className="search-result-item" onClick={() => openPatient(p)}>
                 <span><b>{p.name || 'Unnamed'}</b>{'. '}EMR: {p.emr || 'N/A'}{q && p.ward ? '. Ward: ' + p.ward : ''}<AdmissionTagBadge patient={p} /><PendingDischargeBadge patient={p} busy={readmitBusyId === p.id} message={readmitMsgs[p.id]} onReadmit={handleReadmit} /></span>
-                <span>{p.diagnosis || ''}</span>
+                <span className="patient-diagnosis-col">
+                  <span>{p.diagnosis || ''}</span>
+                  <BedTag patient={p} />
+                </span>
               </div>
             ))}
           </div>

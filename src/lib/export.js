@@ -236,7 +236,7 @@ function addPatientHeader(pdf, record) {
 
   const rows = [
     ['Name', p.name || '-', 'EMR', p.emr || '-'],
-    ['Hospital No', p.hospNo || '-', 'Age', p.age || '-'],
+    ['Hospital Bed No', p.hospNo || '-', 'Age', p.age || '-'],
     ['Ward', p.ward || '-', 'Date of Admission', p.admissionDate || '-'],
     ['Insurance', p.insurance || '-', '', '']
   ];

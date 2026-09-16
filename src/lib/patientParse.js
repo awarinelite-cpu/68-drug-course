@@ -176,8 +176,8 @@ export function parsePatientFields(text) {
   // --- EMR / patient ID ------------------------------------------------------
   out.emr = out.emr || grabLabel(norm, ['PID', 'EMR(?: Number| No)?\\.?']);
 
-  // --- Hospital No -----------------------------------------------------------
-  out.hospNo = grabLabel(norm, ['Hospital No\\.?', 'Hosp No\\.?', 'Hospital Number', 'Folder No\\.?']);
+  // --- Hospital Bed No -----------------------------------------------------------
+  out.hospNo = grabLabel(norm, ['Hospital Bed No\\.?', 'Hospital No\\.?', 'Hosp No\\.?', 'Hospital Number', 'Bed No\\.?', 'Folder No\\.?']);
 
   // --- Ward --------------------------------------------------------------
   out.ward = grabLabel(norm, ['Ward']);
