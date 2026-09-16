@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect } from "react";
 import { Routes, Route } from "react-router-dom";
-import { AuthProvider } from "./contexts/AuthContext.jsx";
+import { AuthProvider, useAuth } from "./contexts/AuthContext.jsx";
 import { NavProvider } from "./contexts/NavContext.jsx";
 import { ThemeProvider } from "./contexts/ThemeContext.jsx";
 import RequireAuth from "./components/RequireAuth.jsx";
@@ -12,6 +12,7 @@ import { useServiceWorker } from "./hooks/useServiceWorker.js";
 import { useForegroundAlerts } from "./hooks/useForegroundAlerts.js";
 import { useHardwareBackButton } from "./hooks/useHardwareBackButton.js";
 import { prefetchRoutes } from "./lib/prefetchRoutes.js";
+import { prefetchReportData } from "./lib/prefetchData.js";
 
 // Login stays eager: it's the first thing an unauthenticated user sees,
 // so there's no benefit to splitting it out and it avoids a loading
@@ -52,6 +53,18 @@ function AuthedShell({ children }) {
   );
 }
 
+// Warms the offline Firestore cache once the nurse's profile (and ward)
+// are known — see prefetchData.js for what it fetches and why. Rendered
+// inside AuthProvider (needs useAuth), separately from the routed pages,
+// so it fires once per session regardless of which page loads first.
+function DataPrefetch() {
+  const { status, profile } = useAuth();
+  useEffect(() => {
+    if (status === "ready") prefetchReportData(profile);
+  }, [status, profile]);
+  return null;
+}
+
 export default function App() {
   useServiceWorker();
   useForegroundAlerts();
@@ -71,6 +84,7 @@ export default function App() {
       <NavProvider>
         <OfflineBanner />
         <OfflineCacheStatus />
+        <DataPrefetch />
         <Suspense fallback={<PageLoading />}>
         <Routes>
           <Route path="/login" element={<Login />} />
