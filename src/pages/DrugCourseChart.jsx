@@ -988,7 +988,13 @@ export default function DrugCourseChart() {
                 {drugs.map((d, i) => {
                   const editing = drugsEditMode && editingDrugRows[i];
                   const showPencil = drugsEditMode && !editing;
-                  const due = dueLabelFor(d, i, chartRows, now);
+                  // Archived charts belong to a discharged/closed-out patient —
+                  // no further doses will ever be given, so there's nothing
+                  // left to be "due" and nothing to flag overdue. Computing
+                  // this against the live clock (`now`) for an archived chart
+                  // would just make every drug whose last recorded dose is
+                  // more than one interval in the past show red forever.
+                  const due = isArchived ? { text: '—', overdue: false, skippedPending: false } : dueLabelFor(d, i, chartRows, now);
 
                   if (editing) {
                     return (
