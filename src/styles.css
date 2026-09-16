@@ -294,6 +294,11 @@ table.entries th { background: var(--background); text-transform: uppercase; fon
   .table-wrap { overflow-x: visible; }
   .table-wrap table { width: 100%; min-width: 0; table-layout: auto; }
   .table-wrap table th, .table-wrap table td { white-space: normal; }
+  /* On a wide desktop container, space-between stretches the diagnosis+bed
+     column all the way to the far right edge of the page, away from the
+     patient name it describes. Keep it left-aligned, sitting just after
+     the name with a fixed gap, instead of pinned to the row's right edge. */
+  .search-result-item { justify-content: flex-start; gap: 32px; }
 }
 
 /* Abnormal-value flagging shared across vitals, glycemic and intake/output charts */
