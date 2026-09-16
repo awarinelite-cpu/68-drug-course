@@ -91,7 +91,7 @@ export async function closeOutDischargedPatient(patientId) {
 // 24h-or-write-up expiry still fits: the sending nurse just needs to
 // notice it once. transferRejectedByWard (set alongside it) carries
 // which ward rejected it, for AdmissionTagBadge in Home.jsx to show.
-export const ADMISSION_TAG_LABEL = { AE_TRANSFER: 'TRANS IN from A&E', WARD_TRANSFER: 'TRANS IN', NEW_PATIENT: 'NEW PATIENT', TRANSFER_REJECTED: 'TRANSFER REJECTED' };
+export const ADMISSION_TAG_LABEL = { AE_TRANSFER: 'TRANS IN from A&E', WARD_TRANSFER: 'TRANS IN', NEW_PATIENT: 'NEW PATIENT', TRANSFER_REJECTED: 'TRANSFER REJECTED', READMITTED: 'READMITTED' };
 
 // Maps an admissionTag to the matching PATIENT_STATUS_OPTIONS string (see
 // nurses-report-common.js) — these were already options on the write-up's
@@ -271,6 +271,12 @@ export async function applyPatientStatus({ patientId, reason, transferWard, from
     archiveReasonLabel: label,
     archivedAt: serverTimestamp(),
     archivedAtDisplay: formatDateTime(new Date(), { year: true }),
+    // Captured so a later Readmit (see readmitLatestAdmission below)
+    // restores the patient to the exact ward they were actually on —
+    // by the time a full readmit runs, the live patient doc's own ward
+    // field has already been cleared by closeOutDischargedPatient, so
+    // this archived copy is the only record of where they were.
+    ward: patientWard, pedBedType: patientPedBedType,
     drugCourseChart: { ...drugChartData, f_discharge: dischargeDate },
     bloodGlucose: bgData,
     vitals: vitalsArr,
@@ -361,7 +367,12 @@ export async function hasActiveAdmissionData(patientId) {
 // admission somewhere else right now (same hasActiveAdmissionData check
 // Readmit uses) — admitting here would silently pull them off that
 // ward's live roster instead. The correct move for an already-admitted
-// patient is Transfer, not this.
+// patient is Transfer, not this. A patient landing here has, by
+// definition, no real current ward — either fully archived (no ward at
+// all) or carrying a leftover value that never had a corresponding live
+// admission — so unlike Readmit's own ward-to-ward equivalent, nothing
+// is ever bumped on any other ward's Shift Statistics: they can be
+// admitted onto any ward freely, with nowhere they're "leaving".
 export async function admitExistingPatientToWard({ patientId, currentWard, nurseWard, pedBedType }) {
   // Only treat currentWard as a real, active ward assignment if it's
   // actually one of the known wards. Patient records can carry stray
@@ -392,20 +403,6 @@ export async function admitExistingPatientToWard({ patientId, currentWard, nurse
   // Shift Statistics: counts the same as a brand-new registration would —
   // best-effort, never blocks the admission itself.
   bumpShiftStatForPatientWard(nurseWard, nextPedBedType, 'adm', 1).catch(() => {});
-  // If she genuinely had a real (known, different) ward on file — even
-  // though it wasn't an active admission (the guard above would have
-  // refused this otherwise) — that ward's headcount has been carrying
-  // her this whole time via its live census, and its own Shift
-  // Statistics running Occ won't notice she's gone until that ward's
-  // report next reconciles against the headcount (see WardNurse.jsx's
-  // per-load Occ reconciliation). Bump transferOut there right now
-  // instead of waiting for that: same field a normal ward-to-ward
-  // Transfer uses to record a patient leaving, and it decreases Occ the
-  // same way (see OCC_DECREASE_KEYS in nurses-report-common.js) — so the
-  // old ward's count corrects immediately, not just eventually.
-  if (onKnownWard && currentWard !== nurseWard) {
-    bumpShiftStatForPatientWard(currentWard, pedBedType, 'transferOut', 1).catch(() => {});
-  }
   return { ok: true };
 }
 
@@ -440,13 +437,15 @@ export async function admitExistingPatientToWard({ patientId, currentWard, nurse
 //      patient has since started an unrelated new admission somewhere,
 //      refuse — with a message naming that ward — rather than overwrite
 //      it (transferring is the correct move for a patient who's already
-//      on a ward). Otherwise the patient isn't on any ward right now, so
-//      this readmit lands them on the admitting nurse's own ward
-//      (`nurseWard`) rather than silently reusing whatever ward they
-//      were discharged from — a nurse on Ward B readmitting someone
-//      last discharged from Ward A should bring that patient onto
-//      Ward B, not quietly re-park them back on Ward A.
-export async function readmitLatestAdmission({ patientId, nurseName, nurseWard }) {
+//      on a ward). Otherwise, this restores the patient to the exact
+//      ward they were archived from (admData.ward, captured by
+//      applyPatientStatus at the time) — the same stay picking back up,
+//      not a move to a different ward, so nothing is bumped on any
+//      other ward's Shift Statistics. A patient can only be readmitted
+//      back to where they came from; moving them to a different ward is
+//      what Admit Patient / Register New Patient (admitExistingPatientToWard
+//      below) is for instead.
+export async function readmitLatestAdmission({ patientId, nurseName }) {
   let dischargeStatus = '', dischargeStatShiftRef = null, currentWard = '';
   try {
     const patientSnap = await getDoc(doc(db, 'patients', patientId));
@@ -533,16 +532,20 @@ export async function readmitLatestAdmission({ patientId, nurseName, nurseWard }
       // Discharge is cancelled, so the roster's exit badge and the
       // readonly discharge-date lock both need to clear too — otherwise
       // a readmitted patient would still show DISCHARGE/DAMA/etc. on the
-      // ward list even though they're active again. This branch only
-      // runs once we know the patient has no active admission anywhere
-      // (guard above), so they're by definition not currently "on" any
-      // ward's live roster — land them on whichever ward the admitting
-      // nurse belongs to, rather than leaving (or reusing) whatever ward
-      // they happened to be discharged from, which may well be a
-      // different ward from the one actually readmitting them.
+      // ward list even though they're active again. A full readmit only
+      // ever restores a patient to the ward they were actually archived
+      // from (admData.ward, captured by applyPatientStatus at the time)
+      // — never to whichever ward is doing the readmitting, and never to
+      // any other ward either. Nothing else about that stay changed, so
+      // no ward-to-ward move happened and no Transfer Out is bumped
+      // anywhere; they just reappear on that same ward's list, tagged
+      // READMITTED so the nurse can see at a glance that this isn't a
+      // brand-new arrival (see ADMISSION_TAG_LABEL above).
       updateDoc(doc(db, 'patients', patientId), {
         dischargeStatus: '', dischargeStatusAt: null, dischargeStatShiftRef: null,
-        ward: nurseWard || currentWard, updatedAt: serverTimestamp()
+        ward: admData.ward || currentWard, pedBedType: admData.pedBedType || '',
+        admissionSource: 'READMITTED', admissionSourceAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
       })
     ]);
 

@@ -75,7 +75,7 @@ function PendingDischargeBadge({ patient, busy, message, onReadmit }) {
 // that's what confirms the arrival was actually acted on; a rejected
 // transfer has no equivalent follow-up action to wait for, so requiring
 // one before it can go away would just leave it blinking for no reason.
-const ADMISSION_TAG_BADGE_CLASS = { AE_TRANSFER: 'badge-active', WARD_TRANSFER: 'badge-active', NEW_PATIENT: 'badge-active', TRANSFER_REJECTED: 'badge-transferred' };
+const ADMISSION_TAG_BADGE_CLASS = { AE_TRANSFER: 'badge-active', WARD_TRANSFER: 'badge-active', NEW_PATIENT: 'badge-active', TRANSFER_REJECTED: 'badge-transferred', READMITTED: 'badge-active' };
 function AdmissionTagBadge({ patient }) {
   const tag = activeAdmissionTag(patient);
   if (!tag) return null;
@@ -216,7 +216,7 @@ export default function Home() {
     }
     setReadmitBusyId(p.id);
     setReadmitMsgs((m) => ({ ...m, [p.id]: { color: '#555', text: 'Working\u2026' } }));
-    const result = await readmitLatestAdmission({ patientId: p.id, nurseName: profile?.name, nurseWard: profile?.ward });
+    const result = await readmitLatestAdmission({ patientId: p.id, nurseName: profile?.name });
     setReadmitBusyId(null);
     if (!result.ok) {
       setReadmitMsgs((m) => ({ ...m, [p.id]: { color: '#b91c1c', text: result.message } }));
@@ -362,21 +362,13 @@ export default function Home() {
     // on whichever ward the patient lands on, the moment it happens —
     // the automatic counterpart to a nurse typing this into
     // WardNurse.jsx's ShiftTable by hand. Best-effort; never blocks
-    // registration.
+    // registration. Reusing an existing (fully archived, or otherwise
+    // not on any real active admission) record doesn't bump anything on
+    // its old ward: a patient in that state doesn't belong to any ward,
+    // so there's nowhere for them to be "leaving" — see
+    // admitExistingPatientToWard in patientAdmissionStatus.js, which
+    // this mirrors.
     bumpShiftStatForPatientWard(data.ward, data.pedBedType, 'adm', 1).catch(() => {});
-
-    // Reusing an existing record that had a real, different ward on file
-    // (even though it wasn't an active admission — the guard above would
-    // have refused this otherwise): that old ward's headcount has been
-    // carrying her this whole time, so bump transferOut there right now
-    // rather than waiting for that ward's report to next reconcile
-    // against the live headcount (see WardNurse.jsx's per-load Occ
-    // reconciliation) — same field, and same immediate correction, as
-    // admitExistingPatientToWard uses for the Patient page's own Admit
-    // Patient action.
-    if (existing && existing.ward && WARD_OPTIONS.includes(existing.ward) && existing.ward !== data.ward) {
-      bumpShiftStatForPatientWard(existing.ward, existing.pedBedType, 'transferOut', 1).catch(() => {});
-    }
 
     // Update the in-memory ward list directly instead of re-querying —
     // we already have the new patient's data, so this needs no round

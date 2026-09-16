@@ -95,7 +95,7 @@ export default function Admission() {
     setReadmitBusy(true);
     setReadmitStatus({ color: '#555', text: 'Restoring charts\u2026' });
 
-    const result = await readmitLatestAdmission({ patientId, nurseName: profile?.name, nurseWard: profile?.ward });
+    const result = await readmitLatestAdmission({ patientId, nurseName: profile?.name });
     if (!result.ok) {
       setReadmitStatus({ color: '#b91c1c', text: result.message });
       setReadmitBusy(false);
