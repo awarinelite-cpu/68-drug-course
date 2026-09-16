@@ -674,6 +674,24 @@ export function parseDrugLine(line) {
     rest = tokens.slice(dosageIdx + 1);
   }
 
+  // A unit count right after the strength (e.g. "amoxicillin 500mg 1 tds",
+  // "ciprofloxacin 500mg 2 bd") states how many tablets/capsules are given
+  // each time — a doctor writing both the per-unit strength and how many
+  // units to take. Fold it into the dosage as a "xN" quantity marker before
+  // Frequency parsing runs, so it doesn't leak into the Frequency text
+  // (which would otherwise leave "1 tds" un-normalized instead of "TDS").
+  // Only applies when a real strength was already found (dosage is set) and
+  // guards on a recognized frequency word right after the count, so this
+  // never fires on quantities that are actually part of the dose/name.
+  if (dosage && rest.length >= 2 && QTY_RE.test(rest[0])) {
+    const nextKey = rest[1].replace(/[.,]$/, '').toLowerCase();
+    const twoKey = rest.length >= 3 ? (rest[1] + rest[2].replace(/[.,]$/, '')).toLowerCase() : '';
+    if (FREQ_ALIASES[nextKey] || FREQ_ALIASES[twoKey]) {
+      dosage = dosage + ' x' + rest[0].toLowerCase();
+      rest = rest.slice(1);
+    }
+  }
+
   // A meal-time qualifier right after the dose (e.g. "50mg lunchtime dly")
   // describes when in the day it's taken — pull it out of the frequency
   // tokens and fold it into the name below, before the rest of Frequency
