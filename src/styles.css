@@ -314,6 +314,14 @@ table.entries th { background: var(--background); text-transform: uppercase; fon
   input, select, textarea, button, .btn { font-size: 18px; }
   label { font-size: 18px; }
   table th, table td { font-size: 17px; }
+
+  /* On a maximized desktop browser window, the last button in the topbar
+     (Back/Print/etc.) sits flush against the very right edge of the
+     screen — exactly where the device's own webcam-active indicator
+     shows up on this monitor, covering it. Give the topbar's right-hand
+     button group some breathing room from the edge so nothing else
+     sitting in that corner overlaps it. */
+  .topbar { padding-right: 56px; }
 }
 
 /* Abnormal-value flagging shared across vitals, glycemic and intake/output charts */
