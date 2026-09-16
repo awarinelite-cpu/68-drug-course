@@ -504,7 +504,7 @@ td.flag-deficit input, td.flag-deficit select { color: #b45309 !important; font-
 .lab-root.reading .lab-list-items li { font-size: 16px; }
 
 @media (max-width: 700px) {
-  .topbar { padding: 10px; }
+  .topbar { padding: 10px; padding-right: 48px; }
   .container { padding: 14px 10px; }
   .search-row { flex-direction: column; }
   /* In a column layout the row's "flex: 1 1 200px" turns into a HEIGHT basis
