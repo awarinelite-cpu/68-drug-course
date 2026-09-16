@@ -906,7 +906,7 @@ function WardPatientPicker({ value, options, onSelect, usedIds }) {
       {open && (
         <div className="modal-overlay no-print" onClick={(e) => { if (e.target === e.currentTarget) setOpen(false); }}>
           <div className="modal-box">
-            <div className="modal-header"><h3>Select Patient</h3><button className="modal-close" onClick={() => setOpen(false)}>&times;</button></div>
+            <div className="modal-header"><h3>Select Patient <span className="ward-count-badge">{options.length}</span></h3><button className="modal-close" onClick={() => setOpen(false)}>&times;</button></div>
             <div className="modal-body ward-patient-picker-body">
               <div className="ward-patient-picker-row" onClick={() => pick('')}>
                 <span className={"ward-patient-picker-name" + (!value ? ' is-selected' : '')}>{'\u2014 Select from ward \u2014'}</span>
