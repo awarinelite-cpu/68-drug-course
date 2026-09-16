@@ -1,4 +1,5 @@
 import { WARD_OPTIONS, PED_BED_TYPES } from "../lib/drugChartHelpers.js";
+import { classifyAffiliation, AFFILIATION_LABEL } from "../lib/patientAffiliation.js";
 
 // lockWard: true on the Patient page's own Edit Patient Information form
 // (see Patient.jsx) — ward is deliberately not editable there anymore.
@@ -44,11 +45,33 @@ export default function PatientForm({ form, setForm, lockWard }) {
           </select>
         </div>
       )}
+      <div className="field">
+        <label>Gender</label>
+        <select value={form.gender || ''} onChange={set('gender')}>
+          <option value="">Select…</option>
+          <option value="M">Male</option>
+          <option value="F">Female</option>
+        </select>
+      </div>
       <div className="field"><label>Age</label><input type="text" value={form.age} onChange={set('age')} /></div>
       <div className="field"><label>Hospital Bed No</label><input type="text" value={form.hospNo} onChange={set('hospNo')} /></div>
       <div className="field"><label>Date of Admission</label><input type="date" value={form.admissionDate} onChange={set('admissionDate')} /></div>
       <div className="field"><label>Allergies</label><input type="text" placeholder="None known / list allergies" value={form.allergies} onChange={set('allergies')} /></div>
       <div className="field"><label>Insurance</label><input type="text" placeholder="e.g. NHIS, Private, HMO name" value={form.insurance || ''} onChange={set('insurance')} /></div>
+      <div className="field">
+        <label>Army Number</label>
+        <input type="text" placeholder="e.g. 06NA/59/5240 or N/764521" value={form.armyNumber || ''} onChange={set('armyNumber')} />
+      </div>
+      {/* Read-only \u2014 never a manual choice. Recomputed live from Insurance
+          and Army Number above (see classifyAffiliation in
+          patientAffiliation.js) so a nurse can see at a glance which way
+          this patient will be counted on the ward's Patient Demographics
+          table (adm/disch/dead x Military/Civilian x M/F), the same
+          detection the saved record itself uses. */}
+      <div className="field">
+        <label>Military / Civilian</label>
+        <input type="text" value={AFFILIATION_LABEL[classifyAffiliation(form)]} disabled />
+      </div>
     </>
   );
 }

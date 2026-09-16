@@ -2,7 +2,8 @@ import { collection, doc, getDoc, getDocs, addDoc, query, where, orderBy, limit,
 import { db } from "../firebase.js";
 import { STATUS_LABELS, WARD_OPTIONS, defaultRow } from "./drugChartHelpers.js";
 import { formatDateTime } from "./time-format.js";
-import { bumpShiftStat, bumpShiftStatForPatientWard } from "./shiftStatsSync.js";
+import { bumpShiftStat, bumpShiftStatForPatientWard, bumpDemographicStat, bumpDemographicStatForPatientWard } from "./shiftStatsSync.js";
+import { classifyAffiliation } from "./patientAffiliation.js";
 
 // Which Shift Statistics column each exit reason feeds — 'referred' is
 // an external hand-off to another hospital, so it counts as Ext Out, not
@@ -13,6 +14,16 @@ import { bumpShiftStat, bumpShiftStatForPatientWard } from "./shiftStatsSync.js"
 // ward's live roster yet (see the early-return branch below), so nothing
 // is counted until acceptance.
 export const EXIT_STAT_KEY = { discharged: 'disch', referred: 'extOut', died: 'death', dama: 'dama', absconded: 'absc' };
+
+// Patient Demographics (see DEMOGRAPHIC_CATEGORIES in
+// nurses-report-common.js) only tracks Admission/Disch/Dead/BID — a
+// narrower set than Shift Statistics' exit columns above. Only
+// 'discharged' and 'died' have a demographic-category equivalent
+// ('dead', not 'death' — the two lists use different keys for the same
+// thing); 'referred'/'dama'/'absconded' have no cell on the paper form
+// at all and are deliberately left out of the automatic demographic
+// bump below.
+export const EXIT_DEMOGRAPHIC_CATEGORY = { discharged: 'disch', died: 'dead' };
 
 // Every "Allocate to Me" doc is keyed by uid+patientId with no ward or
 // admission tie-in (see Patient.jsx's allocationDocRef), so nothing ever
@@ -188,12 +199,18 @@ export async function applyPatientStatus({ patientId, reason, transferWard, from
   // function stays the single source of truth for the Shift Statistics
   // side effect below — Patient.jsx, WardNurse.jsx's submitReport, and any
   // future caller all get it automatically just by calling applyPatientStatus.
-  let patientWard = '', patientPedBedType = '';
+  let patientWard = '', patientPedBedType = '', patientGender = '', patientAffiliation = 'civ';
   try {
     const patientSnap = await getDoc(doc(db, 'patients', patientId));
     if (patientSnap.exists()) {
-      patientWard = patientSnap.data().ward || '';
-      patientPedBedType = patientSnap.data().pedBedType || '';
+      const pdata = patientSnap.data();
+      patientWard = pdata.ward || '';
+      patientPedBedType = pdata.pedBedType || '';
+      patientGender = pdata.gender || '';
+      // Recomputed here rather than trusting a stored militaryCivilian —
+      // this stays correct even for records saved before that field
+      // existed, or edited outside the app.
+      patientAffiliation = classifyAffiliation(pdata);
     }
   } catch (e) { /* fine to skip the automatic stat bump if this fails */ }
 
@@ -265,6 +282,18 @@ export async function applyPatientStatus({ patientId, reason, transferWard, from
   const statKey = EXIT_STAT_KEY[reason];
   const exitStatRef = statKey ? await bumpShiftStatForPatientWard(patientWard, patientPedBedType, statKey, 1) : null;
 
+  // Patient Demographics: same exit, counted as one Disch/Dead x
+  // Military/Civilian x Male/Female cell — only for the two exit
+  // reasons the paper form actually tracks (see
+  // EXIT_DEMOGRAPHIC_CATEGORY above) and only when a gender was
+  // recorded. Best-effort, same as exitStatRef above; the exact target
+  // written is saved the same way exitStatRef is, so a later Readmit
+  // can reverse this exact count too instead of leaving it stuck.
+  const demographicCategory = EXIT_DEMOGRAPHIC_CATEGORY[reason];
+  const demographicStatRef = (demographicCategory && (patientGender === 'M' || patientGender === 'F'))
+    ? await bumpDemographicStatForPatientWard(patientWard, patientPedBedType, demographicCategory, patientAffiliation, patientGender, 1)
+    : null;
+
   const admissionDoc = {
     diagnosis: drugChartData.f_diagnosis,
     archiveReason: reason,
@@ -283,7 +312,8 @@ export async function applyPatientStatus({ patientId, reason, transferWard, from
     intakeOutput: ioArr,
     intakeOutputSummary: ioSummary,
     seizure: seizureArr,
-    exitStatRef
+    exitStatRef,
+    demographicStatRef
   };
 
   try {
@@ -311,7 +341,7 @@ export async function applyPatientStatus({ patientId, reason, transferWard, from
       // closing report is submitted for them — see closeOutDischargedPatient.
       updateDoc(doc(db, 'patients', patientId), {
         dischargeStatus: ROSTER_TAG_FOR_REASON[reason] || '', dischargeStatusAt: serverTimestamp(),
-        dischargeStatShiftRef: exitStatRef
+        dischargeStatShiftRef: exitStatRef, dischargeStatDemographicRef: demographicStatRef
       })
     ]);
   } catch (e) {
@@ -393,7 +423,7 @@ export async function admitExistingPatientToWard({ patientId, currentWard, nurse
       // same fields readmitLatestAdmission clears on a normal readmit —
       // and tags this as a fresh admission for the roster picker, same
       // as a brand-new registration (see ADMISSION_TAG_LABEL above).
-      dischargeStatus: '', dischargeStatusAt: null, dischargeStatShiftRef: null,
+      dischargeStatus: '', dischargeStatusAt: null, dischargeStatShiftRef: null, dischargeStatDemographicRef: null,
       admissionSource: 'NEW_PATIENT', admissionSourceAt: serverTimestamp(),
       updatedAt: serverTimestamp()
     });
@@ -403,6 +433,18 @@ export async function admitExistingPatientToWard({ patientId, currentWard, nurse
   // Shift Statistics: counts the same as a brand-new registration would —
   // best-effort, never blocks the admission itself.
   bumpShiftStatForPatientWard(nurseWard, nextPedBedType, 'adm', 1).catch(() => {});
+  // Patient Demographics: same Admission cell a fresh registration would
+  // bump (see createPatient in Home.jsx) — read back the patient's own
+  // gender/affiliation since this function isn't handed them directly.
+  try {
+    const patientSnap = await getDoc(doc(db, 'patients', patientId));
+    if (patientSnap.exists()) {
+      const pdata = patientSnap.data();
+      if (pdata.gender === 'M' || pdata.gender === 'F') {
+        bumpDemographicStatForPatientWard(nurseWard, nextPedBedType, 'adm', classifyAffiliation(pdata), pdata.gender, 1).catch(() => {});
+      }
+    }
+  } catch (e) { /* best-effort, same as the Shift Statistics bump above */ }
   return { ok: true };
 }
 
@@ -446,12 +488,13 @@ export async function admitExistingPatientToWard({ patientId, currentWard, nurse
 //      what Admit Patient / Register New Patient (admitExistingPatientToWard
 //      below) is for instead.
 export async function readmitLatestAdmission({ patientId, nurseName }) {
-  let dischargeStatus = '', dischargeStatShiftRef = null, currentWard = '';
+  let dischargeStatus = '', dischargeStatShiftRef = null, dischargeStatDemographicRef = null, currentWard = '';
   try {
     const patientSnap = await getDoc(doc(db, 'patients', patientId));
     if (patientSnap.exists()) {
       dischargeStatus = patientSnap.data().dischargeStatus || '';
       dischargeStatShiftRef = patientSnap.data().dischargeStatShiftRef || null;
+      dischargeStatDemographicRef = patientSnap.data().dischargeStatDemographicRef || null;
       currentWard = patientSnap.data().ward || '';
     }
   } catch (e) {
@@ -461,16 +504,20 @@ export async function readmitLatestAdmission({ patientId, nurseName }) {
   if (dischargeStatus && await hasActiveAdmissionData(patientId)) {
     // Situation 1 above: the old exit was never closed out and a new
     // admission is already live. Just cancel the stale exit tag — and,
-    // if that exit had bumped a Shift Statistics column, undo that exact
-    // count too (a no-op if that day's report has since been submitted;
-    // see bumpShiftStat). This is cancelling a still-open exit on an
+    // if that exit had bumped a Shift Statistics column (and/or a
+    // Patient Demographics cell), undo that exact count too (a no-op if
+    // that day's report has since been submitted; see bumpShiftStat /
+    // bumpDemographicStat). This is cancelling a still-open exit on an
     // admission that's already live on this same ward, not bringing the
     // patient in from outside — so the ward stays as it is.
     if (dischargeStatShiftRef) {
       bumpShiftStat(dischargeStatShiftRef.wardKey, dischargeStatShiftRef.statKey, -1, dischargeStatShiftRef).catch(() => {});
     }
+    if (dischargeStatDemographicRef) {
+      bumpDemographicStat(dischargeStatDemographicRef.wardKey, dischargeStatDemographicRef.category, dischargeStatDemographicRef.affiliation, dischargeStatDemographicRef.sex, -1, dischargeStatDemographicRef).catch(() => {});
+    }
     try {
-      await updateDoc(doc(db, 'patients', patientId), { dischargeStatus: '', dischargeStatusAt: null, dischargeStatShiftRef: null, updatedAt: serverTimestamp() });
+      await updateDoc(doc(db, 'patients', patientId), { dischargeStatus: '', dischargeStatusAt: null, dischargeStatShiftRef: null, dischargeStatDemographicRef: null, updatedAt: serverTimestamp() });
       return { ok: true, cancelledPendingExit: true };
     } catch (e) {
       return { ok: false, message: 'Could not cancel the exit: ' + (e.code || e.message) };
@@ -542,7 +589,7 @@ export async function readmitLatestAdmission({ patientId, nurseName }) {
       // READMITTED so the nurse can see at a glance that this isn't a
       // brand-new arrival (see ADMISSION_TAG_LABEL above).
       updateDoc(doc(db, 'patients', patientId), {
-        dischargeStatus: '', dischargeStatusAt: null, dischargeStatShiftRef: null,
+        dischargeStatus: '', dischargeStatusAt: null, dischargeStatShiftRef: null, dischargeStatDemographicRef: null,
         ward: admData.ward || currentWard, pedBedType: admData.pedBedType || '',
         admissionSource: 'READMITTED', admissionSourceAt: serverTimestamp(),
         updatedAt: serverTimestamp()
@@ -554,6 +601,12 @@ export async function readmitLatestAdmission({ patientId, nurseName }) {
     // no-op if that day's report has since been submitted.
     if (admData.exitStatRef) {
       bumpShiftStat(admData.exitStatRef.wardKey, admData.exitStatRef.statKey, -1, admData.exitStatRef).catch(() => {});
+    }
+    // Same undo for the Patient Demographics cell that exit bumped (see
+    // demographicStatRef, saved by applyPatientStatus above).
+    if (admData.demographicStatRef) {
+      const r = admData.demographicStatRef;
+      bumpDemographicStat(r.wardKey, r.category, r.affiliation, r.sex, -1, r).catch(() => {});
     }
 
     await deleteDoc(doc(db, 'patients', patientId, 'admissions', admSnap.id));

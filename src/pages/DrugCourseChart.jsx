@@ -16,8 +16,9 @@ import {
   autoDurationForFrequency, buildSnoSegments, buildSnoText, abbreviateReason,
   parseWeeklyFrequency, weeklyDosesGivenThisWeek
 } from "../lib/drugChartHelpers.js";
-import { ROSTER_TAG_FOR_REASON, clearAllocationsForPatient, EXIT_STAT_KEY } from "../lib/patientAdmissionStatus.js";
-import { bumpShiftStatForPatientWard } from "../lib/shiftStatsSync.js";
+import { ROSTER_TAG_FOR_REASON, clearAllocationsForPatient, EXIT_STAT_KEY, EXIT_DEMOGRAPHIC_CATEGORY } from "../lib/patientAdmissionStatus.js";
+import { bumpShiftStatForPatientWard, bumpDemographicStatForPatientWard } from "../lib/shiftStatsSync.js";
+import { classifyAffiliation } from "../lib/patientAffiliation.js";
 import { useTimeFormat, formatTime, formatDateTime } from "../lib/time-format.js";
 
 const FIELD_IDS = ['f_admission', 'f_discharge', 'f_diagnosis'];
@@ -829,6 +830,17 @@ export default function DrugCourseChart() {
     // below so a later Readmit reverses this exact count.
     const statKey = EXIT_STAT_KEY[reason];
     const exitStatRef = statKey ? await bumpShiftStatForPatientWard(patient?.ward, patient?.pedBedType, statKey, 1) : null;
+
+    // Patient Demographics: same exit, counted as one Disch/Dead x
+    // Military/Civilian x Male/Female cell — mirrors the same bump in
+    // applyPatientStatus (patientAdmissionStatus.js). Only for the two
+    // exit reasons the paper form tracks, and only when a gender was
+    // recorded. Not yet reversed by Readmit (same limitation as that
+    // other copy of this flow).
+    const demographicCategory = EXIT_DEMOGRAPHIC_CATEGORY[reason];
+    if (demographicCategory && (patient?.gender === 'M' || patient?.gender === 'F')) {
+      bumpDemographicStatForPatientWard(patient?.ward, patient?.pedBedType, demographicCategory, classifyAffiliation(patient), patient.gender, 1).catch(() => {});
+    }
 
     const { fields: f, drugs: d, chartRows: c, verbalOrders: v, careInstructions: ci, auditLog: al } = latestRef.current;
     const drugChartData = { ...f, f_discharge: dischargeDate, rows: c, drugs: d, verbalOrders: v, careInstructions: ci, auditLog: al };

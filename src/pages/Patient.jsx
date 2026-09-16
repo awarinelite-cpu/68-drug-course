@@ -9,6 +9,7 @@ import { usePatientHeader } from "../hooks/usePatientHeader.js";
 import { getDocSafe } from "../lib/firestoreOffline.js";
 import { applyPatientStatus, admitExistingPatientToWard } from "../lib/patientAdmissionStatus.js";
 import { nameSearchTokens } from "../lib/patientDirectory.js";
+import { classifyAffiliation } from "../lib/patientAffiliation.js";
 import { STATUS_LABELS, WARD_OPTIONS } from "../lib/drugChartHelpers.js";
 import Topbar from "../components/Topbar.jsx";
 import PatientBanner from "../components/PatientBanner.jsx";
@@ -128,7 +129,8 @@ export default function Patient() {
       pedBedType: patient.pedBedType || '',
       age: patient.age || '', hospNo: patient.hospNo || '',
       admissionDate: patient.admissionDate || '', allergies: patient.allergies || '',
-      insurance: patient.insurance || ''
+      insurance: patient.insurance || '',
+      gender: patient.gender || '', armyNumber: patient.armyNumber || ''
     });
     setEditMsg('');
     setShowEditForm(true);
@@ -159,8 +161,15 @@ export default function Patient() {
       age: editForm.age.trim(),
       hospNo: editForm.hospNo.trim(), admissionDate: editForm.admissionDate.trim(), allergies: editForm.allergies.trim(),
       insurance: editForm.insurance.trim(),
+      gender: editForm.gender.trim(),
+      armyNumber: editForm.armyNumber.trim(),
       updatedAt: serverTimestamp()
     };
+    // Recomputed from Insurance/Army Number, same as on creation — see
+    // classifyAffiliation in patientAffiliation.js. Correcting either
+    // field here re-derives this automatically; it's never edited
+    // directly.
+    updates.militaryCivilian = classifyAffiliation(updates);
     // Not awaited — same offline-hang reason as toggleAllocation above.
     updateDoc(doc(db, 'patients', patient.id), updates).catch((e) => {
       console.warn('Patient edit queued locally; will retry once back online:', e);

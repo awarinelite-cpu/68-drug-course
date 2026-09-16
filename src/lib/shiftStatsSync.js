@@ -1,6 +1,6 @@
 import { doc, runTransaction, serverTimestamp, collection, getDocs } from "firebase/firestore";
 import { db } from "../firebase.js";
-import { WARDS, reportDateId, defaultWardDoc } from "./nurses-report-common.js";
+import { WARDS, reportDateId, defaultWardDoc, DEMOGRAPHIC_SEXES } from "./nurses-report-common.js";
 import { reportWardKeysForPatientWard, patientWardAndBedTypeForReportKey } from "./wardNameMatch.js";
 import { wardHeadcount } from "./wardCensus.js";
 
@@ -123,6 +123,12 @@ export async function bumpShiftStat(wardKey, statKey, delta = 1, { dateId, shift
 // the order it was queued, then clears the queue; anything that queues
 // afterward (while reopened and then locked again) waits for the next
 // reopen the same way. A no-op if there's nothing queued.
+//
+// Entries queued by bumpDemographicStat below carry `demographic: true`
+// and a top-level `fieldKey` instead of a `shiftKey` (Patient
+// Demographics is one daily total per ward, not per-shift — see
+// DEMOGRAPHIC_FIELDS in nurses-report-common.js) — those are applied
+// straight onto the doc's own field rather than under `shifts`.
 export async function applyPendingStatBumps(wardKey, dateId) {
   const ref = doc(db, 'nurseReports', dateId, 'wards', wardKey);
   try {
@@ -133,13 +139,20 @@ export async function applyPendingStatBumps(wardKey, dateId) {
       const pending = Array.isArray(data.pendingStatBumps) ? data.pendingStatBumps : [];
       if (!pending.length) return;
       const shifts = { ...(data.shifts || {}) };
-      pending.forEach(({ shiftKey, statKey, delta }) => {
+      const topLevel = {};
+      pending.forEach((entry) => {
+        if (entry.demographic) {
+          const current = typeof data[entry.fieldKey] === 'number' ? data[entry.fieldKey] : 0;
+          topLevel[entry.fieldKey] = Math.max(0, (topLevel[entry.fieldKey] ?? current) + entry.delta);
+          return;
+        }
+        const { shiftKey, statKey, delta } = entry;
         const shiftObj = { ...(shifts[shiftKey] || {}) };
         const current = typeof shiftObj[statKey] === 'number' ? shiftObj[statKey] : 0;
         shiftObj[statKey] = Math.max(0, current + delta);
         shifts[shiftKey] = shiftObj;
       });
-      tx.update(ref, { shifts, pendingStatBumps: [], updatedAt: serverTimestamp() });
+      tx.update(ref, { shifts, ...topLevel, pendingStatBumps: [], updatedAt: serverTimestamp() });
     });
   } catch (e) {
     console.warn('applyPendingStatBumps failed for', wardKey, dateId, e);
@@ -159,5 +172,66 @@ export async function bumpShiftStatForPatientWard(patientWardLabel, pedBedType, 
     ? keys.filter(k => (pedBedType === 'Cot' ? k === 'paedcot' : k === 'paedbed'))
     : keys;
   const results = await Promise.all((targets.length ? targets : keys).map(k => bumpShiftStat(k, statKey, delta, opts)));
+  return results.find(Boolean) || null;
+}
+
+// Automatically bumps one cell of the Patient Demographics table — the
+// automatic counterpart to a nurse typing a number into
+// DemographicsTable in WardNurse.jsx by hand. Unlike bumpShiftStat, this
+// writes a single top-level field on the ward doc (Demographics is one
+// daily total per ward, not per-shift — see DEMOGRAPHIC_FIELDS in
+// nurses-report-common.js), keyed `${category}_${affiliation}${sex}`
+// (e.g. 'adm_milM'). `category` is one of DEMOGRAPHIC_CATEGORIES'
+// keys ('adm'/'disch'/'dead'/'bid'), `affiliation` one of
+// DEMOGRAPHIC_AFFILIATIONS' keys ('mil'/'civ' — see
+// classifyAffiliation in patientAffiliation.js), `sex` 'M' or 'F'.
+// Best-effort and never throws; a patient with no recorded gender
+// simply doesn't get counted here (same as a blank cell a nurse never
+// filled in), so this never blocks the admission/exit it's attached to.
+export async function bumpDemographicStat(wardKey, category, affiliation, sex, delta = 1, { dateId } = {}) {
+  if (!category || !affiliation || !DEMOGRAPHIC_SEXES.includes(sex)) return null;
+  const w = WARDS.find(x => x.key === wardKey);
+  if (!w) return null;
+  const useDateId = dateId || reportDateId();
+  const fieldKey = category + '_' + affiliation + sex;
+  const ref = doc(db, 'nurseReports', useDateId, 'wards', wardKey);
+  const seedHeadcount = await liveHeadcountForWardKey(wardKey);
+  try {
+    await runTransaction(db, async (tx) => {
+      const snap = await tx.get(ref);
+      if (!snap.exists()) {
+        const startOcc = typeof seedHeadcount === 'number' ? seedHeadcount : 0;
+        const seed = defaultWardDoc(w, startOcc);
+        seed[fieldKey] = Math.max(0, delta);
+        tx.set(ref, { ...seed, updatedAt: serverTimestamp() });
+        return;
+      }
+      const data = snap.data();
+      if (data.locked) {
+        const pending = Array.isArray(data.pendingStatBumps) ? data.pendingStatBumps.slice() : [];
+        pending.push({ demographic: true, fieldKey, delta, queuedAt: new Date().toISOString() });
+        tx.update(ref, { pendingStatBumps: pending });
+        return;
+      }
+      const current = typeof data[fieldKey] === 'number' ? data[fieldKey] : 0;
+      tx.update(ref, { [fieldKey]: Math.max(0, current + delta), updatedAt: serverTimestamp() });
+    });
+  } catch (e) {
+    console.warn('bumpDemographicStat failed for', wardKey, fieldKey, e);
+    return null;
+  }
+  return { wardKey, category, affiliation, sex, dateId: useDateId };
+}
+
+// Resolves a patient-chart ward label the same way
+// bumpShiftStatForPatientWard does, then bumps the matching
+// Demographics cell on whichever report ward(s) that resolves to.
+export async function bumpDemographicStatForPatientWard(patientWardLabel, pedBedType, category, affiliation, sex, delta = 1, opts) {
+  const keys = reportWardKeysForPatientWard(patientWardLabel);
+  if (!keys.length) return null;
+  const targets = keys.length > 1
+    ? keys.filter(k => (pedBedType === 'Cot' ? k === 'paedcot' : k === 'paedbed'))
+    : keys;
+  const results = await Promise.all((targets.length ? targets : keys).map(k => bumpDemographicStat(k, category, affiliation, sex, delta, opts)));
   return results.find(Boolean) || null;
 }

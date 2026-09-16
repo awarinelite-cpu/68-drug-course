@@ -15,8 +15,9 @@ import { reportWardKeysForPatientWard, patientWardAndBedTypeForReportKey } from 
 import { WARDS } from "../lib/nurses-report-common.js";
 import { loadWardPatients, loadIncomingTransfers, searchPatients, findPatientByEmrExact, nameSearchTokens } from "../lib/patientDirectory.js";
 import { activeAdmissionTag, ADMISSION_TAG_LABEL, clearAdmissionTag, readmitLatestAdmission, READMIT_ELIGIBLE_TAGS, hasActiveAdmissionData } from "../lib/patientAdmissionStatus.js";
-import { bumpShiftStatForPatientWard } from "../lib/shiftStatsSync.js";
+import { bumpShiftStatForPatientWard, bumpDemographicStatForPatientWard } from "../lib/shiftStatsSync.js";
 import { WARD_OPTIONS } from "../lib/drugChartHelpers.js";
+import { classifyAffiliation } from "../lib/patientAffiliation.js";
 
 function normEmr(emr) { return (emr || '').trim().toLowerCase(); }
 
@@ -113,7 +114,7 @@ function BedTag({ patient }) {
   );
 }
 
-const EMPTY_FORM = { name: '', emr: '', diagnosis: '', ward: '', pedBedType: '', age: '', hospNo: '', admissionDate: '', allergies: '', insurance: '' };
+const EMPTY_FORM = { name: '', emr: '', diagnosis: '', ward: '', pedBedType: '', age: '', hospNo: '', admissionDate: '', allergies: '', insurance: '', gender: '', armyNumber: '' };
 
 // Wards are stored/compared in ALL CAPS (matches WARD_OPTIONS); this is
 // purely for display so headings don't shout at the reader.
@@ -339,12 +340,19 @@ export default function Home() {
       age: newForm.age.trim(),
       hospNo: newForm.hospNo.trim(), admissionDate: newForm.admissionDate.trim(), allergies: newForm.allergies.trim(),
       insurance: newForm.insurance.trim(),
+      gender: newForm.gender.trim(),
+      armyNumber: newForm.armyNumber.trim(),
       updatedAt: serverTimestamp(),
       // Brand-new record, no transfer involved — tags this patient "NEW
       // PATIENT" (blue) on the ward's roster picker for 24h. See
       // ADMISSION_TAG_LABEL/activeAdmissionTag in patientAdmissionStatus.js.
       admissionSource: 'NEW_PATIENT', admissionSourceAt: serverTimestamp()
     };
+    // Recomputed from Insurance/Army Number above, never chosen by hand —
+    // see classifyAffiliation in patientAffiliation.js. This is what
+    // decides the Military/Civilian half of the Patient Demographics
+    // bump just below.
+    data.militaryCivilian = classifyAffiliation(data);
     if (existing) {
       // Reusing an existing record: clear out anything left over from
       // its last exit so it reads as a clean, active admission again —
@@ -381,6 +389,15 @@ export default function Home() {
     // admitExistingPatientToWard in patientAdmissionStatus.js, which
     // this mirrors.
     bumpShiftStatForPatientWard(data.ward, data.pedBedType, 'adm', 1).catch(() => {});
+
+    // Patient Demographics: the same registration, counted as one
+    // Admission x Military/Civilian x Male/Female cell (see
+    // DemographicsTable in WardNurse.jsx) instead of a nurse typing it
+    // in by hand — only when a gender was actually recorded, since
+    // there's no cell to bump otherwise.
+    if (data.gender === 'M' || data.gender === 'F') {
+      bumpDemographicStatForPatientWard(data.ward, data.pedBedType, 'adm', data.militaryCivilian, data.gender, 1).catch(() => {});
+    }
 
     // Update the in-memory ward list directly instead of re-querying —
     // we already have the new patient's data, so this needs no round
