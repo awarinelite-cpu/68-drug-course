@@ -392,9 +392,17 @@ export default function DrugCourseChart() {
     scheduleSave();
   }
 
+  // Chart's own Diagnosis field (fields.f_diagnosis) starts blank on every
+  // new chart, separate from the diagnosis already recorded on the patient
+  // at registration (patient.diagnosis, same one shown in the ward list).
+  // Fall back to that so the diagnosis actually shows up here instead of
+  // reading blank until a nurse re-types it into this chart specifically —
+  // same fallback Patient.jsx already uses for its own banner.
+  const displayDiagnosis = fields.f_diagnosis || patient?.diagnosis || '';
+
   // --- Diagnosis modal (readonly + truncated on the banner; tap to view/edit) ---
   function openDiagnosisModal(startInEdit) {
-    setDiagEditText(fields.f_diagnosis || '');
+    setDiagEditText(displayDiagnosis);
     setDiagEditing(!!startInEdit && !isArchived);
     setDiagModalOpen(true);
   }
@@ -916,6 +924,7 @@ export default function DrugCourseChart() {
           <div>
             <div className="pname">{patient ? (patient.name || 'Unnamed') : 'Loading…'}</div>
             <div className="pmeta">{patient ? 'EMR: ' + (patient.emr || 'N/A') : ''}</div>
+            {patient && displayDiagnosis && <div className="pmeta" style={{ cursor: 'pointer' }} onClick={() => openDiagnosisModal()}>{displayDiagnosis}</div>}
           </div>
         </div>
         {isArchived && archiveMeta && (
@@ -942,7 +951,7 @@ export default function DrugCourseChart() {
               <input type="date" readOnly={isArchived} value={fields.f_admission} onChange={(e) => updateField('f_admission', e.target.value)} />
             </div>
             <div className="info-row"><label>Diagnosis:</label>
-              <input type="text" placeholder="Enter diagnosis for this chart" readOnly value={fields.f_diagnosis} onClick={() => openDiagnosisModal()} />
+              <input type="text" placeholder="Enter diagnosis for this chart" readOnly value={displayDiagnosis} onClick={() => openDiagnosisModal()} />
             </div>
             <div className="info-row"><label>Discharge Date:</label>
               <input type="date" readOnly value={fields.f_discharge}
@@ -1317,7 +1326,7 @@ export default function DrugCourseChart() {
               <h3>Diagnosis</h3>
               <div className="diag-header-actions">
                 {!isArchived && !diagEditing && (
-                  <button className="diag-edit-btn" title="Edit diagnosis" aria-label="Edit diagnosis" onClick={() => { setDiagEditText(fields.f_diagnosis || ''); setDiagEditing(true); }}>✏️</button>
+                  <button className="diag-edit-btn" title="Edit diagnosis" aria-label="Edit diagnosis" onClick={() => { setDiagEditText(displayDiagnosis); setDiagEditing(true); }}>✏️</button>
                 )}
                 <button className="diag-edit-btn" title="Close" aria-label="Close" onClick={() => setDiagModalOpen(false)}>&times;</button>
               </div>
@@ -1326,12 +1335,12 @@ export default function DrugCourseChart() {
               {diagEditing ? (
                 <textarea className="diag-edit-textarea" rows={3} placeholder="Enter diagnosis for this chart" value={diagEditText} onChange={(e) => setDiagEditText(e.target.value)} autoFocus />
               ) : (
-                <p className="diag-full-text">{fields.f_diagnosis || '(No diagnosis entered)'}</p>
+                <p className="diag-full-text">{displayDiagnosis || '(No diagnosis entered)'}</p>
               )}
             </div>
             {diagEditing && (
               <div className="diag-modal-footer modal-footer">
-                <button className="btn btn-secondary" onClick={() => { setDiagEditText(fields.f_diagnosis || ''); setDiagEditing(false); }}>Cancel</button>
+                <button className="btn btn-secondary" onClick={() => { setDiagEditText(displayDiagnosis); setDiagEditing(false); }}>Cancel</button>
                 <button className="btn btn-primary" onClick={saveDiagnosisEdit}>Save</button>
               </div>
             )}
