@@ -868,7 +868,16 @@ function useWardReport(wardKey, isAdmin, profile, user) {
 // glance who she's already written on and can't pick them again by
 // mistake — except the option matching this picker's own current value,
 // which stays fully selectable/highlighted since it's this card's pick.
-function WardPatientPicker({ value, options, onSelect, usedIds }) {
+// `columns`, when provided (currently just the merged PAED WARD "Check a
+// patient's status" lookup — see MergedWardReportPanel), splits the list
+// into side-by-side sub-ward tables instead of one flat list, e.g. PAED
+// BED on the left and PAED COT on the right, since a nurse scanning for a
+// patient usually already knows which sub-ward they're in and a single
+// merged list makes that slower to find. Each entry is
+// { label, options }; `options` here is still the full combined list,
+// used for the button's own selected-label lookup and for the
+// duplicate-EMR check across both sub-wards.
+function WardPatientPicker({ value, options, onSelect, usedIds, columns }) {
   const [open, setOpen] = useState(false);
   const selected = options.find((o) => o.id === value);
   const label = selected ? ((selected.name || 'Unnamed') + (selected.emr ? ' (' + selected.emr + ')' : '')) : '\u2014 Select from ward \u2014';
@@ -897,6 +906,31 @@ function WardPatientPicker({ value, options, onSelect, usedIds }) {
 
   function pick(id) { onSelect(id); setOpen(false); }
 
+  function OptionRow(o) {
+    const isUsedElsewhere = !!usedIds && usedIds.has(o.id) && o.id !== value;
+    return (
+      <div className={"ward-patient-picker-row" + (isUsedElsewhere ? ' is-used' : '')}
+        key={o.id} onClick={() => { if (!isUsedElsewhere) pick(o.id); }}>
+        <div>
+          <span className={"ward-patient-picker-name" + (o.id === value ? ' is-selected' : '')}>
+            {(o.name || 'Unnamed') + (o.emr ? ' (' + o.emr + ')' : '')}{!columns && o.location ? ' \u2014 ' + o.location : ''}
+          </span>
+          {isUsedElsewhere && (
+            <div className="ward-patient-picker-tag used">{'Already selected in another write-up'}</div>
+          )}
+          {duplicateEmrIds.has(o.id) && (
+            <div className="ward-patient-picker-tag duplicate">{'\u26A0\uFE0F Duplicate EMR \u2014 check with Overall Nurse'}</div>
+          )}
+          {o.dischargeStatus ? (
+            <div className="ward-patient-picker-tag">{o.dischargeStatus === 'TRANS OUT' ? 'TRANS OUT' : o.dischargeStatus === 'DEATH' ? 'Death' : o.dischargeStatus === 'DAMA' ? 'DAMA' : o.dischargeStatus === 'ABSC' ? 'Absconded' : 'Discharged'}</div>
+          ) : o.admissionTag ? (
+            <div className="ward-patient-picker-tag admission">{ADMISSION_TAG_LABEL[o.admissionTag] || o.admissionTag}</div>
+          ) : null}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <>
       <button type="button" className={"ward-patient-picker-btn" + (value ? ' set' : '')} onClick={() => setOpen(true)}>
@@ -911,30 +945,18 @@ function WardPatientPicker({ value, options, onSelect, usedIds }) {
               <div className="ward-patient-picker-row" onClick={() => pick('')}>
                 <span className={"ward-patient-picker-name" + (!value ? ' is-selected' : '')}>{'\u2014 Select from ward \u2014'}</span>
               </div>
-              {options.map((o) => {
-                const isUsedElsewhere = !!usedIds && usedIds.has(o.id) && o.id !== value;
-                return (
-                  <div className={"ward-patient-picker-row" + (isUsedElsewhere ? ' is-used' : '')}
-                    key={o.id} onClick={() => { if (!isUsedElsewhere) pick(o.id); }}>
-                    <div>
-                      <span className={"ward-patient-picker-name" + (o.id === value ? ' is-selected' : '')}>
-                        {(o.name || 'Unnamed') + (o.emr ? ' (' + o.emr + ')' : '')}{o.location ? ' \u2014 ' + o.location : ''}
-                      </span>
-                      {isUsedElsewhere && (
-                        <div className="ward-patient-picker-tag used">{'Already selected in another write-up'}</div>
-                      )}
-                      {duplicateEmrIds.has(o.id) && (
-                        <div className="ward-patient-picker-tag duplicate">{'\u26A0\uFE0F Duplicate EMR \u2014 check with Overall Nurse'}</div>
-                      )}
-                      {o.dischargeStatus ? (
-                        <div className="ward-patient-picker-tag">{o.dischargeStatus === 'TRANS OUT' ? 'TRANS OUT' : o.dischargeStatus === 'DEATH' ? 'Death' : o.dischargeStatus === 'DAMA' ? 'DAMA' : o.dischargeStatus === 'ABSC' ? 'Absconded' : 'Discharged'}</div>
-                      ) : o.admissionTag ? (
-                        <div className="ward-patient-picker-tag admission">{ADMISSION_TAG_LABEL[o.admissionTag] || o.admissionTag}</div>
-                      ) : null}
+              {columns ? (
+                <div className="ward-patient-picker-columns">
+                  {columns.map((col) => (
+                    <div className="ward-patient-picker-column" key={col.label}>
+                      <div className="ward-patient-picker-column-header">{col.label}</div>
+                      {col.options.length === 0
+                        ? <div className="ward-patient-picker-empty">No patients</div>
+                        : col.options.map((o) => OptionRow(o))}
                     </div>
-                  </div>
-                );
-              })}
+                  ))}
+                </div>
+              ) : options.map((o) => OptionRow(o))}
             </div>
           </div>
         </div>
@@ -1290,6 +1312,16 @@ function MergedWardReportPanel({ group, isAdmin, profile, user, navigate }) {
     ...(hA.wardPatientOptions || []).map((o) => ({ ...o, location: hA.w?.label })),
     ...(hB.wardPatientOptions || []).map((o) => ({ ...o, location: hB.w?.label }))
   ].sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+  // Only PAED WARD sets patientLocationOptions (Maternity's Cots member
+  // has no real patient records — see the WARD_GROUPS comment above), so
+  // only there does a two-column Bed/Cot table make sense; Maternity keeps
+  // the flat list.
+  const quickLookupColumns = group.patientLocationOptions
+    ? group.patientLocationOptions.map((loc) => ({
+      label: loc,
+      options: quickLookupOptions.filter((o) => o.location === loc)
+    }))
+    : null;
   const quickLookupRecord = quickLookupOptions.find((o) => o.id === quickLookupId);
   let quickLookupTag = null;
   if (quickLookupRecord) {
@@ -1315,7 +1347,7 @@ function MergedWardReportPanel({ group, isAdmin, profile, user, navigate }) {
             <div style={{ display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap' }}>
               {quickLookupOptions.length > 0 && (
                 <div style={{ flex: '1 1 180px', minWidth: 180 }}>
-                  <WardPatientPicker value={quickLookupId} options={quickLookupOptions} onSelect={setQuickLookupId} />
+                  <WardPatientPicker value={quickLookupId} options={quickLookupOptions} columns={quickLookupColumns} onSelect={setQuickLookupId} />
                   {quickLookupTag && (
                     <div style={{ fontSize: 12, marginTop: 4, fontWeight: 'bold', color: quickLookupRecord.dischargeStatus ? '#dc2626' : quickLookupRecord.admissionTag ? '#2563eb' : '#6b7280' }}>
                       {quickLookupTag}{quickLookupRecord.location ? ' \u2014 ' + quickLookupRecord.location : ''}

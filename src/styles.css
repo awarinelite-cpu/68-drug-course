@@ -985,6 +985,22 @@ table.ward-shift tr.shift-section-row td { font-weight: bold; text-align: left; 
 .ward-patient-picker-tag.used { color: #9ca3af; text-transform: none; letter-spacing: normal; font-weight: normal; }
 .ward-patient-picker-row.is-used { opacity: .45; cursor: not-allowed; }
 .ward-patient-picker-row.is-used:active { background: none; }
+/* Two-column Bed/Cot table for the merged PAED WARD "Check a patient's
+   status" lookup (see `columns` on WardPatientPicker) — side by side on
+   wide screens, stacked on narrow ones so it still fits a phone modal. */
+.ward-patient-picker-columns { display: flex; gap: 0; flex-wrap: wrap; }
+.ward-patient-picker-column { flex: 1 1 200px; min-width: 200px; }
+.ward-patient-picker-column + .ward-patient-picker-column { border-left: 1px solid var(--border); }
+.ward-patient-picker-column-header {
+  position: sticky; top: 0; background: var(--surface-bg); z-index: 1;
+  padding: 8px 16px; font-size: 12px; font-weight: bold; text-transform: uppercase;
+  letter-spacing: .02em; color: #6b7280; border-bottom: 1px solid var(--border);
+}
+.ward-patient-picker-empty { padding: 12px 16px; font-size: 13px; color: #9ca3af; }
+@media (max-width: 520px) {
+  .ward-patient-picker-columns { flex-direction: column; }
+  .ward-patient-picker-column + .ward-patient-picker-column { border-left: none; border-top: 1px solid var(--border); }
+}
 .status-stamp {
   position: absolute; top: 10px; right: 14px;
   color: var(--danger); font-weight: 900; font-size: 16px; text-transform: uppercase;
