@@ -73,9 +73,7 @@ export default function Profile() {
 
   async function saveProfile() {
     setPfMsg(null);
-    const trimmedName = name.trim();
-    if (!trimmedName) { setPfMsg({ type: 'error', text: 'Name cannot be empty.' }); return; }
-    const updates = { name: trimmedName, phone: phone.trim(), gender };
+    const updates = { phone: phone.trim(), gender };
     try {
       await updateDoc(doc(db, 'users', user.uid), updates);
     } catch (e) {
@@ -189,7 +187,12 @@ export default function Profile() {
 
           <hr style={{ border: 'none', borderTop: '1px solid #e5e7eb', margin: '20px 0' }} />
 
-          <div className="field"><label>Full Name</label><input type="text" value={name} onChange={(e) => setName(e.target.value)} /></div>
+          <div className="field">
+            <label>Full Name</label>
+            <div style={{ padding: 10, border: '1px solid #e5e7eb', borderRadius: 6, background: '#f9fafb', fontSize: 14, color: '#374151' }}>
+              {profile.name || 'Unnamed'}
+            </div>
+          </div>
           <div className="field"><label>Phone Number</label><input type="text" placeholder="e.g. 080XXXXXXXX" value={phone} onChange={(e) => setPhone(e.target.value)} /></div>
           <div className="field">
             <label>Gender</label>

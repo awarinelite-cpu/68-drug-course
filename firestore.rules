@@ -40,12 +40,15 @@ service cloud.firestore {
       allow read: if isKnownUser();
       allow create: if isSignedIn() && isAdmin();
       // Admins can update anything. A signed-in user may also edit their own
-      // profile (name, phone, department, etc.) but may not change their own
-      // role or email through this path.
+      // profile (phone, gender, ward, etc.) but may not change their own
+      // role, email, or name through this path — name changes need an
+      // admin, same as role/email, since it's the identity shown on every
+      // chart/audit entry a nurse makes.
       allow update: if isAdmin() || (
         isSignedIn() && request.auth.uid == uid &&
         request.resource.data.role == resource.data.role &&
-        request.resource.data.email == resource.data.email
+        request.resource.data.email == resource.data.email &&
+        request.resource.data.name == resource.data.name
       );
       allow delete: if isAdmin();
 
