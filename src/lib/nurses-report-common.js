@@ -347,7 +347,7 @@ export function defaultWardDoc(w, startOcc = 0) {
   const occ = typeof startOcc === 'number' ? startOcc : 0;
   const d = {
     label: w.label, beds: w.beds, startOcc: occ, occ: occ, vac: w.beds - occ,
-    locked: false, submitted: false,
+    locked: false, submitted: false, pendingStatBumps: [],
     shifts: {}, patients: [], nightUpdate: '', nightUpdateBy: '', nightUpdatedAt: null,
     demographicsRemarks: '', childMale: 0, childFemale: 0
   };

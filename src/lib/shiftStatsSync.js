@@ -47,17 +47,30 @@ export function currentShiftKey(d = new Date()) {
 // would otherwise type a number into by hand in WardNurse.jsx's
 // ShiftTable. This is always a background side effect of something that
 // already happened elsewhere (a registration, discharge, transfer,
-// readmit) — it never throws. An unrecognized ward key, or a report
-// that's already been submitted/locked, is silently skipped rather than
-// blocking whatever real action triggered it or corrupting a report
-// that's already been filed.
+// readmit) — it never throws. An unrecognized ward key is silently
+// skipped rather than blocking whatever real action triggered it.
+//
+// Gated on `locked` alone (not `submitted`) — same as `editable` in
+// WardNurse.jsx — since Overall Nurse can reopen a submitted report by
+// clearing just `locked` (see toggleLock in OverallNurse.jsx), and a
+// nurse can then go back to editing it by hand; an automatic bump
+// should be allowed to land the same way a manual edit would. While
+// actually locked, a bump isn't dropped anymore — it's queued onto the
+// doc's own pendingStatBumps (a new admission/discharge/transfer/etc.
+// that happens after a ward's report was filed for the day shouldn't
+// just vanish from that day's figures). It stays queued, invisible to
+// the totals, until Overall Nurse deliberately reopens that report —
+// see applyPendingStatBumps below, which replays it then. This is
+// intentionally not automatic: a filed report shouldn't silently
+// rewrite itself days later just because e.g. a Readmit reverses an
+// old exit; only an explicit reopen replays anything.
 //
 // Returns the exact {wardKey, statKey, dateId, shiftKey} target actually
-// written, or null if nothing was written — callers that trigger an
-// exit event (discharge/refer/DAMA/absconded) save this alongside the
-// patient record so a later Readmit can hand it straight back here with
-// delta: -1 for an exact reversal, instead of guessing which day/shift
-// the original count landed on.
+// written (queued or applied), or null if nothing happened at all —
+// callers that trigger an exit event (discharge/refer/DAMA/absconded)
+// save this alongside the patient record so a later Readmit can hand it
+// straight back here with delta: -1 for an exact reversal, instead of
+// guessing which day/shift the original count landed on.
 export async function bumpShiftStat(wardKey, statKey, delta = 1, { dateId, shiftKey } = {}) {
   const w = WARDS.find(x => x.key === wardKey);
   if (!w) return null;
@@ -81,12 +94,12 @@ export async function bumpShiftStat(wardKey, statKey, delta = 1, { dateId, shift
         return;
       }
       const data = snap.data();
-      // A submitted/locked report has already been filed — it reflects
-      // what really happened on that day/shift, and shouldn't be
-      // reopened by a later reversal (e.g. a Readmit days after the
-      // original discharge). The live report currently open is where
-      // that correction belongs instead; this call just becomes a no-op.
-      if (data.submitted || data.locked) return;
+      if (data.locked) {
+        const pending = Array.isArray(data.pendingStatBumps) ? data.pendingStatBumps.slice() : [];
+        pending.push({ shiftKey: useShiftKey, statKey, delta, queuedAt: new Date().toISOString() });
+        tx.update(ref, { pendingStatBumps: pending });
+        return;
+      }
       const shiftObj = (data.shifts && data.shifts[useShiftKey]) || {};
       const current = typeof shiftObj[statKey] === 'number' ? shiftObj[statKey] : 0;
       const next = Math.max(0, current + delta);
@@ -97,6 +110,40 @@ export async function bumpShiftStat(wardKey, statKey, delta = 1, { dateId, shift
     return null;
   }
   return { wardKey, statKey, dateId: useDateId, shiftKey: useShiftKey };
+}
+
+// Replays every stat bump queued while a ward's report was locked (see
+// the queuing branch in bumpShiftStat above) — a new admission, trans
+// in, discharge, DAMA, ABSC, trans out, etc. that happened after that
+// day's report was filed, none of which touched the figures at the
+// time. Called once, the moment Overall Nurse actually reopens the
+// report (see toggleLock in OverallNurse.jsx unlocking it) — never on a
+// timer or automatically, so a filed report only ever changes because
+// someone deliberately chose to reopen it. Applies each queued delta in
+// the order it was queued, then clears the queue; anything that queues
+// afterward (while reopened and then locked again) waits for the next
+// reopen the same way. A no-op if there's nothing queued.
+export async function applyPendingStatBumps(wardKey, dateId) {
+  const ref = doc(db, 'nurseReports', dateId, 'wards', wardKey);
+  try {
+    await runTransaction(db, async (tx) => {
+      const snap = await tx.get(ref);
+      if (!snap.exists()) return;
+      const data = snap.data();
+      const pending = Array.isArray(data.pendingStatBumps) ? data.pendingStatBumps : [];
+      if (!pending.length) return;
+      const shifts = { ...(data.shifts || {}) };
+      pending.forEach(({ shiftKey, statKey, delta }) => {
+        const shiftObj = { ...(shifts[shiftKey] || {}) };
+        const current = typeof shiftObj[statKey] === 'number' ? shiftObj[statKey] : 0;
+        shiftObj[statKey] = Math.max(0, current + delta);
+        shifts[shiftKey] = shiftObj;
+      });
+      tx.update(ref, { shifts, pendingStatBumps: [], updatedAt: serverTimestamp() });
+    });
+  } catch (e) {
+    console.warn('applyPendingStatBumps failed for', wardKey, dateId, e);
+  }
 }
 
 // Resolves a patient-chart ward label (+ pedBedType, only meaningful for

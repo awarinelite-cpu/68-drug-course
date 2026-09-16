@@ -19,6 +19,7 @@ import {
 } from "../../lib/nurses-report-common.js";
 import { patientWardAndBedTypeForReportKey } from "../../lib/wardNameMatch.js";
 import { wardHeadcount } from "../../lib/wardCensus.js";
+import { applyPendingStatBumps } from "../../lib/shiftStatsSync.js";
 import { loadPatientsForWardLabels } from "../../lib/patientDirectory.js";
 import { useGoBack } from "../../hooks/useGoBack.js";
 import Topbar from "../../components/Topbar.jsx";
@@ -454,6 +455,15 @@ export default function OverallNurse() {
     const locked = !!(wardData[wardKey] && wardData[wardKey].locked);
     try {
       await updateDoc(doc(wardsCol, wardKey), { locked: !locked });
+      // Reopening (was locked, now isn't): replay anything that queued
+      // while it was locked — a new admission, trans in, discharge,
+      // DAMA, ABSC, trans out, etc. that happened after this report was
+      // filed for the day, none of which touched the figures at the
+      // time (see bumpShiftStat in shiftStatsSync.js). Locking it back
+      // up doesn't need the reverse — nothing to replay there.
+      if (locked) {
+        await applyPendingStatBumps(wardKey, dateId);
+      }
     } catch (e) {
       setSaveStatus({ text: "Couldn't change access: " + (e.code || e.message || 'unknown error'), error: true });
     }
