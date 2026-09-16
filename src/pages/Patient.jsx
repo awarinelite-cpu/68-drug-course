@@ -147,8 +147,15 @@ export default function Patient() {
       // here, renaming or correcting a patient's EMR silently dropped them
       // out of search results until an admin ran the reindex.
       nameLower: name.toLowerCase(), emrLower: emr.toLowerCase(), nameTokens: nameSearchTokens(name),
-      diagnosis: editForm.diagnosis.trim(), ward: editForm.ward.trim(),
-      pedBedType: editForm.ward.trim() === 'PEDIATRIC/NICU WARD' ? (editForm.pedBedType || '') : '',
+      diagnosis: editForm.diagnosis.trim(),
+      // Ward/pedBedType are deliberately never written from here — the
+      // Edit form locks that field (see PatientForm's lockWard) so this
+      // is belt-and-suspenders: even if editForm.ward somehow differs
+      // from patient.ward, Save Changes must never be how a ward
+      // changes. Transfer / Admit Patient / Register New Patient /
+      // Readmit (patientAdmissionStatus.js) are the only paths that are
+      // allowed to move a patient, since those are the ones that also
+      // keep Shift Statistics and the roster in sync with the move.
       age: editForm.age.trim(),
       hospNo: editForm.hospNo.trim(), admissionDate: editForm.admissionDate.trim(), allergies: editForm.allergies.trim(),
       insurance: editForm.insurance.trim(),
@@ -306,7 +313,7 @@ export default function Patient() {
             {showEditForm && editForm && (
               <div className="card-box" style={{ marginTop: 12, boxShadow: 'none', border: '1px solid #e5e7eb' }}>
                 <h3 style={{ marginTop: 0 }}>Edit Patient Information</h3>
-                <PatientForm form={editForm} setForm={setEditForm} />
+                <PatientForm form={editForm} setForm={setEditForm} lockWard />
                 <button className="btn btn-primary" onClick={saveEditPatient}>Save Changes</button>
                 <button className="btn btn-secondary" onClick={() => setShowEditForm(false)}>Cancel</button>
                 {editMsg && <div className="error-msg">{editMsg}</div>}

@@ -1,6 +1,16 @@
 import { WARD_OPTIONS, PED_BED_TYPES } from "../lib/drugChartHelpers.js";
 
-export default function PatientForm({ form, setForm }) {
+// lockWard: true on the Patient page's own Edit Patient Information form
+// (see Patient.jsx) — ward is deliberately not editable there anymore.
+// A patient's ward should only ever change through an action that also
+// keeps Shift Statistics and the roster honest about it: Transfer,
+// Admit Patient, Register New Patient (reusing an existing record), or
+// Readmit — all in patientAdmissionStatus.js. Editing it free-form here
+// let it drift out of sync with what those flows and the ward's own
+// census actually reflect. Register New Patient's own form (Home.jsx)
+// is unaffected — picking a ward there is exactly how that admission
+// itself happens, not an edit to an existing one.
+export default function PatientForm({ form, setForm, lockWard }) {
   const set = (key) => (e) => setForm({ ...form, [key]: e.target.value });
   const setWard = (e) => setForm({ ...form, ward: e.target.value, pedBedType: e.target.value === 'PEDIATRIC/NICU WARD' ? form.pedBedType : '' });
   return (
@@ -10,12 +20,22 @@ export default function PatientForm({ form, setForm }) {
       <div className="field"><label>Diagnosis</label><input type="text" value={form.diagnosis} onChange={set('diagnosis')} /></div>
       <div className="field">
         <label>Ward</label>
-        <select value={form.ward} onChange={setWard}>
-          <option value="">Select ward…</option>
-          {WARD_OPTIONS.map(w => <option key={w} value={w}>{w}</option>)}
-        </select>
+        {lockWard ? (
+          <>
+            <input type="text" value={form.ward || 'Not admitted'} disabled />
+            {form.ward === 'PEDIATRIC/NICU WARD' && form.pedBedType && (
+              <input type="text" value={form.pedBedType} disabled style={{ marginTop: 6 }} />
+            )}
+            <div className="field-hint">To change ward, use Transfer, Admit Patient, or Readmit instead.</div>
+          </>
+        ) : (
+          <select value={form.ward} onChange={setWard}>
+            <option value="">Select ward…</option>
+            {WARD_OPTIONS.map(w => <option key={w} value={w}>{w}</option>)}
+          </select>
+        )}
       </div>
-      {form.ward === 'PEDIATRIC/NICU WARD' && (
+      {!lockWard && form.ward === 'PEDIATRIC/NICU WARD' && (
         <div className="field">
           <label>Bed / Cot</label>
           <select value={form.pedBedType || ''} onChange={set('pedBedType')}>

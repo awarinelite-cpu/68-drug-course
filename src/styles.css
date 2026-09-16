@@ -201,6 +201,7 @@ input[type=week], textarea, select {
 }
 label { font-weight: bold; font-size: 16px; display: block; margin-bottom: 4px; }
 .field { margin-bottom: 14px; }
+.field-hint { font-size: 13px; color: #6b7280; margin-top: 6px; }
 .error-msg { color: var(--danger); font-size: 16px; margin-top: 8px; }
 .info-msg { color: var(--primary-blue); font-size: 16px; margin-top: 8px; }
 
