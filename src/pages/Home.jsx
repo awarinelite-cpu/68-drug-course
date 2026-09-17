@@ -281,6 +281,11 @@ export default function Home() {
     // overwriting that with a stale ward from elsewhere is exactly how
     // a patient ends up admitted to the wrong ward.
     setNewForm((f) => ({
+      ...f, // keep every field not touched by the paste (armyNumber, gender,
+            // pedBedType, ...) intact — rebuilding the object from just the
+            // pasted fields dropped them to undefined and crashed Save
+            // Patient's later .trim() calls even though they were never
+            // meant to be required.
       name: fields.name || f.name,
       emr: fields.emr || f.emr,
       diagnosis: fields.diagnosis || f.diagnosis,
@@ -347,18 +352,24 @@ export default function Home() {
       return;
     }
 
-    const diagnosis = newForm.diagnosis.trim();
-    const ward = newForm.ward.trim();
+    // Every field below is optional except Name and EMR (checked above) —
+    // in particular Insurance and Army Number are never required, an
+    // empty Army Number/Insurance is exactly what makes classifyAffiliation()
+    // default a patient to Civilian. (f || '') guards each one so a form
+    // field that ends up undefined (e.g. dropped by some future paste/autofill
+    // path) can never crash the save the way it used to.
+    const diagnosis = (newForm.diagnosis || '').trim();
+    const ward = (newForm.ward || '').trim();
     const data = {
       name, emr,
       nameLower: name.toLowerCase(), emrLower: emr.toLowerCase(), nameTokens: nameSearchTokens(name),
       diagnosis, ward,
       pedBedType: ward === 'PEDIATRIC/NICU WARD' ? (newForm.pedBedType || '') : '',
-      age: newForm.age.trim(),
-      hospNo: newForm.hospNo.trim(), admissionDate: newForm.admissionDate.trim(), allergies: newForm.allergies.trim(),
-      insurance: newForm.insurance.trim(),
-      gender: newForm.gender.trim(),
-      armyNumber: newForm.armyNumber.trim(),
+      age: (newForm.age || '').trim(),
+      hospNo: (newForm.hospNo || '').trim(), admissionDate: (newForm.admissionDate || '').trim(), allergies: (newForm.allergies || '').trim(),
+      insurance: (newForm.insurance || '').trim(),
+      gender: (newForm.gender || '').trim(),
+      armyNumber: (newForm.armyNumber || '').trim(),
       updatedAt: serverTimestamp(),
       // Brand-new record, no transfer involved — tags this patient "NEW
       // PATIENT" (blue) on the ward's roster picker for 24h. See
