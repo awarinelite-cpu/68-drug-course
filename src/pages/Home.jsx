@@ -306,6 +306,13 @@ export default function Home() {
     setNewMsg('');
     if (!name || !emr) { setNewMsg('Name and EMR number are required.'); return; }
 
+    // Insurance and Army Number are deliberately NOT required here — an
+    // empty Army Number and an empty Insurance both just mean "no match"
+    // to classifyAffiliation() below, which is exactly what makes a
+    // patient Civilian by default. Never add a blocking check on either
+    // field; see patientAffiliation.js.
+    try {
+
     // A patient already in the system under this EMR number shouldn't get
     // a second, duplicate record just because a different ward's nurse is
     // registering her as if new. Look up an existing record by EMR first:
@@ -325,7 +332,17 @@ export default function Home() {
       existing = await findPatientByEmrExact(emr);
     } catch (e) { /* fall through */ }
 
-    if (existing && existing.ward && WARD_OPTIONS.includes(existing.ward) && await hasActiveAdmissionData(existing.id)) {
+    // hasActiveAdmissionData is itself best-effort here too: if it throws
+    // (e.g. a transient network/permissions error) we fall through and
+    // register normally rather than leaving the Save button looking like
+    // it did nothing.
+    let blockedByActiveAdmission = false;
+    if (existing && existing.ward && WARD_OPTIONS.includes(existing.ward)) {
+      try {
+        blockedByActiveAdmission = await hasActiveAdmissionData(existing.id);
+      } catch (e) { /* fall through */ }
+    }
+    if (blockedByActiveAdmission) {
       setNewMsg('Patient on admission in ' + existing.ward + '. You can transfer the patient to the ward if need be.');
       return;
     }
@@ -411,6 +428,13 @@ export default function Home() {
     setNewForm(EMPTY_FORM);
     clearEmrPaste();
     openPatient({ id: ref.id });
+    } catch (e) {
+      // Whatever went wrong, surface it instead of leaving Save Patient
+      // looking unresponsive with no feedback — that silence is exactly
+      // what made this bug hard to pin down.
+      console.error('createPatient failed:', e);
+      setNewMsg('Could not save patient: ' + (e && e.message ? e.message : 'unknown error') + '. Please try again.');
+    }
   }
 
   // --- Bulk upload (CSV) --------------------------------------------------
