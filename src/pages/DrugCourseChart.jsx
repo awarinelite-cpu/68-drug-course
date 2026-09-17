@@ -511,6 +511,16 @@ export default function DrugCourseChart() {
     }
     delete chartRowSnapshots.current[i];
     setEditingChartRows((e) => { const n = { ...e }; delete n[i]; return n; });
+    // Re-check drug completion right away (e.g. the 3rd dose of a
+    // "0,12,24hr" sequence just got locked in) instead of waiting for the
+    // hourly recheck/visibility-change effect — a nurse finishing this row
+    // should see Action flip to Completed immediately, not up to an hour
+    // later.
+    setDrugs((d) => {
+      const next = withDrugCompletionChecked(d, chartRows);
+      if (next !== d) scheduleSave();
+      return next;
+    });
   }
 
   function touchRowNurse(row) {
