@@ -1,6 +1,7 @@
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useNav } from "../contexts/NavContext.jsx";
 import { useAuth } from "../contexts/AuthContext.jsx";
+import { formatNameWithTitle } from "../lib/roles.js";
 
 // Falls back to the currently selected patient (stored by Home in
 // sessionStorage) so the Overview link still works from the home page, where
@@ -46,7 +47,7 @@ export default function NavDrawer() {
           <span>68 NARHY Ward Charts</span>
           <button className="gnav-drawer-close" aria-label="Close menu" onClick={closeDrawer}>&times;</button>
         </div>
-        <div className="gnav-who">{profile ? profile.name + " (" + profile.role + ")" : ""}</div>
+        <div className="gnav-who">{profile ? formatNameWithTitle(profile.name, profile.role) + " (" + profile.role + ")" : ""}</div>
         <div className="gnav-drawer-body">
           <button className="gnav-link" onClick={() => go("/")}><span className="gnav-icon">&#127968;</span>Home</button>
           <button className="gnav-link" onClick={handleSearch}><span className="gnav-icon">&#128269;</span>Search</button>

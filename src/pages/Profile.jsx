@@ -6,6 +6,7 @@ import { db } from "../firebase.js";
 import { useAuth } from "../contexts/AuthContext.jsx";
 import { useGoBack } from "../hooks/useGoBack.js";
 import { avatarMarkup } from "../lib/avatar.js";
+import { formatNameWithTitle } from "../lib/roles.js";
 import { pushIsEnabled, enablePushForThisDevice, disablePushForThisDevice, isNativePlatform } from "../lib/push.js";
 import { WARD_OPTIONS } from "../lib/drugChartHelpers.js";
 import Topbar from "../components/Topbar.jsx";
@@ -177,7 +178,7 @@ export default function Profile() {
           <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 6 }}>
             <div className="avatar" dangerouslySetInnerHTML={{ __html: avatarMarkup({ name, gender }, 56) }} />
             <div>
-              <div style={{ fontSize: 18, fontWeight: 'bold' }}>{profile.name || 'Unnamed'}</div>
+              <div style={{ fontSize: 18, fontWeight: 'bold' }}>{formatNameWithTitle(profile.name, profile.role) || 'Unnamed'}</div>
               <span style={{
                 display: 'inline-block', padding: '2px 10px', borderRadius: 999, fontSize: 11,
                 fontWeight: 'bold', textTransform: 'uppercase', background: '#eff6ff', color: '#1d4ed8', marginTop: 4
@@ -190,7 +191,7 @@ export default function Profile() {
           <div className="field">
             <label>Full Name</label>
             <div style={{ padding: 10, border: '1px solid #e5e7eb', borderRadius: 6, background: '#f9fafb', fontSize: 14, color: '#374151' }}>
-              {profile.name || 'Unnamed'}
+              {formatNameWithTitle(profile.name, profile.role) || 'Unnamed'}
             </div>
           </div>
           <div className="field"><label>Phone Number</label><input type="text" placeholder="e.g. 080XXXXXXXX" value={phone} onChange={(e) => setPhone(e.target.value)} /></div>

@@ -10,6 +10,7 @@ import { useGoBack } from "../hooks/useGoBack.js";
 import { downloadFullBackup } from "../lib/export.js";
 import { rebuildSearchIndex } from "../lib/patientDirectory.js";
 import { avatarMarkup } from "../lib/avatar.js";
+import { ROLE_OPTIONS, formatNameWithTitle } from "../lib/roles.js";
 import {
   SOUND_OPTIONS, APPEARANCE_OPTIONS, REPEAT_OPTIONS, ALL_FREQUENCIES, GLUCOSE_INTERVAL_OPTIONS,
   OVERDUE_REPEAT_OPTIONS, loadAlarmSettings, saveAlarmSettings as persistAlarmSettings
@@ -46,6 +47,7 @@ export default function Admin() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [gender, setGender] = useState('');
+  const [newAccountRole, setNewAccountRole] = useState('nurse');
   const [msg, setMsg] = useState(null);
 
   const [allPatients, setAllPatients] = useState([]);
@@ -170,13 +172,13 @@ export default function Admin() {
       const secondaryAuth = getAuth(secondaryApp);
       const cred = await createUserWithEmailAndPassword(secondaryAuth, trimmedEmail, password);
       await setDoc(doc(db, 'users', cred.user.uid), {
-        name: trimmedName, email: trimmedEmail, gender, role: 'nurse', createdAt: serverTimestamp()
+        name: trimmedName, email: trimmedEmail, gender, role: newAccountRole, createdAt: serverTimestamp()
       });
       await signOut(secondaryAuth);
       await deleteApp(secondaryApp);
 
-      setMsg({ type: 'info', text: 'Nurse account created for ' + trimmedEmail + '.' });
-      setName(''); setEmail(''); setPassword(''); setGender('');
+      setMsg({ type: 'info', text: ROLE_OPTIONS.find(r => r.value === newAccountRole)?.label + ' account created for ' + trimmedEmail + '.' });
+      setName(''); setEmail(''); setPassword(''); setGender(''); setNewAccountRole('nurse');
       loadUsers();
     } catch (e) {
       setMsg({ type: 'error', text: e.message || 'Failed to create account.' });
@@ -300,7 +302,7 @@ export default function Admin() {
 
       <div className="container">
         <div className="card-box">
-          <h3 style={{ marginTop: 0 }}>Create Nurse Account</h3>
+          <h3 style={{ marginTop: 0 }}>Create Account</h3>
           <div className="field"><label>Full Name</label><input type="text" value={name} onChange={(e) => setName(e.target.value)} /></div>
           <div className="field"><label>Email</label><input type="email" value={email} onChange={(e) => setEmail(e.target.value)} /></div>
           <div className="field"><label>Temporary Password</label><input type="text" placeholder="At least 6 characters" value={password} onChange={(e) => setPassword(e.target.value)} /></div>
@@ -312,10 +314,16 @@ export default function Admin() {
               <option value="female">Female</option>
             </select>
           </div>
+          <div className="field">
+            <label>Role</label>
+            <select value={newAccountRole} onChange={(e) => setNewAccountRole(e.target.value)}>
+              {ROLE_OPTIONS.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
+            </select>
+          </div>
           <button className="btn btn-primary" onClick={createNurse}>Create Account</button>
           {msg && <div className={msg.type === 'error' ? 'error-msg' : 'info-msg'}>{msg.text}</div>}
           <p style={{ fontSize: 12, color: '#666', marginTop: 10 }}>
-            Share this email and temporary password with the nurse directly. They can change it anytime using
+            Share this email and temporary password with them directly. They can change it anytime using
             "Forgot password?" on the login page, which sends a reset link to their own email.
           </p>
         </div>
@@ -360,7 +368,7 @@ export default function Admin() {
                 {users.map((u) => (
                   <tr key={u.id}>
                     <td dangerouslySetInnerHTML={{ __html: avatarMarkup(u, 32) }} />
-                    <td>{u.name || ''}</td><td>{u.email || ''}</td><td>{u.role || ''}</td>
+                    <td>{formatNameWithTitle(u.name, u.role)}</td><td>{u.email || ''}</td><td>{u.role || ''}</td>
                     <td>
                       {u.id !== user.uid && (u.role === 'nurse' || u.role === 'subadmin') && (
                         <button className="btn btn-secondary" style={{ padding: '4px 10px', fontSize: 11, marginRight: 6 }}
