@@ -9,6 +9,7 @@ import { useBackLock } from "../hooks/useBackLock.js";
 import { useChartBack, chartBackTarget } from "../hooks/useChartBack.js";
 import { usePatientHeader } from "../hooks/usePatientHeader.js";
 import Topbar from "../components/Topbar.jsx";
+import TimePicker from "../components/TimePicker.jsx";
 import {
   ROUTE_OPTIONS, FREQ_OPTIONS, ACTION_OPTIONS, REMARK_OPTIONS, STATUS_LABELS, WARD_OPTIONS, actionColor, defaultRow,
   dueLabelFor, withDrugCompletionChecked, computeRouteFromSno, parseBulkText,
@@ -213,6 +214,7 @@ export default function DrugCourseChart() {
   const [freqModalText, setFreqModalText] = useState('');
   const freqApplyRef = useRef(null);
 
+  const [timePickerRow, setTimePickerRow] = useState(-1);
   const [snoPickerRow, setSnoPickerRow] = useState(-1);
   const [snoPickerSelected, setSnoPickerSelected] = useState([]);
   const [snoPickerSkipped, setSnoPickerSkipped] = useState({}); // { [drugNum]: reasonText }
@@ -1099,7 +1101,13 @@ export default function DrugCourseChart() {
                         <span className="sno-picker-text">{buildSnoText(row.sno, row.skipped) || 'Select drug(s)'}</span>
                         <span className="sno-picker-caret">{'\u25BE'}</span>
                       </button></td>
-                      <td className="col-time"><input type="time" value={row.time || ''} onChange={(e) => updateChartRow(i, { time: e.target.value })} /></td>
+                      <td className="col-time">
+                        <button
+                          type="button"
+                          className={'time-picker-btn' + (row.time ? '' : ' placeholder')}
+                          onClick={() => setTimePickerRow(i)}
+                        >{row.time || 'Set time'}</button>
+                      </td>
                       <td className="col-dose"><input type="text" value={row.dose || 'AP'} onChange={(e) => updateChartRow(i, { dose: e.target.value })} /></td>
                       <td className="col-route"><input type="text" value={row.route || ''} onChange={(e) => updateChartRow(i, { route: e.target.value })} /></td>
                       <td className="col-nurse"><input type="text" readOnly value={row.nurse || ''} /></td>
@@ -1265,6 +1273,15 @@ export default function DrugCourseChart() {
             )}
           </div>
         </div>
+      )}
+
+      {timePickerRow !== -1 && (
+        <TimePicker
+          title="Set Time"
+          value={chartRows[timePickerRow]?.time || ''}
+          onChange={(val) => updateChartRow(timePickerRow, { time: val })}
+          onClose={() => setTimePickerRow(-1)}
+        />
       )}
 
       {snoPickerRow !== -1 && (
