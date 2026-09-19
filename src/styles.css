@@ -912,10 +912,22 @@ table.entries td.popup-cell { cursor:pointer; text-overflow:ellipsis; overflow:h
 .role-grid { display: flex; flex-direction: column; gap: 16px; margin-top: 16px; }
 .role-card {
   background: var(--surface-bg); border: 2px solid var(--border); border-radius: 14px; padding: 24px 20px;
-  text-align: center; cursor: pointer; font-family: inherit; box-shadow: 0 1px 4px rgba(0,0,0,0.08);
-  transition: border-color .15s, box-shadow .15s; width: 100%;
+  text-align: center; cursor: pointer; font-family: inherit;
+  transition: border-color .15s, box-shadow .15s, transform .15s; width: 100%;
+  box-shadow: 0 1px 0 rgba(255,255,255,.6) inset, 0 1px 2px rgba(16,24,40,.08), 0 6px 14px -6px rgba(16,24,40,.2), 0 16px 30px -14px rgba(16,24,40,.22);
 }
-.role-card:hover { border-color: var(--primary-blue); box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+.role-card:hover {
+  border-color: var(--primary-blue);
+  transform: translateY(-3px);
+  box-shadow: 0 1px 0 rgba(255,255,255,.6) inset, 0 2px 4px rgba(16,24,40,.1), 0 10px 20px -6px rgba(16,24,40,.26), 0 22px 38px -14px rgba(16,24,40,.26);
+}
+.role-card:active { transform: translateY(0); box-shadow: 0 1px 2px rgba(16,24,40,.15); }
+:root[data-theme="dark"] .role-card {
+  box-shadow: 0 1px 0 rgba(255,255,255,.04) inset, 0 1px 2px rgba(0,0,0,.4), 0 6px 14px -6px rgba(0,0,0,.55), 0 16px 30px -14px rgba(0,0,0,.5);
+}
+:root[data-theme="dark"] .role-card:hover {
+  box-shadow: 0 1px 0 rgba(255,255,255,.05) inset, 0 2px 4px rgba(0,0,0,.45), 0 10px 20px -6px rgba(0,0,0,.6), 0 22px 38px -14px rgba(0,0,0,.55);
+}
 .role-card .icon { font-size: 40px; display: block; margin-bottom: 10px; }
 .role-card .title { display: block; font-size: 18px; font-weight: bold; color: var(--primary-navy); letter-spacing: .5px; }
 .role-card .desc { display: block; font-size: 16px; color: var(--text-secondary); margin-top: 6px; max-width: 480px; margin-left: auto; margin-right: auto; }
