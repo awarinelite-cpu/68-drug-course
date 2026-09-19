@@ -157,12 +157,25 @@ a { text-decoration: none; color: inherit; }
   font-weight: 700; font-size: 16px; font-family: inherit;
 }
 
-.btn { border: none; border-radius: 6px; padding: 10px 16px; font-weight: bold; font-size: 16px; cursor: pointer; }
-.btn-primary { background: var(--primary-blue); color: var(--surface); }
-.btn-danger { background: var(--danger); color: var(--surface); }
-.btn-secondary { background: var(--text-secondary); color: var(--surface); }
-.btn-success { background: var(--success); color: var(--surface); }
-.btn-purple { background: var(--accent-purple); color: var(--surface); }
+.btn {
+  border: none; border-radius: 7px; padding: 10px 16px; font-weight: bold; font-size: 16px; cursor: pointer;
+  position: relative; box-shadow: var(--btn-shadow, 0 3px 0 rgba(0,0,0,.28), 0 2px 3px rgba(0,0,0,.18), 0 6px 12px -4px rgba(0,0,0,.3));
+  transform: translateY(0); transition: transform .08s ease, box-shadow .08s ease, filter .08s ease;
+}
+.btn:hover { filter: brightness(1.06); }
+.btn:active {
+  transform: translateY(2px);
+  box-shadow: var(--btn-shadow-active, 0 1px 0 rgba(0,0,0,.28), 0 1px 2px rgba(0,0,0,.18));
+}
+.btn:disabled {
+  cursor: not-allowed; filter: grayscale(.3) brightness(.9);
+  transform: translateY(0); box-shadow: 0 1px 0 rgba(0,0,0,.15);
+}
+.btn-primary  { background: var(--primary-blue);   color: var(--surface); --btn-shadow: 0 3px 0 #1e4c8f, 0 2px 3px rgba(0,0,0,.2), 0 6px 12px -4px rgba(48,112,199,.55); --btn-shadow-active: 0 1px 0 #1e4c8f, 0 1px 2px rgba(0,0,0,.2); }
+.btn-danger   { background: var(--danger);         color: var(--surface); --btn-shadow: 0 3px 0 rgba(0,0,0,.35), 0 2px 3px rgba(0,0,0,.2), 0 6px 12px -4px rgba(220,38,38,.5); --btn-shadow-active: 0 1px 0 rgba(0,0,0,.35), 0 1px 2px rgba(0,0,0,.2); }
+.btn-secondary{ background: var(--text-secondary); color: var(--surface); --btn-shadow: 0 3px 0 rgba(0,0,0,.3), 0 2px 3px rgba(0,0,0,.18), 0 6px 12px -4px rgba(0,0,0,.35); --btn-shadow-active: 0 1px 0 rgba(0,0,0,.3), 0 1px 2px rgba(0,0,0,.18); }
+.btn-success  { background: var(--success);        color: var(--surface); --btn-shadow: 0 3px 0 rgba(0,0,0,.32), 0 2px 3px rgba(0,0,0,.18), 0 6px 12px -4px rgba(22,163,74,.5); --btn-shadow-active: 0 1px 0 rgba(0,0,0,.32), 0 1px 2px rgba(0,0,0,.18); }
+.btn-purple   { background: var(--accent-purple);  color: var(--surface); --btn-shadow: 0 3px 0 rgba(0,0,0,.32), 0 2px 3px rgba(0,0,0,.18), 0 6px 12px -4px rgba(147,51,234,.5); --btn-shadow-active: 0 1px 0 rgba(0,0,0,.32), 0 1px 2px rgba(0,0,0,.18); }
 
 .container { max-width: 960px; margin: 0 auto; padding: 20px 16px; }
 
