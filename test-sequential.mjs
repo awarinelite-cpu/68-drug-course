@@ -50,4 +50,14 @@ const after = withDrugCompletionChecked(fl, [mins(35)]);                        
 assert.deepEqual(after.map(r => r.action || 'active'), ['Completed', 'Ongoing', 'Inactive']);
 // a plain STAT still completes as soon as it is charted
 assert.equal(withDrugCompletionChecked(parseBulkText('IV Ceftriaxone 1g stat'), [mins(1)])[0].action, 'Completed');
+// Route must be picked up however the order is typed
+const routeOf = (l) => parseBulkText(l).map(r => r.route);
+assert.deepEqual(routeOf('IV Pentazocine 30mg 6 hourly \u00D7 48 hours then PRN for 2/7'), ['IV', 'IV']);       // × instead of x
+assert.deepEqual(routeOf('IV Pentazocine 30mg 6 hourly for 48 hours then PRN for 2/7'), ['IV', 'IV']);        // "for" instead of x
+assert.deepEqual(routeOf('Inj. Pentazocine 30mg IV 6 hourly x 48 hours then PRN for 2/7'), ['IV', 'IV']);     // route after the dose
+assert.deepEqual(routeOf('Vit C 500mg PO OD'), ['Oral']);
+assert.deepEqual(routeOf('Paracetamol 1g IV TDS x 3/7'), ['IV']);
+assert.equal(parseBulkText('Paracetamol 1g IV TDS x 3/7')[0].name, 'Paracetamol 1g');
+assert.deepEqual(routeOf('Inj. Ceftriaxone 1g 12hrly'), ['']);                                                // Inj. alone is not oral
+assert.equal(parseBulkText('Inj. Pentazocine 30mg IV whenever needed')[0].route, 'IV');                       // unsplittable line still gets its route
 console.log('all sequential-prescription checks passed');

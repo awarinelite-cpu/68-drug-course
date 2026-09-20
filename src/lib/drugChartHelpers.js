@@ -571,6 +571,7 @@ export function buildSnoText(sno, skipped) {
 // --- Bulk Upload: paste "Drug Name Dosage Frequency Duration" lines and auto-parse ---
 const ROUTE_ALIASES = {
   tab: 'Oral', tabs: 'Oral', tavs: 'Oral', tablet: 'Oral', tablets: 'Oral',
+  po: 'Oral', 'p.o': 'Oral', 'p.o.': 'Oral', oral: 'Oral', orally: 'Oral',
   cap: 'Oral', caps: 'Oral', capsule: 'Oral', capsules: 'Oral',
   susp: 'Oral', suspension: 'Oral', syr: 'Oral', syrup: 'Oral',
   iv: 'IV', 'i.v': 'IV', 'i.v.': 'IV', ivf: 'IV',
@@ -583,6 +584,27 @@ const ROUTE_ALIASES = {
   sl: 'Sublingual', sublingual: 'Sublingual',
   neb: 'Inhalation', inhaler: 'Inhalation', inhalation: 'Inhalation'
 };
+// Route words that are safe to pick up from ANYWHERE in an order (e.g.
+// "Inj. Pentazocine 30mg IV 6 hourly"). Deliberately excludes words that can
+// be part of a drug name ("cream", "top", "sup", "pr", "neb"), which are only
+// read as a route when they open the line.
+const EXPLICIT_ROUTE_KEYS = new Set(['iv', 'i.v', 'i.v.', 'im', 'i.m', 'i.m.', 'sc', 's.c', 's.c.', 'po', 'p.o', 'p.o.', 'oral', 'orally', 'ng', 'ngt']);
+const routeKey = (t) => (t || '').toLowerCase().replace(/[,;]$/, '').replace(/\.$/, (m, off, str) => (/^[a-z]\.[a-z]$/i.test(str.slice(0, -1)) ? '.' : ''));
+const INJ_LEAD_RE = /^inj(?:ection|\.)?$/i;
+// Index of the first explicit route word after the opening token, or -1.
+function findExplicitRouteIdx(tokens) {
+  return tokens.findIndex((t, idx) => idx > 0 && EXPLICIT_ROUTE_KEYS.has(routeKey(t)) && ROUTE_ALIASES[routeKey(t)]);
+}
+// Best-effort route for a whole line we could not split (used by the
+// whole-line-in-Name fallback, so Route is still filled in).
+export function detectRouteInLine(line) {
+  let tokens = line.trim().split(/\s+/);
+  if (!tokens[0]) return '';
+  if (ROUTE_ALIASES[routeKey(tokens[0])]) return ROUTE_ALIASES[routeKey(tokens[0])];
+  if (INJ_LEAD_RE.test(tokens[0])) { tokens = tokens.slice(1); if (ROUTE_ALIASES[routeKey(tokens[0])]) return ROUTE_ALIASES[routeKey(tokens[0])]; }
+  const idx = findExplicitRouteIdx(tokens);
+  return idx === -1 ? '' : ROUTE_ALIASES[routeKey(tokens[idx])];
+}
 const FREQ_ALIASES = {
   od: 'OD', once: 'OD', daily: 'OD', dly: 'OD', bd: 'BD', tds: 'TDS', tid: 'TDS', qds: 'QDS', qid: 'QDS',
   stat: 'STAT', prn: 'PRN',
@@ -678,9 +700,22 @@ export function parseDrugLine(line) {
     route = ROUTE_ALIASES[firstKey];
     tokens = tokens.slice(1);
   } else {
-    // No route prefix in the order (e.g. "Indapamide 1.5mg dly") — nursing
-    // drug orders default to oral/tablet when a route isn't stated.
-    route = 'Oral';
+    // No route prefix. The route may still be stated further along
+    // ("Inj. Pentazocine 30mg IV 6 hourly") — pick it up and remove it from
+    // the name. "Inj."/"Injection" on its own means it isn't oral, so leave
+    // Route blank rather than guess. Only when nothing says otherwise do we
+    // default to oral/tablet ("Indapamide 1.5mg dly").
+    const injLead = INJ_LEAD_RE.test(tokens[0]);
+    if (injLead && tokens.length > 1) {
+      tokens = tokens.slice(1);
+      const k = routeKey(tokens[0]);
+      if (ROUTE_ALIASES[k]) { route = ROUTE_ALIASES[k]; tokens = tokens.slice(1); }
+    }
+    if (!route) {
+      const ri = findExplicitRouteIdx(tokens);
+      if (ri !== -1) { route = ROUTE_ALIASES[routeKey(tokens[ri])]; tokens = tokens.filter((_, idx) => idx !== ri); }
+    }
+    if (!route) route = injLead ? '' : 'Oral';
   }
 
   // Alternating-fluid orders ("...to alt with...") describe two bags as one
@@ -1097,7 +1132,8 @@ export function parseSequentialCourseLine(line) {
   const segments = raw.split(THEN_SPLIT_RE).map(x => x.trim()).filter(Boolean);
   if (segments.length < 2) return null;
 
-  const first = parseDrugLine(segments[0]);
+  // "6 hourly for 48 hours" reads the same as "6 hourly x 48 hours".
+  const first = parseDrugLine(segments[0].replace(/\bfor\s+(?=\d)/i, 'x '));
   if (!first || !first.name || !first.frequency || !isRecognizedFrequency(first.frequency)) return null;
   if (!first.duration || (parseDurationHours(first.duration) == null && parseDurationDays(first.duration) == null)) return null;
   first.duration = normalizeHourDuration(first.duration);
@@ -1201,7 +1237,8 @@ const BULLET_PREFIX_RE = /^[\s•\u2022\-*]+|^\d+[.)]\s*/;
 export function parseBulkText(text) {
   const rows = [];
   text.split('\n').forEach(rawLine => {
-    const line = rawLine.replace(BULLET_PREFIX_RE, '').trim();
+    // Word / phone keyboards turn "x" into a real multiplication sign.
+    const line = rawLine.replace(/[\u00D7\u2715\u2716]/g, 'x').replace(BULLET_PREFIX_RE, '').trim();
     if (!line) return;
     if (isHeaderLine(line)) return;
 
@@ -1221,7 +1258,7 @@ export function parseBulkText(text) {
     // only the frequency.
     rows.push({
       name: line,
-      route: '',
+      route: detectRouteInLine(line),
       frequency: extractFallbackFrequency(line),
       action: '',
       duration: '',
