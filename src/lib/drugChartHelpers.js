@@ -245,6 +245,12 @@ export function computeDueAt(d, i, chartRows) {
     const weeklyN = parseWeeklyFrequency(freq);
     if (weeklyN) intervalHours = (7 * 24) / weeklyN;
   }
+  // A STAT stage that was just activated (a later stage of a staged fluid
+  // order) is due right away, until its dose has been charted.
+  if (!intervalHours && freq.toUpperCase() === 'STAT' && d.activatedAt && !administrationTimesFor(chartRows, i).length) {
+    const at = new Date(d.activatedAt);
+    return isNaN(at) ? null : at;
+  }
   if (!intervalHours) return null; // STAT / PRN / custom text — not covered
 
   // A documented "not given" reason advances the due clock the same as an
@@ -317,6 +323,24 @@ export function parseDurationHours(text) {
   return null;
 }
 
+// --- Minute-based durations (e.g. "30 mins") ---------------------------
+// Rate-controlled IV runs are timed in minutes ("500mls over 30 mins").
+// Returned as a separate parser so completion math can use minute precision.
+export function parseDurationMinutes(text) {
+  if (!text) return null;
+  const m = text.trim().toLowerCase().match(/^(\d+)\s*(mins?|minutes?)$/);
+  return m ? parseInt(m[1], 10) : null;
+}
+
+// How long a timed run lasts in ms, if the duration is given in minutes or
+// hours — otherwise null (day/week/month durations aren't a "run time").
+export function durationRunMs(text) {
+  const mins = parseDurationMinutes(text);
+  if (mins != null) return mins * 60000;
+  const hrs = parseDurationHours(text);
+  return hrs != null ? hrs * 3600000 : null;
+}
+
 // If a drug has no recorded start date yet, fall back to the earliest date
 // it was actually administered on the chart below (matched by Drug S/N).
 function inferStartDateForDrug(chartRows, index) {
@@ -337,6 +361,19 @@ function inferStartDateForDrug(chartRows, index) {
 // a NEW drugs array if anything changed, or the same reference if not (so
 // callers can skip a re-render/save when nothing changed).
 export function withDrugCompletionChecked(drugs, chartRows) {
+  // Repeat until nothing changes: completing one stage of a chained order
+  // activates the next, and a chart reopened after a long gap can have
+  // several stages already finished (each pass finishes at most one link).
+  let current = drugs;
+  for (let pass = 0; pass < 6; pass++) {
+    const next = completionPass(current, chartRows);
+    if (next === current) break;
+    current = next;
+  }
+  return current;
+}
+
+function completionPass(drugs, chartRows) {
   const now = new Date();
   const today = new Date(); today.setHours(0, 0, 0, 0);
   let changed = false;
@@ -345,8 +382,15 @@ export function withDrugCompletionChecked(drugs, chartRows) {
 
     // STAT: a single one-off dose. As soon as it's recorded as given on the
     // chart below, auto-flag the drug Completed.
+    // A STAT with a run time ("STAT x 30 mins", an infusion given over a set
+    // time) only completes once that run has finished, counted from the
+    // recorded dose — so whatever is waiting on it starts at the right moment.
     if ((d.frequency || '').trim().toUpperCase() === 'STAT') {
-      if (!locked && administrationTimesFor(chartRows, i).length >= 1) { changed = true; return { ...d, action: 'Completed' }; }
+      const given = locked ? [] : administrationTimesFor(chartRows, i);
+      if (given.length >= 1) {
+        const runMs = durationRunMs(d.duration);
+        if (runMs == null || now.getTime() >= given[0].getTime() + runMs) { changed = true; return { ...d, action: 'Completed' }; }
+      }
       return d;
     }
 
@@ -358,7 +402,8 @@ export function withDrugCompletionChecked(drugs, chartRows) {
       return d;
     }
 
-    const hours = parseDurationHours(d.duration);
+    const mins = parseDurationMinutes(d.duration);
+    const hours = mins != null ? mins / 60 : parseDurationHours(d.duration);
     const days = hours == null ? parseDurationDays(d.duration) : null;
     if (hours == null && days == null) return d;
     if (locked) return d;
@@ -378,7 +423,7 @@ export function withDrugCompletionChecked(drugs, chartRows) {
       else if (d.activatedAt) { const at = new Date(d.activatedAt); if (!isNaN(at)) startDate = at; }
     }
     const endDate = new Date(startDate);
-    if (hours != null) endDate.setHours(endDate.getHours() + hours);
+    if (hours != null) endDate.setTime(endDate.getTime() + hours * 3600000);
     else endDate.setDate(endDate.getDate() + days);
 
     const needsStartDate = !d.startDate;
@@ -990,7 +1035,24 @@ export function parseStagedFluidLine(line) {
   const baseDosage = tokens[dosageIdx];
   const firstRemainder = tokens.slice(dosageIdx + 1).join(' ');
 
-  return segments.map((seg, i) => parseFluidStage(i === 0 ? firstRemainder : seg, baseDrugName, baseDosage));
+  const rows = segments.map((seg, i) => parseFluidStage(i === 0 ? firstRemainder : seg, baseDrugName, baseDosage));
+
+  // Chain the stages: stage 1 runs now; every later stage stays Inactive
+  // ("To be commenced when <previous stage> is completed") and is activated
+  // by activateFollowOnDrugs once the stage before it is Completed.
+  // Only chained if every stage is a recognized frequency, so a line that
+  // falls back to the whole-line-in-Name path is never half-chained.
+  if (rows.every(r => isRecognizedFrequency(r.frequency))) {
+    rows.forEach((row, i) => {
+      if (i < rows.length - 1) row.id = newDrugId();
+      if (i === 0) return;
+      row.action = 'Inactive';
+      row.startsAfterId = rows[i - 1].id;
+      const prevText = i === 1 ? segments[0] : 'IV ' + baseDrugName + ' ' + segments[i - 1];
+      row.actionNote = 'To be commenced when ' + prevText + ' is completed';
+    });
+  }
+  return rows;
 }
 
 // --- Sequential courses: "X <freq> x <duration> then Y" ------------------

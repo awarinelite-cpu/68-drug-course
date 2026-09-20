@@ -29,7 +29,6 @@ for (const [line, a, b] of cases) {
 }
 
 // Lines that must NOT be treated as sequential courses
-assert.equal(parseBulkText('IVF normal saline 500mls fast over 30 mins then 500ml over 1 hr, then 500mls 4hrly').length, 3);
 assert.equal(parseBulkText('Artesunate 120mg stat, then 8hrly 24hrs').length, 1);
 
 // Auto-completion: 48h course whose first dose was 49h ago completes and starts the follow-on
@@ -39,4 +38,16 @@ const rows = [{ date: `${t.getFullYear()}-${p(t.getMonth() + 1)}-${p(t.getDate()
 const out = withDrugCompletionChecked([a, b], rows);
 assert.equal(out[0].action, 'Completed');
 assert.equal(out[1].action, 'Ongoing');
+// Staged IV fluid: 3 rows, chained (stage 1 active, 2 and 3 Inactive), minute durations time the run
+const fl = parseBulkText('IVF normal saline 500mls fast over 30 mins then 500ml over 1 hr, then 500mls 4hrly');
+assert.equal(fl.length, 3);
+assert.deepEqual(fl.map(r => r.action || 'active'), ['active', 'Inactive', 'Inactive']);
+assert.equal(fl[1].startsAfterId, fl[0].id);
+assert.equal(fl[2].startsAfterId, fl[1].id);
+const mins = (m) => { const t = new Date(Date.now() - m * 60000); return { date: `${t.getFullYear()}-${p(t.getMonth() + 1)}-${p(t.getDate())}`, time: `${p(t.getHours())}:${p(t.getMinutes())}`, sno: '1', skipped: [] }; };
+assert.equal(withDrugCompletionChecked(fl, [mins(10)])[0].action || 'active', 'active');      // still running
+const after = withDrugCompletionChecked(fl, [mins(35)]);                                       // 30 min run finished
+assert.deepEqual(after.map(r => r.action || 'active'), ['Completed', 'Ongoing', 'Inactive']);
+// a plain STAT still completes as soon as it is charted
+assert.equal(withDrugCompletionChecked(parseBulkText('IV Ceftriaxone 1g stat'), [mins(1)])[0].action, 'Completed');
 console.log('all sequential-prescription checks passed');
