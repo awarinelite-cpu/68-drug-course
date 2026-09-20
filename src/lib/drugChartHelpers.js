@@ -1,7 +1,7 @@
 import { formatTime } from './time-format.js';
 
 export const ROUTE_OPTIONS = ['', 'Oral', 'IV', 'IM', 'SC', 'Sublingual', 'Topical', 'Rectal', 'Suppository', 'Inhalation', 'NG Tube', 'Other'];
-export const FREQ_OPTIONS = ['', 'OD', 'Daily', 'Mane', 'Nocte', 'AM', 'PM', 'HS', 'BD', 'TDS', 'Premeal TDS', 'QDS', 'QOD', 'STAT', 'STAT then Q4H', 'STAT then Q6H', 'STAT then Q8H', 'STAT then Q12H', 'PRN', 'Q4H', 'Q6H', '8hrly', 'Q8H', '12hrly', 'Q12H', 'Weekly', 'Twice Weekly', 'Thrice Weekly', '0,12,24hr', 'Other'];
+export const FREQ_OPTIONS = ['', 'OD', 'Daily', 'Mane', 'Nocte', 'AM', 'PM', 'HS', 'BD', 'TDS', 'Premeal TDS', 'QDS', 'QOD', 'STAT', 'STAT then Q4H', 'STAT then Q6H', 'STAT then Q8H', 'STAT then Q12H', 'PRN', 'Q4H', 'Q6H', '8hrly', 'Q8H', '12hrly', 'Q12H', 'Weekly', 'Twice Weekly', 'Thrice Weekly', '0,12,24hr'];
 export const ACTION_OPTIONS = ['', 'Ongoing', 'Completed', 'Discontinued', 'Withheld', 'Other'];
 export const REMARK_OPTIONS = ['', 'Given', 'Not Given'];
 export const STATUS_LABELS = { admitted: 'Admit Patient', referred: 'Referred to another hospital', transferred: 'Transferred to another ward', discharged: 'Discharged', died: 'Death', dama: 'Discharged Against Medical Advice (DAMA)', absconded: 'Absconded' };
@@ -929,6 +929,12 @@ function parseFluidStage(text, baseDrugName, baseDosage) {
 export function parseStagedFluidLine(line) {
   const raw = line.trim();
   if (!raw || !/\bthen\b/i.test(raw)) return null;
+  // A "then switch to .../then convert to ..." line is a mid-course change
+  // to a different drug/route (e.g. IV to oral) once oral intake resumes —
+  // not a fluid run staged at different rates. Leave it for parseDrugLine
+  // (and, if that can't cleanly split it, the "not on the system" fallback
+  // in parseBulkText) instead of mis-splitting it into fluid-stage rows.
+  if (/\b(switch|convert)\b/i.test(raw)) return null;
   const segments = raw.split(THEN_SPLIT_RE).map(s => s.trim()).filter(Boolean);
   if (segments.length < 2) return null;
 
@@ -946,15 +952,96 @@ export function parseStagedFluidLine(line) {
   return segments.map((seg, i) => parseFluidStage(i === 0 ? firstRemainder : seg, baseDrugName, baseDosage));
 }
 
+// --- "Not on the system": whole-line fallback for prescriptions the ------
+// smart parser above can't cleanly split (multi-step regimens, conditional
+// instructions, dosing caveats, etc.) — these used to leave Frequency as
+// unrecognized free text, which the UI showed as the "Other" custom-entry
+// option. Now that "Other" is gone from the Frequency dropdown, any line
+// that doesn't resolve to one of FREQ_OPTIONS is instead kept WHOLE in the
+// Name column, with only the one frequency word/phrase the system does
+// recognize pulled out into Frequency.
+function isRecognizedFrequency(freq) {
+  if (!freq) return true;
+  if (FREQ_OPTIONS.includes(freq)) return true;
+  if (/^STAT then Q\d+H$/i.test(freq)) return true; // any hour count, not just the 4 listed
+  if (/^\d+x Weekly$/i.test(freq)) return true; // weeklyFrequencyLabel() for n > 3
+  return false;
+}
+
+// Earliest-occurring recognized frequency word/phrase anywhere in the raw
+// line, normalized to its canonical Frequency-column form. Scans the whole
+// line (not just a trailing token) since the frequency in a hard-to-parse
+// line can sit in the middle, e.g. "...30mg 6 hourly x 48 hours then PRN
+// for 2/7" — "6 hourly" (the drug's actual working frequency) comes before
+// the later "PRN" fallback-dose mention, so leftmost-match picks it.
+const FREQ_SCAN_PATTERNS = [
+  { re: /\bstat[,\s]*then\s+q?(\d+)\s*(?:hrly|hourly|h)\b/i, toFreq: (m) => 'STAT then Q' + m[1] + 'H' },
+  { re: /\b(\d+)\s*(?:hrly|hourly)\b/i, toFreq: (m) => 'Q' + m[1] + 'H' },
+  { re: /\b0[,\s]*12[,\s]*24\s*hrs?\b/i, toFreq: () => '0,12,24hr' },
+  { re: /\bprn\b/i, toFreq: () => 'PRN' },
+  { re: /\bstat\b/i, toFreq: () => 'STAT' },
+  { re: /\bpremeal\s*tds\b/i, toFreq: () => 'Premeal TDS' },
+  { re: /\btds\b/i, toFreq: () => 'TDS' },
+  { re: /\bqds\b/i, toFreq: () => 'QDS' },
+  { re: /\bqod\b/i, toFreq: () => 'QOD' },
+  { re: /\bbd\b/i, toFreq: () => 'BD' },
+  { re: /\bod\b/i, toFreq: () => 'OD' },
+  { re: /\bdaily\b/i, toFreq: () => 'OD' },
+  { re: /\bmane\b/i, toFreq: () => 'Mane' },
+  { re: /\bnocte\b/i, toFreq: () => 'Nocte' },
+  { re: /\bhs\b/i, toFreq: () => 'HS' },
+  { re: /\bthrice\s*weekly\b/i, toFreq: () => 'Thrice Weekly' },
+  { re: /\btwice\s*weekly\b/i, toFreq: () => 'Twice Weekly' },
+  { re: /\bweekly\b/i, toFreq: () => 'Weekly' },
+];
+function extractFallbackFrequency(raw) {
+  let best = null;
+  FREQ_SCAN_PATTERNS.forEach(p => {
+    const m = raw.match(p.re);
+    if (m && (best === null || m.index < best.index)) best = { index: m.index, value: p.toFreq(m) };
+  });
+  return best ? best.value : '';
+}
+
+// Section headers and lead-in lines that sometimes ride along in a pasted
+// order set ("ANALGESIA:", "OTHERS:", "Following commencement of oral
+// intake:") — organizational text, not a drug order, so skipped rather
+// than becoming a bogus row. Recognized as a line ending in a colon with
+// no digits anywhere in it (a real order always carries a dose, duration,
+// or numbered frequency).
+const HEADER_LINE_RE = /:\s*$/;
+function isHeaderLine(raw) { return HEADER_LINE_RE.test(raw) && !/\d/.test(raw); }
+
+// A leading bullet/dash marker ("•", "-", "*", "1.") on a pasted line —
+// stripped before parsing so it isn't mistaken for the drug's route/name.
+const BULLET_PREFIX_RE = /^[\s•\u2022\-*]+|^\d+[.)]\s*/;
+
 export function parseBulkText(text) {
   const rows = [];
-  text.split('\n').forEach(line => {
+  text.split('\n').forEach(rawLine => {
+    const line = rawLine.replace(BULLET_PREFIX_RE, '').trim();
+    if (!line) return;
+    if (isHeaderLine(line)) return;
+
     const splitDose = parseSplitDoseLine(line);
-    if (splitDose) { rows.push(...splitDose); return; }
+    if (splitDose && splitDose.every(r => isRecognizedFrequency(r.frequency))) { rows.push(...splitDose); return; }
     const staged = parseStagedFluidLine(line);
-    if (staged) { rows.push(...staged); return; }
+    if (staged && staged.every(r => isRecognizedFrequency(r.frequency))) { rows.push(...staged); return; }
     const parsed = parseDrugLine(line);
-    if (parsed) rows.push(parsed);
+    if (parsed && isRecognizedFrequency(parsed.frequency)) { rows.push(parsed); return; }
+    if (NON_DRUG_LINE_RE.test(line)) return;
+
+    // Nothing above resolved to a frequency the system recognizes — keep
+    // the whole prescription as typed in the Name column and pull out
+    // only the frequency.
+    rows.push({
+      name: line,
+      route: '',
+      frequency: extractFallbackFrequency(line),
+      action: '',
+      duration: '',
+      createdAt: new Date().toISOString()
+    });
   });
   return rows;
 }

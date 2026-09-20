@@ -35,16 +35,19 @@ function rowsFromDoc(dataRows) {
     : blankChartRows();
 }
 
-// --- Frequency <select> + "Other" custom-text control ---------------------
+// --- Frequency <select>, with a custom-text display/edit for any frequency
+// a nurse's bulk-paste order didn't resolve to one of FREQ_OPTIONS (e.g. a
+// compound/conditional prescription the parser kept whole in the Name
+// column) — no longer reachable by picking "Other" from the list, only by
+// clicking the custom text itself to edit it.
 function FreqCell({ drug, onChange, openFreqModal }) {
   const isCustom = !!drug.frequency && !FREQ_OPTIONS.includes(drug.frequency);
   function handlePick(val) {
-    if (val === 'Other') openFreqModal(isCustom ? drug.frequency : '', (text) => onChange(text, autoDurationForFrequency(text)));
-    else onChange(val, autoDurationForFrequency(val));
+    onChange(val, autoDurationForFrequency(val));
   }
   return (
     <>
-      <select value={isCustom ? 'Other' : (drug.frequency || '')} onChange={(e) => handlePick(e.target.value)}>
+      <select value={isCustom ? '' : (drug.frequency || '')} onChange={(e) => handlePick(e.target.value)}>
         {FREQ_OPTIONS.map(opt => <option key={opt} value={opt}>{opt || '—'}</option>)}
       </select>
       {isCustom && (
