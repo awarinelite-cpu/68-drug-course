@@ -12,7 +12,7 @@ import Topbar from "../components/Topbar.jsx";
 import TimePicker from "../components/TimePicker.jsx";
 import {
   ROUTE_OPTIONS, FREQ_OPTIONS, ACTION_OPTIONS, REMARK_OPTIONS, STATUS_LABELS, WARD_OPTIONS, actionColor, defaultRow,
-  dueLabelFor, withDrugCompletionChecked, computeRouteFromSno, parseBulkText,
+  dueLabelFor, withDrugCompletionChecked, activateFollowOnDrugs, computeRouteFromSno, parseBulkText,
   parseDoseSequence, administrationTimesFor, flaggedDrugRefs, flaggedDrugMessage, diffFields,
   autoDurationForFrequency, buildSnoSegments, buildSnoText, abbreviateReason,
   parseWeeklyFrequency, weeklyDosesGivenThisWeek
@@ -456,7 +456,18 @@ export default function DrugCourseChart() {
   }
 
   function updateDrug(i, patch) {
-    setDrugs((d) => d.map((row, idx) => idx === i ? { ...row, ...patch } : row));
+    setDrugs((d) => {
+      let next = d.map((row, idx) => idx === i ? { ...row, ...patch } : row);
+      if (patch.action !== undefined) {
+        // A nurse manually moving a follow-on drug off "Inactive" cuts its
+        // link to the drug it was waiting on; and marking a drug Completed
+        // (by hand) starts whatever was waiting on it, same as the automatic
+        // completion check does.
+        next = next.map((row, idx) => (idx === i && patch.action !== 'Inactive' && row.startsAfterId) ? { ...row, startsAfterId: '', actionNote: '' } : row);
+        next = activateFollowOnDrugs(next);
+      }
+      return next;
+    });
     scheduleSave();
   }
 
@@ -1028,6 +1039,7 @@ export default function DrugCourseChart() {
                             style={d.action ? { background: actionColor(d.action), color: '#fff', fontWeight: 'bold' } : {}}>
                             {ACTION_OPTIONS.map(opt => <option key={opt} value={opt}>{opt || '—'}</option>)}
                           </select>
+                          {d.action === 'Inactive' && d.actionNote && <div style={{ fontSize: 10, lineHeight: 1.25, color: '#6d28d9', marginTop: 3, fontWeight: 'normal' }}>{d.actionNote}</div>}
                         </td>
                         <td>
                           <input type="text" placeholder="e.g. 3/7 or 5 days" value={d.duration || ''} onChange={(e) => {
@@ -1053,7 +1065,7 @@ export default function DrugCourseChart() {
                         <DoseSequenceBadges drug={d} index={i} chartRows={chartRows} />
                         <WeeklyDoseBadges drug={d} index={i} chartRows={chartRows} now={now} />
                       </td>
-                      <td>{d.action ? <span style={{ display: 'inline-block', padding: '2px 8px', borderRadius: 10, color: '#fff', fontSize: 11, fontWeight: 'bold', background: actionColor(d.action) }}>{d.action}</span> : '—'}</td>
+                      <td>{d.action ? <span style={{ display: 'inline-block', padding: '2px 8px', borderRadius: 10, color: '#fff', fontSize: 11, fontWeight: 'bold', background: actionColor(d.action) }}>{d.action}</span> : '—'}{d.action === 'Inactive' && d.actionNote && <div style={{ fontSize: 10, lineHeight: 1.25, color: '#6d28d9', marginTop: 3, fontWeight: 'normal' }}>{d.actionNote}</div>}</td>
                       <td>{d.duration || '—'}</td>
                       <td className="no-print" style={due.overdue ? { color: '#dc2626', fontWeight: 'bold' } : due.skippedPending ? { color: '#d97706', fontWeight: 'bold' } : {}} title={due.skippedPending ? 'Last due dose was documented as not given' : undefined}>{due.text}</td>
                       {showPencil && <td className="no-print"></td>}
@@ -1412,7 +1424,7 @@ export default function DrugCourseChart() {
                       <tbody>
                         {bulkParsed.map((d, i) => (
                           <tr key={i}>
-                            <td style={{ border: '1px solid #000', padding: 3 }}><input type="text" style={{ width: '100%', border: 'none', fontSize: 12 }} value={d.name} onChange={(e) => updateBulkRow(i, { name: e.target.value })} /></td>
+                            <td style={{ border: '1px solid #000', padding: 3 }}><input type="text" style={{ width: '100%', border: 'none', fontSize: 12 }} value={d.name} onChange={(e) => updateBulkRow(i, { name: e.target.value })} />{d.action === 'Inactive' && d.actionNote && <div style={{ fontSize: 10, lineHeight: 1.25, color: '#6d28d9', marginTop: 3, fontWeight: 'normal' }}>Inactive — {d.actionNote}</div>}</td>
                             <td style={{ border: '1px solid #000', padding: 3 }}>
                               <select style={{ fontSize: 12 }} value={d.route || ''} onChange={(e) => updateBulkRow(i, { route: e.target.value })}>
                                 {ROUTE_OPTIONS.map(opt => <option key={opt} value={opt}>{opt || '—'}</option>)}

@@ -265,7 +265,7 @@ function addDrugChartSection(pdf, y, dc) {
   pdf.text('Admitted: ' + (dc.f_admission || '-') + '     Discharge Date: ' + (dc.f_discharge || '-'), PAGE_LEFT, y + 12);
   y += 26;
 
-  const drugRows = (dc.drugs || []).filter(d => d && d.name).map(d => [d.name, d.route, d.frequency, d.action, d.duration]);
+  const drugRows = (dc.drugs || []).filter(d => d && d.name).map(d => [d.name, d.route, d.frequency, (d.action === 'Inactive' && d.actionNote) ? d.action + ' - ' + d.actionNote : d.action, d.duration]);
   y = addTable(pdf, y, ['Drug', 'Route', 'Frequency', 'Action', 'Duration'], drugRows);
 
   const adminRows = (dc.rows || []).filter(r => r && (r.date || r.sno || r.time)).map(r => [r.date, r.sno, r.time, r.dose, r.route, r.nurse, r.remark]);

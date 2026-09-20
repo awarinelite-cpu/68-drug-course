@@ -2,7 +2,9 @@ import { formatTime } from './time-format.js';
 
 export const ROUTE_OPTIONS = ['', 'Oral', 'IV', 'IM', 'SC', 'Sublingual', 'Topical', 'Rectal', 'Suppository', 'Inhalation', 'NG Tube', 'Other'];
 export const FREQ_OPTIONS = ['', 'OD', 'Daily', 'Mane', 'Nocte', 'AM', 'PM', 'HS', 'BD', 'TDS', 'Premeal TDS', 'QDS', 'QOD', 'STAT', 'STAT then Q4H', 'STAT then Q6H', 'STAT then Q8H', 'STAT then Q12H', 'PRN', 'Q4H', 'Q6H', '8hrly', 'Q8H', '12hrly', 'Q12H', 'Weekly', 'Twice Weekly', 'Thrice Weekly', '0,12,24hr'];
-export const ACTION_OPTIONS = ['', 'Ongoing', 'Completed', 'Discontinued', 'Withheld', 'Other'];
+// 'Inactive' = ordered but not started yet — used for the 2nd half of a "X then Y" order
+// (see parseSequentialCourseLine) until the 1st half is Completed.
+export const ACTION_OPTIONS = ['', 'Ongoing', 'Inactive', 'Completed', 'Discontinued', 'Withheld', 'Other'];
 export const REMARK_OPTIONS = ['', 'Given', 'Not Given'];
 export const STATUS_LABELS = { admitted: 'Admit Patient', referred: 'Referred to another hospital', transferred: 'Transferred to another ward', discharged: 'Discharged', died: 'Death', dama: 'Discharged Against Medical Advice (DAMA)', absconded: 'Absconded' };
 export const WARD_OPTIONS = [
@@ -28,7 +30,7 @@ export const AE_WARD_LABEL = 'ACCIDENT & EMERGENCY';
 // guessed at.
 export const PED_BED_TYPES = ['Bed', 'Cot'];
 
-const ACTION_COLORS = { Ongoing: '#2563eb', Completed: '#16a34a', Discontinued: '#dc2626', Withheld: '#d97706', Other: '#6b7280' };
+const ACTION_COLORS = { Ongoing: '#2563eb', Inactive: '#7c3aed', Completed: '#16a34a', Discontinued: '#dc2626', Withheld: '#d97706', Other: '#6b7280' };
 export function actionColor(action) { return ACTION_COLORS[action] || '#9ca3af'; }
 
 export function defaultRow() {
@@ -226,6 +228,7 @@ export function computeDueAt(d, i, chartRows) {
     const givenCount = administrationTimesFor(chartRows, i).length;
     if (givenCount >= seq.length) return null; // sequence complete
     if (givenCount === 0) {
+      if (d.activatedAt) { const at = new Date(d.activatedAt); if (!isNaN(at)) return at; }
       if (d.startDate) return toLocalDate(d.startDate, '00:00');
       if (d.createdAt) { const dt = new Date(d.createdAt); return isNaN(dt) ? null : dt; }
       return null;
@@ -249,6 +252,9 @@ export function computeDueAt(d, i, chartRows) {
   // for a dose the nurse already explicitly accounted for.
   const lastEvent = lastDrugEventFor(chartRows, i);
   if (lastEvent) return new Date(lastEvent.time.getTime() + intervalHours * 3600 * 1000);
+  // A follow-on drug (the 2nd half of an "X then Y" order) becomes due the
+  // moment the 1st half completes, not at midnight of that day.
+  if (d.activatedAt) { const at = new Date(d.activatedAt); if (!isNaN(at)) return at; }
   if (d.startDate) return toLocalDate(d.startDate, '00:00');
   if (d.createdAt) { const dt = new Date(d.createdAt); return isNaN(dt) ? null : dt; }
   return null;
@@ -335,7 +341,7 @@ export function withDrugCompletionChecked(drugs, chartRows) {
   const today = new Date(); today.setHours(0, 0, 0, 0);
   let changed = false;
   const next = drugs.map((d, i) => {
-    const locked = ['Discontinued', 'Withheld', 'Other', 'Completed'].includes(d.action);
+    const locked = ['Discontinued', 'Withheld', 'Other', 'Completed', 'Inactive'].includes(d.action);
 
     // STAT: a single one-off dose. As soon as it's recorded as given on the
     // chart below, auto-flag the drug Completed.
@@ -360,8 +366,17 @@ export function withDrugCompletionChecked(drugs, chartRows) {
     let start = d.startDate || inferStartDateForDrug(chartRows, i);
     if (!start) return d;
 
-    const startDate = new Date(start + 'T00:00:00');
+    let startDate = new Date(start + 'T00:00:00');
     if (isNaN(startDate)) return d;
+    // An hour-based course ("x 48 hours") runs from the moment it actually
+    // began — the first recorded dose, or the moment a follow-on drug was
+    // activated — not from midnight of its start date, otherwise a course
+    // started at 14:00 would be flagged Completed ~14 hours early.
+    if (hours != null) {
+      const firstDose = administrationTimesFor(chartRows, i)[0];
+      if (firstDose) startDate = firstDose;
+      else if (d.activatedAt) { const at = new Date(d.activatedAt); if (!isNaN(at)) startDate = at; }
+    }
     const endDate = new Date(startDate);
     if (hours != null) endDate.setHours(endDate.getHours() + hours);
     else endDate.setDate(endDate.getDate() + days);
@@ -374,6 +389,31 @@ export function withDrugCompletionChecked(drugs, chartRows) {
 
     changed = true;
     return { ...d, startDate: start, ...(needsComplete ? { action: 'Completed' } : {}) };
+  });
+  return activateFollowOnDrugs(changed ? next : drugs);
+}
+
+// --- Follow-on drugs: "X then Y" orders split into two rows -------------
+// The 2nd row of a split order starts Inactive with `startsAfterId` pointing
+// at the 1st row's `id`. The moment that 1st row is Completed (auto, when its
+// duration runs out, or set by a nurse) the follow-on flips to Ongoing so it
+// can be charted and starts alerting. Discontinued/Withheld/Other on the 1st
+// row deliberately do NOT activate it — the course wasn't completed. Returns
+// the same array reference if nothing changed.
+function localDateStr(d) {
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+}
+export function activateFollowOnDrugs(drugs) {
+  const byId = new Map();
+  drugs.forEach(d => { if (d && d.id) byId.set(d.id, d); });
+  let changed = false;
+  const next = drugs.map(d => {
+    if (!d || d.action !== 'Inactive' || !d.startsAfterId) return d;
+    const pred = byId.get(d.startsAfterId);
+    if (!pred || pred.action !== 'Completed') return d;
+    changed = true;
+    const now = new Date();
+    return { ...d, action: 'Ongoing', startDate: localDateStr(now), activatedAt: now.toISOString(), startsAfterId: '', actionNote: '' };
   });
   return changed ? next : drugs;
 }
@@ -404,15 +444,16 @@ export function flaggedDrugRefs(snoText, drugs) {
     seen.add(n);
     const d = drugs[parseInt(n, 10) - 1];
     if (d && d.action && d.action !== 'Ongoing') {
-      blocked.push({ num: n, name: d.name || '', action: d.action });
+      blocked.push({ num: n, name: d.name || '', action: d.action, note: d.actionNote || '' });
     }
   });
   return blocked;
 }
 
 export function flaggedDrugMessage(blocked) {
-  return blocked.map(b =>
-    'Drug ' + b.num + (b.name ? ' (' + b.name + ')' : '') + ' has been marked "' + b.action + '" and cannot be added as served medication.'
+  return blocked.map(b => b.action === 'Inactive'
+    ? 'Drug ' + b.num + (b.name ? ' (' + b.name + ')' : '') + ' is not active yet' + (b.note ? ' — ' + b.note.charAt(0).toLowerCase() + b.note.slice(1) : '') + ', so it cannot be added as served medication.'
+    : 'Drug ' + b.num + (b.name ? ' (' + b.name + ')' : '') + ' has been marked "' + b.action + '" and cannot be added as served medication.'
   ).join('\n');
 }
 
@@ -952,6 +993,85 @@ export function parseStagedFluidLine(line) {
   return segments.map((seg, i) => parseFluidStage(i === 0 ? firstRemainder : seg, baseDrugName, baseDosage));
 }
 
+// --- Sequential courses: "X <freq> x <duration> then Y" ------------------
+// A doctor often writes a step-down as ONE line, e.g.
+//   IV Pentazocine 30mg 6 hourly x 48 hours then PRN for 2/7
+//   IV PCM 900mg 8 hourly x 72 hours then switch to Tabs PCM 1g TDS
+//   IM Diclofenac 75mg 12 hourly x 72 hours then switch to Tabs Arthrotec 75mg BD
+// These are really separate orders, so each is split into its own row. The
+// FIRST row is a normal Ongoing drug. Every later row is created Inactive,
+// with `startsAfterId` pointing at the row before it and `actionNote`
+// saying so; activateFollowOnDrugs() flips it to Ongoing the moment that
+// row is Completed. Only fires when the 1st part has a recognized frequency
+// AND a duration (otherwise we couldn't know when it completes), so staged
+// fluid orders ("over 30 mins then ...") and "STAT then Q8H" lines are left
+// to the parsers below.
+export function newDrugId() {
+  return 'd' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+}
+
+const FOLLOW_ON_LEAD_RE = /^(?:switch(?:ed)?|convert(?:ed)?|change(?:d)?)\s+(?:over\s+)?to\s+/i;
+
+// True if a follow-on segment starts with a frequency (e.g. "PRN for 2/7",
+// "BD x 3/7", "8 hrly") rather than a drug — i.e. same drug, new schedule.
+function startsWithFrequency(seg) {
+  const toks = seg.trim().split(/\s+/).map(t => t.replace(/[.,]$/, '').toLowerCase());
+  const k0 = toks[0] || '', k1 = toks[1] || '';
+  return !!(FREQ_ALIASES[k0] || FREQ_ALIASES[k0 + k1] || parseWeeklyFrequency(k0 + ' ' + k1));
+}
+
+function normalizeHourDuration(dur) {
+  const h = parseDurationHours(dur);
+  return h != null ? h + 'hrs' : dur;
+}
+
+function describeCourse(row) {
+  return [row.route, row.name, row.frequency].filter(Boolean).join(' ') + (row.duration ? ' x ' + row.duration : '');
+}
+
+export function parseSequentialCourseLine(line) {
+  const raw = line.trim();
+  if (!raw || !/\bthen\b/i.test(raw)) return null;
+  const segments = raw.split(THEN_SPLIT_RE).map(x => x.trim()).filter(Boolean);
+  if (segments.length < 2) return null;
+
+  const first = parseDrugLine(segments[0]);
+  if (!first || !first.name || !first.frequency || !isRecognizedFrequency(first.frequency)) return null;
+  if (!first.duration || (parseDurationHours(first.duration) == null && parseDurationDays(first.duration) == null)) return null;
+  first.duration = normalizeHourDuration(first.duration);
+  first.id = newDrugId();
+
+  const rows = [first];
+  const routeAlias = (route) => Object.keys(ROUTE_ALIASES).find(k => ROUTE_ALIASES[k] === route) || 'tab';
+
+  for (let i = 1; i < segments.length; i++) {
+    const prev = rows[i - 1];
+    let seg = segments[i].replace(FOLLOW_ON_LEAD_RE, '').replace(/\bfor\b/gi, ' ').replace(/\s+/g, ' ').trim();
+    if (!seg) return null;
+    let row;
+    if (startsWithFrequency(seg)) {
+      // Same drug, new schedule: borrow its name+dose and route, and let
+      // parseDrugLine read just the frequency/duration off the segment.
+      const p = parseDrugLine('tab X 1mg ' + seg);
+      if (!p || !p.frequency) return null;
+      row = { name: prev.name, route: prev.route, frequency: p.frequency, action: '', duration: p.duration, createdAt: new Date().toISOString() };
+    } else {
+      // A different drug/route ("switch to Tabs PCM 1g TDS") — parse it whole.
+      row = parseDrugLine(seg);
+      if (!row || !row.name) return null;
+    }
+    if (!isRecognizedFrequency(row.frequency)) return null;
+    row.duration = normalizeHourDuration(row.duration);
+    const priorText = i === 1 ? segments[0] : describeCourse(prev);
+    row.action = 'Inactive';
+    row.actionNote = 'To be commenced when ' + priorText + ' is completed';
+    row.startsAfterId = prev.id;
+    if (i < segments.length - 1) row.id = newDrugId(); // a 3rd stage will point at this one
+    rows.push(row);
+  }
+  return rows;
+}
+
 // --- "Not on the system": whole-line fallback for prescriptions the ------
 // smart parser above can't cleanly split (multi-step regimens, conditional
 // instructions, dosing caveats, etc.) — these used to leave Frequency as
@@ -1022,6 +1142,9 @@ export function parseBulkText(text) {
     const line = rawLine.replace(BULLET_PREFIX_RE, '').trim();
     if (!line) return;
     if (isHeaderLine(line)) return;
+
+    const sequential = parseSequentialCourseLine(line);
+    if (sequential) { rows.push(...sequential); return; }
 
     const splitDose = parseSplitDoseLine(line);
     if (splitDose && splitDose.every(r => isRecognizedFrequency(r.frequency))) { rows.push(...splitDose); return; }

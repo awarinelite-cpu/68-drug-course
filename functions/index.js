@@ -243,6 +243,7 @@ function computeDueAt(drug, chartRows, drugIndex) {
     const givenCount = administrationCountFor(drugIndex, chartRows);
     if (givenCount >= seq.length) return null; // sequence complete
     if (givenCount === 0) {
+      if (drug.activatedAt) { const at = new Date(drug.activatedAt); if (!isNaN(at.getTime())) return at; }
       if (drug.startDate) return toWardDate(drug.startDate, '00:00');
       if (drug.createdAt) {
         const d = new Date(drug.createdAt);
@@ -262,6 +263,9 @@ function computeDueAt(drug, chartRows, drugIndex) {
     return new Date(lastGiven.getTime() + intervalHours * 3600 * 1000);
   }
   // Never administered yet — anchor to whichever of these is available.
+  // A follow-on drug (2nd half of an "X then Y" order) is due from the moment
+  // it was activated, not midnight of that day.
+  if (drug.activatedAt) { const at = new Date(drug.activatedAt); if (!isNaN(at.getTime())) return at; }
   if (drug.startDate) return toWardDate(drug.startDate, '00:00');
   if (drug.createdAt) {
     const d = new Date(drug.createdAt);

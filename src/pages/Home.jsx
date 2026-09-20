@@ -519,9 +519,23 @@ export default function Home() {
     }
     const key = (d) => [d.name, d.route, d.frequency, d.duration].map(v => (v || '').trim().toLowerCase()).join('|');
     const existingKeys = new Set(existingDrugs.map(key));
-    const toAdd = drugsParsed.filter(d => !existingKeys.has(key(d)));
+    const dupOf = new Map(); // parsed id -> id of the identical drug already on the chart
+    const existingByKey = new Map();
+    let existingList = existingDrugs;
+    existingDrugs.forEach((d, idx) => existingByKey.set(key(d), idx));
+    drugsParsed.forEach(d => {
+      if (!d.id || !existingKeys.has(key(d))) return;
+      const idx = existingByKey.get(key(d));
+      if (!existingList[idx].id) { existingList = existingList.slice(); existingList[idx] = { ...existingList[idx], id: d.id }; }
+      dupOf.set(d.id, existingList[idx].id);
+    });
+    // A follow-on row whose predecessor was skipped as a duplicate must
+    // point at the copy already on the chart, not the discarded one.
+    const toAdd = drugsParsed
+      .filter(d => !existingKeys.has(key(d)))
+      .map(d => (d.startsAfterId && dupOf.has(d.startsAfterId)) ? { ...d, startsAfterId: dupOf.get(d.startsAfterId) } : d);
     if (!toAdd.length) return 0;
-    const merged = [...existingDrugs, ...toAdd];
+    const merged = [...existingList, ...toAdd];
     setDoc(ref, { drugs: merged, updatedAt: serverTimestamp() }, { merge: true }).catch((e) => {
       console.warn('Bulk-uploaded drugs write queued locally; will retry once back online:', e);
     });
