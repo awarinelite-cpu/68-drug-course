@@ -308,8 +308,17 @@ export default function Home() {
   async function createPatient() {
     const name = newForm.name.trim();
     const emr = newForm.emr.trim();
+    const gender = (newForm.gender || '').trim();
     setNewMsg('');
     if (!name || !emr) { setNewMsg('Name and EMR number are required.'); return; }
+    // Gender drives the Patient Demographics table (see
+    // bumpDemographicStatForPatientWard below, and the same guard in
+    // patientAdmissionStatus.js / DrugCourseChart.jsx for
+    // discharge/death/BID) — those bumps are silently skipped whenever
+    // gender isn't 'M' or 'F', so a patient registered without it is
+    // permanently invisible to that table for the rest of their stay.
+    // Required here so that can't happen going forward.
+    if (gender !== 'M' && gender !== 'F') { setNewMsg('Gender is required.'); return; }
 
     // Insurance and Army Number are deliberately NOT required here — an
     // empty Army Number and an empty Insurance both just mean "no match"

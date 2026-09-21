@@ -46,7 +46,7 @@ export default function PatientForm({ form, setForm, lockWard }) {
         </div>
       )}
       <div className="field">
-        <label>Gender</label>
+        <label>Gender *</label>
         <select value={form.gender || ''} onChange={set('gender')}>
           <option value="">Select…</option>
           <option value="M">Male</option>

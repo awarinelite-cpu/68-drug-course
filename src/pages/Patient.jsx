@@ -140,8 +140,15 @@ export default function Patient() {
     if (!patient) return;
     const name = editForm.name.trim();
     const emr = editForm.emr.trim();
+    const gender = editForm.gender.trim();
     setEditMsg('');
     if (!name || !emr) { setEditMsg('Name and EMR number are required.'); return; }
+    // Same requirement as Register New Patient (Home.jsx) — gender
+    // drives the Patient Demographics table and is silently skipped
+    // there if it isn't 'M' or 'F'. Enforcing it here too means editing
+    // an older patient record (from before this was required) is also
+    // a chance to backfill it.
+    if (gender !== 'M' && gender !== 'F') { setEditMsg('Gender is required.'); return; }
     const updates = {
       name, emr,
       // Search (patientDirectory.js's searchPatients) reads these lowercased/
