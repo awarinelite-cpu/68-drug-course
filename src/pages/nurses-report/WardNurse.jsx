@@ -344,6 +344,15 @@ function useWardReport(wardKey, isAdmin, profile, user) {
   // set) override the live figure with what's on screen. Keyed
   // 'shiftKey.fieldKey'.
   const touchedShiftFieldsRef = useRef(new Set());
+  // Same idea, for the top-level Patient Demographics fields (adm/disch/
+  // dead/bid x mil/civ x M/F — see DEMOGRAPHIC_FIELDS). Those aren't
+  // nested under `shifts`, so they need their own touched-set and their
+  // own reconciliation (reconcileDemographicsBeforeSave below) — without
+  // this, an automatic bump from a discharge/admission/death/BID that
+  // lands while this report is open gets silently overwritten back to
+  // whatever was on screen when the page loaded, the same bug the shift
+  // reconciliation above already exists to prevent for Shift Statistics.
+  const touchedDemographicFieldsRef = useRef(new Set());
 
   useEffect(() => {
     let cancelled = false;
@@ -515,6 +524,24 @@ function useWardReport(wardKey, isAdmin, profile, user) {
       });
     });
     return merged;
+  }
+  // Mirrors reconcileShiftsBeforeSave above, for the top-level
+  // Demographics fields instead of the nested shifts object — see
+  // touchedDemographicFieldsRef for why this is needed.
+  async function reconcileDemographicsBeforeSave(localDoc) {
+    let live = null;
+    try {
+      const snap = await getDocSafe(doc(db, 'nurseReports', dateId, 'wards', wardKey));
+      if (snap.exists()) live = snap.data();
+    } catch (e) { /* offline or otherwise unreachable — just save local as-is */ }
+    if (!live) return {};
+    const patch = {};
+    DEMOGRAPHIC_FIELDS.forEach((f) => {
+      if (touchedDemographicFieldsRef.current.has(f.key)) return;
+      const liveVal = live[f.key];
+      if (typeof liveVal === 'number' && liveVal !== localDoc[f.key]) patch[f.key] = liveVal;
+    });
+    return patch;
   }
   function updateDuty(shiftKey, value) {
     setWardDoc((d) => ({ ...d, shifts: { ...d.shifts, [shiftKey]: { ...d.shifts[shiftKey], nurseOnDuty: value } } }));
@@ -692,7 +719,7 @@ function useWardReport(wardKey, isAdmin, profile, user) {
     // elsewhere while this report is open doesn't get overwritten by a
     // stale on-screen count.
     const reconciledShifts = await reconcileShiftsBeforeSave(doc_);
-    doc_ = { ...doc_, shifts: reconciledShifts };
+    doc_ = { ...doc_, shifts: reconciledShifts, ...(await reconcileDemographicsBeforeSave(doc_)) };
     setWardDoc(doc_);
     const reconciledCensus = computeCensus(doc_);
     const reconciledTotals = computeMovementTotals(doc_);
@@ -784,7 +811,7 @@ function useWardReport(wardKey, isAdmin, profile, user) {
     // just made for toFinalize above, since those already landed in
     // Firestore by this point.
     const reconciledShifts = await reconcileShiftsBeforeSave(doc_);
-    doc_ = { ...doc_, shifts: reconciledShifts };
+    doc_ = { ...doc_, shifts: reconciledShifts, ...(await reconcileDemographicsBeforeSave(doc_)) };
     const reconciledCensus = computeCensus(doc_);
     const reconciledTotals = computeMovementTotals(doc_);
     const finalDoc = { ...doc_, occ: reconciledCensus.occ, vac: reconciledCensus.vac, ...reconciledTotals };
@@ -832,7 +859,8 @@ function useWardReport(wardKey, isAdmin, profile, user) {
     updateWardDoc, updateShiftField, updateDuty, updateBeds, updateStartOcc,
     addPatient, removePatient, updatePatientField, updateDiagnosisField, updateVitalsSnapshotField,
     updatePatientStatus, lookupPatientByEmr, selectPatientFromWard,
-    openNightUpdate, saveReport, submitReport, pillClass, pillText
+    openNightUpdate, saveReport, submitReport, pillClass, pillText,
+    touchedDemographicFieldsRef
   };
 }
 
@@ -1049,7 +1077,7 @@ function WardPanelRest({ h, showLabel, isAdmin, navigate, includeShiftTable = tr
               <h2>Patient Demographics</h2>
               <div className="table-wrap">
                 <DemographicsTable wardDoc={wardDoc} editable={editable}
-                  onField={(key, raw) => { const n = parseFloat(raw); updateWardDoc({ [key]: isNaN(n) ? 0 : n }); }}
+                  onField={(key, raw) => { touchedDemographicFieldsRef.current.add(key); const n = parseFloat(raw); updateWardDoc({ [key]: isNaN(n) ? 0 : n }); }}
                   onRemarks={(v) => updateWardDoc({ demographicsRemarks: v })} />
               </div>
             </div>
@@ -1377,7 +1405,7 @@ function MergedWardReportPanel({ group, isAdmin, profile, user, navigate }) {
             <MergedDemographicsTable panels={hooks.map((h) => ({
               w: { ...h.w, label: DEMOGRAPHICS_ROW_LABEL[h.w.key] || h.w.label },
               wardDoc: h.wardDoc, editable: h.editable,
-              onField: (key, raw) => { const n = parseFloat(raw); h.updateWardDoc({ [key]: isNaN(n) ? 0 : n }); },
+              onField: (key, raw) => { h.touchedDemographicFieldsRef.current.add(key); const n = parseFloat(raw); h.updateWardDoc({ [key]: isNaN(n) ? 0 : n }); },
               onRemarks: (v) => h.updateWardDoc({ demographicsRemarks: v })
             }))} />
           </div>
