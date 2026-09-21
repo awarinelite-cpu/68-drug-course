@@ -1038,6 +1038,13 @@ function WardPanelRest({ h, showLabel, isAdmin, navigate, includeShiftTable = tr
   // next to Previous Occ while tallying the Shift Statistics table above,
   // instead of scrolling all the way down to the Patients section to find
   // that same tag on a linked write-up.
+  // Which shift the nurse filling in this report is currently working —
+  // a UI-only gate (not saved to Firestore): a morning-shift nurse only
+  // ever sees Save, so she can hand the report off for the night nurse to
+  // finish; the night-shift nurse sees both Save and Submit Report, since
+  // she's the one who closes the day's report out.
+  const [shiftMode, setShiftMode] = useState('');
+
   const [quickLookupId, setQuickLookupId] = useState('');
   const quickLookupRecord = wardPatientOptions.find((o) => o.id === quickLookupId);
   let quickLookupTag = null;
@@ -1114,7 +1121,18 @@ function WardPanelRest({ h, showLabel, isAdmin, navigate, includeShiftTable = tr
           )}
 
           <div className="card-box">
+            {editable && (
+              <div className="patient-field" style={{ marginTop: 0 }}>
+                <label>Select Shift:</label>
+                <select className={"status-select" + (shiftMode ? ' set' : '')} value={shiftMode} onChange={(e) => setShiftMode(e.target.value)}>
+                  <option value="">{'\u2014 Select shift \u2014'}</option>
+                  <option value="morning">Morning Shift</option>
+                  <option value="night">Night Shift</option>
+                </select>
+              </div>
+            )}
             <h2>Patients</h2>
+            <p style={{ fontSize: 12, color: '#6b7280', marginTop: -6, marginBottom: 12 }}>Click add patient to write report</p>
             {editable ? (
               <>
                 {wardDoc.patients.map((p) => (
@@ -1165,7 +1183,6 @@ function WardPanelRest({ h, showLabel, isAdmin, navigate, includeShiftTable = tr
                     </div>
                   </div>
                 ))}
-                <button className="add-patient-btn" type="button" onClick={addPatient}>+ Add Patient</button>
               </>
             ) : wardDoc.patients.length === 0 ? (
               <div className="no-patients">No patient write-ups on this report.</div>
@@ -1189,13 +1206,17 @@ function WardPanelRest({ h, showLabel, isAdmin, navigate, includeShiftTable = tr
               </div>
             )}
             {editable && <div className="night-update-meta">{wardDoc.nightUpdateBy ? 'Added by ' + wardDoc.nightUpdateBy : ''}</div>}
+
+            {editable && <button className="add-patient-btn" type="button" onClick={addPatient} style={{ marginTop: 12 }}>+ Add Patient</button>}
           </div>
 
           <div className="card-box">
             {editable && (
               <div className="submit-bar">
                 <button className="btn btn-secondary" style={{ flex: 1, padding: 12 }} onClick={onSave || saveReport}>Save</button>
-                <button className="btn btn-primary" style={{ flex: 1, padding: 12 }} onClick={onSubmit || submitReport}>Submit Report</button>
+                {shiftMode === 'night' && (
+                  <button className="btn btn-primary" style={{ flex: 1, padding: 12 }} onClick={onSubmit || submitReport}>Submit Report</button>
+                )}
               </div>
             )}
             <div className="save-status" style={{ color: saveStatus.error ? '#dc2626' : '#6b7280' }}>{saveStatus.text}</div>
