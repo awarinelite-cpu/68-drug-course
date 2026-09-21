@@ -415,7 +415,19 @@ export const PATIENT_FIELDS = [
   { key: 'name',      label: 'Name',      type: 'text' },
   { key: 'sex',       label: 'Sex',       type: 'text' },
   { key: 'doa',       label: 'DOA',       type: 'text' },
-  { key: 'diagnosis', label: 'Diagnosis / Notes', type: 'textarea', big: true }
+  { key: 'diagnosis', label: 'Diagnosis / Notes', type: 'textarea', big: true },
+  // Nursing Process — the standard 5-step care framework, one heading +
+  // textarea each, kept separate from the free-form Diagnosis/Notes box
+  // above so a write-up can follow the framework step by step instead of
+  // one undifferentiated block of text. Being plain PATIENT_FIELDS
+  // entries (type 'textarea', big true) means they render, save, and
+  // display read-only on the Overall Nurse and Archive views for free —
+  // same as every other field here — with no extra wiring needed.
+  { key: 'npAssessment',        label: 'Assessment',         type: 'textarea', big: true },
+  { key: 'npNursingDiagnosis',  label: 'Nursing Diagnosis',  type: 'textarea', big: true },
+  { key: 'npPlanning',          label: 'Planning',           type: 'textarea', big: true },
+  { key: 'npImplementation',    label: 'Implementation',     type: 'textarea', big: true },
+  { key: 'npEvaluation',        label: 'Evaluation',         type: 'textarea', big: true }
 ];
 
 // Toggleable patient status, shown as a stamp on the write-up (both the
