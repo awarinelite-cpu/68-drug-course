@@ -1382,3 +1382,25 @@ h1.period-label { margin: 0; display: flex; align-items: center; flex-wrap: wrap
 .diagnosis-note-box .diagnosis-note-body { display: block; width: 100%; box-sizing: border-box; min-height: 110px; padding: 6px 10px 10px; border: none; border-radius: 0 0 6px 6px; background: transparent; box-shadow: none; resize: vertical; }
 .patient-block .patient-note-diagnosis { margin: 4px 0 6px 0; text-align: left; }
 .add-patient-btn.is-disabled { opacity: .5; cursor: not-allowed; }
+
+/* --- Nurses Report: make every write-up textarea clearly visible ---
+   Notes (Diagnosis box), Vital Signs Roll, Nursing Diagnosis, Planning,
+   Implementation, Evaluation and Night Update all get a solid, dark border,
+   a plain background and a strong focus ring, so nurses can always see where
+   to type. Night Update used to be borderless and blended into the page. */
+:root { --textarea-border: #475569; --textarea-bg: #FFFFFF; --textarea-focus: #2563EB; }
+:root[data-theme="dark"] { --textarea-border: rgba(255,255,255,.7); --textarea-bg: #1B2C42; --textarea-focus: #60A5FA; }
+
+.patient-field textarea, #nightUpdateInput {
+  border: 2px solid var(--textarea-border); border-radius: 8px; background-color: var(--textarea-bg);
+  box-shadow: 0 1px 4px rgba(15,23,42,.12); color: var(--text-primary);
+  padding: 12px; min-height: 120px; line-height: 1.5;
+}
+#nightUpdateInput { min-height: 160px; text-align: left; }
+.patient-field textarea::placeholder, #nightUpdateInput::placeholder { color: var(--text-muted); opacity: 1; }
+.patient-field textarea:focus, #nightUpdateInput:focus { outline: none; border-color: var(--textarea-focus); box-shadow: 0 0 0 3px rgba(37,99,235,.25); }
+
+.diagnosis-note-box { border: 2px solid var(--textarea-border); border-radius: 8px; background-color: var(--textarea-bg); box-shadow: 0 1px 4px rgba(15,23,42,.12); }
+.diagnosis-note-box:focus-within { border-color: var(--textarea-focus); box-shadow: 0 0 0 3px rgba(37,99,235,.25); }
+.diagnosis-note-box .diagnosis-note-input, .diagnosis-note-box .diagnosis-note-body { min-height: 0; box-shadow: none; }
+.diagnosis-note-box .diagnosis-note-body { min-height: 110px; }
