@@ -380,7 +380,7 @@ function useWardReport(wardKey, isAdmin, profile, user) {
           // ADMISSION_TAG_LABEL/activeAdmissionTag in
           // patientAdmissionStatus.js and WardPatientPicker below for how
           // it's shown (blue, vs dischargeStatus's red).
-          list.push({ id: d.id, name: data.name || '', emr: data.emr || '', age: data.age || '', admissionDate: data.admissionDate || '', diagnosis: data.diagnosis || '', dischargeStatus: data.dischargeStatus || '', admissionTag: activeAdmissionTag(data) });
+          list.push({ id: d.id, name: data.name || '', emr: data.emr || '', age: data.age || '', admissionDate: data.admissionDate || '', diagnosis: data.diagnosis || '', gender: data.gender || '', dischargeStatus: data.dischargeStatus || '', admissionTag: activeAdmissionTag(data) });
         });
         list.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
         if (!cancelled) setWardPatientOptions(list);
@@ -645,6 +645,8 @@ function useWardReport(wardKey, isAdmin, profile, user) {
           if (!next.name && record.name) next.name = record.name;
           if (!next.age && record.age) next.age = record.age;
           if (!next.doa && record.admissionDate) next.doa = record.admissionDate;
+          if (!next.diagnosis && record.diagnosis) next.diagnosis = record.diagnosis;
+          if (!next.sex && record.gender) next.sex = record.gender === 'M' ? 'Male' : record.gender === 'F' ? 'Female' : record.gender;
           return next;
         })
       }));
@@ -673,6 +675,10 @@ function useWardReport(wardKey, isAdmin, profile, user) {
         if (!next.emr && record.emr) next.emr = record.emr;
         if (!next.name && record.name) next.name = record.name;
         if (!next.age && record.age) next.age = record.age;
+        // Sex is a free-text field on the write-up (unlike the patient
+        // record's own M/F select) — spell it out the way a nurse would
+        // type it by hand, matching every other write-up already on file.
+        if (!next.sex && record.gender) next.sex = record.gender === 'M' ? 'Male' : record.gender === 'F' ? 'Female' : record.gender;
         if (!next.doa && record.admissionDate) next.doa = record.admissionDate;
         if (!next.diagnosis && record.diagnosis) next.diagnosis = record.diagnosis;
         // Picking someone already tagged DISCHARGE/TRANS OUT (see
