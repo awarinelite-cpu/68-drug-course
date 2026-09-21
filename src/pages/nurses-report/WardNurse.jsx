@@ -1135,7 +1135,7 @@ function WardPanelRest({ h, showLabel, isAdmin, navigate, includeShiftTable = tr
             <p style={{ fontSize: 12, color: '#6b7280', marginTop: -6, marginBottom: 12 }}>Click add patient to write report</p>
             {editable ? (
               <>
-                {wardDoc.patients.map((p) => (
+                {wardDoc.patients.map((p, i) => (
                   <div className="patient-card" key={p.id}>
                     <button type="button" className="remove-btn" onClick={() => removePatient(p.id)}>Remove</button>
                     {wardPatientOptions && wardPatientOptions.length > 0 && (
@@ -1181,31 +1181,38 @@ function WardPanelRest({ h, showLabel, isAdmin, navigate, includeShiftTable = tr
                         </div>
                       ))}
                     </div>
+                    {editable && i === wardDoc.patients.length - 1 && (
+                      <>
+                        <h2 className="night-update-heading">Night Update</h2>
+                        <button className="btn btn-secondary" type="button" onClick={openNightUpdate}>{'\uD83C\uDF19 Night Update'}</button>
+                        {nightUpdateOpen && (
+                          <div className="patient-field" style={{ marginTop: 10 }}>
+                            <label className="patient-note-label" style={{ marginTop: 0 }}>Night update:</label>
+                            <textarea id="nightUpdateInput" placeholder="Type the night update here…" style={{ minHeight: 140 }}
+                              value={wardDoc.nightUpdate} onChange={(e) => updateWardDoc({ nightUpdate: e.target.value })} />
+                          </div>
+                        )}
+                        <div className="night-update-meta">{wardDoc.nightUpdateBy ? 'Added by ' + wardDoc.nightUpdateBy : ''}</div>
+                      </>
+                    )}
                   </div>
                 ))}
               </>
             ) : wardDoc.patients.length === 0 ? (
               <div className="no-patients">No patient write-ups on this report.</div>
             ) : (
-              wardDoc.patients.map((p) => <PatientBlockView p={p} key={p.id} />)
+              wardDoc.patients.map((p, i) => (
+                <Fragment key={p.id}>
+                  <PatientBlockView p={p} />
+                  {i === wardDoc.patients.length - 1 && wardDoc.nightUpdate && (
+                    <div className="night-update-block">
+                      <h3 className="patient-note-label">{'Night Update' + (wardDoc.nightUpdateBy ? ' — ' + wardDoc.nightUpdateBy : '') + ':'}</h3>
+                      <p className="patient-note-text">{wardDoc.nightUpdate}</p>
+                    </div>
+                  )}
+                </Fragment>
+              ))
             )}
-
-            <h2 className="night-update-heading">Night Update</h2>
-            {editable && <button className="btn btn-secondary" type="button" onClick={openNightUpdate}>{'\uD83C\uDF19 Night Update'}</button>}
-            {editable && nightUpdateOpen && (
-              <div className="patient-field" style={{ marginTop: 10 }}>
-                <label className="patient-note-label" style={{ marginTop: 0 }}>Night update:</label>
-                <textarea id="nightUpdateInput" placeholder="Type the night update here…" style={{ minHeight: 140 }}
-                  value={wardDoc.nightUpdate} onChange={(e) => updateWardDoc({ nightUpdate: e.target.value })} />
-              </div>
-            )}
-            {!editable && wardDoc.nightUpdate && (
-              <div className="night-update-block">
-                <h3 className="patient-note-label">{'Night Update' + (wardDoc.nightUpdateBy ? ' — ' + wardDoc.nightUpdateBy : '') + ':'}</h3>
-                <p className="patient-note-text">{wardDoc.nightUpdate}</p>
-              </div>
-            )}
-            {editable && <div className="night-update-meta">{wardDoc.nightUpdateBy ? 'Added by ' + wardDoc.nightUpdateBy : ''}</div>}
 
             {editable && <button className="add-patient-btn" type="button" onClick={addPatient} style={{ marginTop: 12 }}>+ Add Patient</button>}
           </div>
