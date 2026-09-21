@@ -3,7 +3,6 @@ import { useNavigate } from "react-router-dom";
 import { signInWithEmailAndPassword, sendPasswordResetEmail } from "firebase/auth";
 import { auth } from "../firebase.js";
 import wardBg from "../assets/login-ward-bg.jpg";
-import Footer from "../components/Footer.jsx";
 
 function friendlyError(e) {
   const code = e.code || '';
@@ -80,7 +79,6 @@ export default function Login() {
         {msg && <div className={msg.type === 'error' ? 'error-msg' : 'info-msg'}>{msg.text}</div>}
       </div>
       </div>
-      <Footer />
     </div>
   );
 }
