@@ -2,7 +2,7 @@ import { useEffect, useRef } from "react";
 import { splitDiagnosisNote, joinDiagnosisNote } from "../lib/diagnosisNote.js";
 
 // Read-only "Diagnosis: GASTRITIS" line shown at the top of a saved note
-// (Ward Nurse, Overall Nurse and Archive views): bold Arial Black, larger.
+// (Ward Nurse, Overall Nurse and Archive views): bold, larger.
 export function DiagnosisHeadline({ diagnosis }) {
   return (
     <p className="patient-note-diagnosis">
