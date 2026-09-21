@@ -1368,3 +1368,17 @@ h1.period-label { margin: 0; display: flex; align-items: center; flex-wrap: wrap
   border-radius:6px; padding:6px 8px; font-size:14px; font-family:inherit; color:var(--text-primary); cursor:pointer;
 }
 .col-time .time-picker-btn.placeholder { color:var(--text-muted); }
+
+/* --- Nurses Report: Notes box with the bold Diagnosis line inside it --- */
+.diagnosis-note-box { width: 100%; box-sizing: border-box; border: 1px solid var(--border); border-radius: 6px; background-color: var(--surface-bg); }
+.diagnosis-note-box:focus-within { border-color: #6366f1; box-shadow: 0 0 0 3px rgba(99,102,241,.15); }
+.diagnosis-note-head { display: flex; align-items: flex-start; gap: 8px; padding: 8px 8px 0 10px; }
+.diagnosis-note-key, .diagnosis-note-box .diagnosis-note-input, .patient-block .patient-note-diagnosis {
+  font-family: "Arial Black", Arial, sans-serif; font-weight: 900; font-size: 20px; line-height: 1.3; color: var(--text-primary);
+}
+.diagnosis-note-key { flex: none; padding-top: 2px; }
+.diagnosis-note-box .diagnosis-note-input { flex: 1; min-width: 0; width: auto; padding: 2px 0; border: none; border-radius: 0; background: transparent; box-shadow: none; resize: none; overflow: hidden; min-height: 0; }
+.diagnosis-note-box .diagnosis-note-input:focus, .diagnosis-note-box .diagnosis-note-body:focus { outline: none; }
+.diagnosis-note-box .diagnosis-note-body { display: block; width: 100%; box-sizing: border-box; min-height: 110px; padding: 6px 10px 10px; border: none; border-radius: 0 0 6px 6px; background: transparent; box-shadow: none; resize: vertical; }
+.patient-block .patient-note-diagnosis { margin: 4px 0 6px 0; text-align: left; }
+.add-patient-btn.is-disabled { opacity: .5; cursor: not-allowed; }

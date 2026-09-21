@@ -415,7 +415,7 @@ export const PATIENT_FIELDS = [
   { key: 'name',      label: 'Name',      type: 'text' },
   { key: 'sex',       label: 'Sex',       type: 'text' },
   { key: 'doa',       label: 'DOA',       type: 'text' },
-  { key: 'diagnosis', label: 'Diagnosis / Notes', type: 'textarea', big: true },
+  { key: 'diagnosis', label: 'Notes', type: 'textarea', big: true },
   // Nursing Process — the standard 5-step care framework, one heading +
   // textarea each, kept separate from the free-form Diagnosis/Notes box
   // above so a write-up can follow the framework step by step instead of

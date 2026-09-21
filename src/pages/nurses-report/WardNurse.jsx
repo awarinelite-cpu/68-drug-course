@@ -16,6 +16,8 @@ import { patientWardAndBedTypeForReportKey } from "../../lib/wardNameMatch.js";
 import { wardHeadcount } from "../../lib/wardCensus.js";
 import { applyPatientStatus, closeOutDischargedPatient, activeAdmissionTag, clearAdmissionTag, ADMISSION_TAG_LABEL, ADMISSION_TAG_STATUS_STAMP } from "../../lib/patientAdmissionStatus.js";
 import Topbar from "../../components/Topbar.jsx";
+import { splitDiagnosisNote, withPatientDiagnosis } from "../../lib/diagnosisNote.js";
+import DiagnosisNoteEditor, { DiagnosisHeadline } from "../../components/DiagnosisNoteEditor.jsx";
 import wardSelectBg from "../../assets/ward-select-bg.svg";
 
 // Row-label overrides for MergedDemographicsTable only — Maternity's
@@ -158,22 +160,25 @@ function isNoteHeadingLine(line) {
   const letters = t.replace(/[^A-Za-z]/g, '');
   return letters.length > 0 && letters === letters.toUpperCase();
 }
-function NoteLines({ text }) {
-  const lines = String(text).split('\n');
+function NoteLines({ text, withDiagnosis }) {
+  let body = String(text);
+  let head = null;
+  if (withDiagnosis) {
+    const parts = splitDiagnosisNote(body);
+    if (parts.hasHeader) { head = <DiagnosisHeadline diagnosis={parts.diagnosis} />; body = parts.rest; }
+  }
+  const lines = body === '' ? [] : body.split('\n');
   const blocks = [];
   let paraLines = [];
-  function flushPara() {
-    if (paraLines.length) blocks.push({ type: 'p', text: paraLines.join('\n') });
-    paraLines = [];
-  }
+  function flushPara() { if (paraLines.length) blocks.push({ type: 'p', text: paraLines.join('\n') }); paraLines = []; }
   lines.forEach(line => {
     if (isNoteHeadingLine(line)) { flushPara(); blocks.push({ type: 'h', text: line.trim() }); }
     else paraLines.push(line);
   });
   flushPara();
-  return blocks.map((b, i) => b.type === 'h'
+  return <>{head}{blocks.map((b, i) => b.type === 'h'
     ? <h4 className="patient-note-subheading" key={i}>{b.text}</h4>
-    : <p className="patient-note-text" key={i}>{b.text}</p>);
+    : <p className="patient-note-text" key={i}>{b.text}</p>)}</>;
 }
 
 function PatientBlockView({ p }) {
@@ -189,7 +194,7 @@ function PatientBlockView({ p }) {
       {textFields.map(f => p[f.key] ? (
         <div key={f.key}>
           <h3 className="patient-note-label">{f.label}:</h3>
-          <NoteLines text={p[f.key]} />
+          <NoteLines text={p[f.key]} withDiagnosis={f.key === 'diagnosis'} />
         </div>
       ) : null)}
     </div>
@@ -667,7 +672,7 @@ function useWardReport(wardKey, isAdmin, profile, user) {
           if (!next.name && record.name) next.name = record.name;
           if (!next.age && record.age) next.age = record.age;
           if (!next.doa && record.admissionDate) next.doa = record.admissionDate;
-          if (!next.diagnosis && record.diagnosis) next.diagnosis = record.diagnosis;
+          if (record.diagnosis) next.diagnosis = withPatientDiagnosis(next.diagnosis, record.diagnosis);
           if (!next.sex && record.gender) next.sex = record.gender === 'M' ? 'Male' : record.gender === 'F' ? 'Female' : record.gender;
           return next;
         })
@@ -703,7 +708,9 @@ function useWardReport(wardKey, isAdmin, profile, user) {
         // type it by hand, matching every other write-up already on file.
         if (!next.sex && record.gender) next.sex = record.gender === 'M' ? 'Male' : record.gender === 'F' ? 'Female' : record.gender;
         if (!next.doa && record.admissionDate) next.doa = record.admissionDate;
-        if (!next.diagnosis && record.diagnosis) next.diagnosis = record.diagnosis;
+        // The patient's diagnosis goes on the bold "Diagnosis:" line at the
+        // top of the Notes box (blank-only, existing notes are kept below it).
+        if (record.diagnosis) next.diagnosis = withPatientDiagnosis(next.diagnosis, record.diagnosis);
         // Picking someone already tagged DISCHARGE/TRANS OUT (see
         // WardPatientPicker) means this write-up is their closing note —
         // pre-fill Status to match so submitReport recognizes it and the
@@ -1044,6 +1051,20 @@ function WardPanelRest({ h, showLabel, isAdmin, navigate, includeShiftTable = tr
   // finish; the night-shift nurse sees both Save and Submit Report, since
   // she's the one who closes the day's report out.
   const [shiftMode, setShiftMode] = useState('');
+  // A nurse must pick her shift before she can add a patient write-up.
+  // Tapping Add Patient with no shift chosen doesn't add anything: it flags
+  // the Select Shift field and scrolls it into view instead.
+  const [shiftWarn, setShiftWarn] = useState(false);
+  const shiftSelectRef = useRef(null);
+  function handleAddPatient() {
+    if (!shiftMode) {
+      setShiftWarn(true);
+      const el = shiftSelectRef.current;
+      if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); el.focus(); }
+      return;
+    }
+    addPatient();
+  }
 
   const [quickLookupId, setQuickLookupId] = useState('');
   const quickLookupRecord = wardPatientOptions.find((o) => o.id === quickLookupId);
@@ -1124,11 +1145,16 @@ function WardPanelRest({ h, showLabel, isAdmin, navigate, includeShiftTable = tr
             {editable && (
               <div className="patient-field" style={{ marginTop: 0 }}>
                 <label>Select Shift:</label>
-                <select className={"status-select" + (shiftMode ? ' set' : '')} value={shiftMode} onChange={(e) => setShiftMode(e.target.value)}>
+                <select ref={shiftSelectRef} className={"status-select" + (shiftMode ? ' set' : '')}
+                  style={shiftWarn && !shiftMode ? { borderColor: '#dc2626', boxShadow: '0 0 0 3px rgba(220,38,38,.15)' } : undefined}
+                  value={shiftMode} onChange={(e) => { setShiftMode(e.target.value); if (e.target.value) setShiftWarn(false); }}>
                   <option value="">{'\u2014 Select shift \u2014'}</option>
                   <option value="morning">Morning Shift</option>
                   <option value="night">Night Shift</option>
                 </select>
+                {shiftWarn && !shiftMode && (
+                  <div className="save-status" style={{ color: '#dc2626', marginTop: 4 }}>Select your shift (Morning or Night) before adding a patient.</div>
+                )}
               </div>
             )}
             <h2>Patients</h2>
@@ -1166,8 +1192,10 @@ function WardPanelRest({ h, showLabel, isAdmin, navigate, includeShiftTable = tr
                         <div className="patient-field" key={f.key} style={f.type === 'textarea' ? { gridColumn: '1 / -1' } : undefined}>
                           <label>{f.label}:</label>
                           {f.type === 'textarea'
-                            ? <textarea className={f.big ? 'big' : ''} value={p[f.key] || ''}
-                                onChange={(e) => f.key === 'diagnosis' ? updateDiagnosisField(p.id, e.target.value) : updatePatientField(p.id, f.key, e.target.value)} />
+                            ? (f.key === 'diagnosis'
+                                ? <DiagnosisNoteEditor value={p.diagnosis || ''} onChange={(v) => updateDiagnosisField(p.id, v)} />
+                                : <textarea className={f.big ? 'big' : ''} value={p[f.key] || ''}
+                                    onChange={(e) => updatePatientField(p.id, f.key, e.target.value)} />)
                             : <input type="text" value={p[f.key] || ''} onChange={(e) => updatePatientField(p.id, f.key, e.target.value)}
                                 onBlur={f.key === 'emr' ? (e) => lookupPatientByEmr(p.id, e.target.value) : undefined} />}
                           {f.key === 'diagnosis' && p.vitalsSnapshot && (
@@ -1214,7 +1242,7 @@ function WardPanelRest({ h, showLabel, isAdmin, navigate, includeShiftTable = tr
               ))
             )}
 
-            {editable && <button className="add-patient-btn" type="button" onClick={addPatient} style={{ marginTop: 12 }}>+ Add Patient</button>}
+            {editable && <button className={"add-patient-btn" + (shiftMode ? '' : ' is-disabled')} type="button" aria-disabled={!shiftMode} onClick={handleAddPatient} style={{ marginTop: 12 }}>+ Add Patient</button>}
           </div>
 
           <div className="card-box">

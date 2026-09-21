@@ -23,6 +23,8 @@ import { applyPendingStatBumps } from "../../lib/shiftStatsSync.js";
 import { loadPatientsForWardLabels } from "../../lib/patientDirectory.js";
 import { useGoBack } from "../../hooks/useGoBack.js";
 import Topbar from "../../components/Topbar.jsx";
+import { splitDiagnosisNote } from "../../lib/diagnosisNote.js";
+import { DiagnosisHeadline } from "../../components/DiagnosisNoteEditor.jsx";
 
 const movementFields = SHIFT_STAT_FIELDS;
 const byKey = k => movementFields.find(f => f.key === k);
@@ -38,8 +40,14 @@ function isNoteHeadingLine(line) {
   const letters = t.replace(/[^A-Za-z]/g, '');
   return letters.length > 0 && letters === letters.toUpperCase();
 }
-function NoteLines({ text }) {
-  const lines = String(text).split('\n');
+function NoteLines({ text, withDiagnosis }) {
+  let body = String(text);
+  let head = null;
+  if (withDiagnosis) {
+    const parts = splitDiagnosisNote(body);
+    if (parts.hasHeader) { head = <DiagnosisHeadline diagnosis={parts.diagnosis} />; body = parts.rest; }
+  }
+  const lines = body === '' ? [] : body.split('\n');
   const blocks = [];
   let paraLines = [];
   function flushPara() { if (paraLines.length) blocks.push({ type: 'p', text: paraLines.join('\n') }); paraLines = []; }
@@ -48,9 +56,9 @@ function NoteLines({ text }) {
     else paraLines.push(line);
   });
   flushPara();
-  return blocks.map((b, i) => b.type === 'h'
+  return <>{head}{blocks.map((b, i) => b.type === 'h'
     ? <h4 className="patient-note-subheading" key={i}>{b.text}</h4>
-    : <p className="patient-note-text" key={i}>{b.text}</p>);
+    : <p className="patient-note-text" key={i}>{b.text}</p>)}</>;
 }
 
 function WardShiftTable({ w, data }) {
@@ -233,7 +241,7 @@ function PatientBlock({ p }) {
       {textFields.map(f => p[f.key] ? (
         <div key={f.key}>
           <h3 className="patient-note-label">{f.label}:</h3>
-          <NoteLines text={p[f.key]} />
+          <NoteLines text={p[f.key]} withDiagnosis={f.key === 'diagnosis'} />
         </div>
       ) : null)}
     </div>
