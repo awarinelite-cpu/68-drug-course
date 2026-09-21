@@ -428,6 +428,11 @@ export const PATIENT_FIELDS = [
   // with the linked patient's latest Vital Signs Chart reading, and it
   // stays a normal editable textarea so the nurse can correct it.
   { key: 'npAssessment',        label: 'Vital Signs Roll',   type: 'textarea', big: true },
+  // Plan — the patient's current drugs (name, route, frequency, duration),
+  // auto-filled from their Drug Course Chart by WardNurse.jsx (see
+  // fillPlan there). Still a normal editable textarea so the nurse can
+  // correct it.
+  { key: 'npPlan',              label: 'Plan',               type: 'textarea', big: true },
   { key: 'npNursingDiagnosis',  label: 'Nursing Diagnosis',  type: 'textarea', big: true },
   { key: 'npPlanning',          label: 'Planning',           type: 'textarea', big: true },
   { key: 'npImplementation',    label: 'Implementation',     type: 'textarea', big: true },

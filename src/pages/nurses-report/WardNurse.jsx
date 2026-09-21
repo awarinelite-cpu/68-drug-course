@@ -88,6 +88,22 @@ async function fetchLatestVitals(patientId) {
   return snap.docs[0].data();
 }
 
+// The patient's current drugs from their Drug Course Chart, one per line as
+// "1. Name – Route – Frequency – Duration" (blank parts left out). Only drugs
+// that are Ongoing count as "current" — Completed / Discontinued / Withheld /
+// Other, and Inactive follow-on orders that haven't started yet, are left
+// off, and so are unnamed placeholder rows.
+function formatPlanDrugs(drugs) {
+  const active = (Array.isArray(drugs) ? drugs : []).filter((d) => d && (d.name || '').trim() && (!d.action || d.action === 'Ongoing'));
+  return active.map((d, i) => (i + 1) + '. ' + [d.name, d.route, d.frequency, d.duration].map((x) => (x || '').toString().trim()).filter(Boolean).join(' \u2013 ')).join('\n');
+}
+
+async function fetchCurrentDrugPlan(patientId) {
+  const snap = await getDocSafe(doc(db, 'patients', patientId, 'drugCourseChart', 'main'));
+  if (!snap || !snap.exists()) return '';
+  return formatPlanDrugs(snap.data().drugs);
+}
+
 const VITALS_CHIPS = [
   { key: 'temp', label: 'T', suffix: '\u2070c' },
   { key: 'pulse', label: 'P', suffix: 'b/m' },
@@ -644,6 +660,41 @@ function useWardReport(wardKey, isAdmin, profile, user) {
     }
   }
 
+  // Fills the "Plan" box (npPlan) with the linked patient's current drugs
+  // from their Drug Course Chart. Blank-only, like fillVitalsRoll, so it
+  // never overwrites anything the nurse typed or edited. Silent no-op if the
+  // patient has no active drugs or the lookup fails.
+  async function fillPlan(id, patientId) {
+    if (!patientId) return;
+    try {
+      const text = await fetchCurrentDrugPlan(patientId);
+      if (!text) return;
+      setWardDoc((d) => ({
+        ...d,
+        patients: d.patients.map((p) => (p.id === id && !p.npPlan) ? { ...p, npPlan: text } : p)
+      }));
+    } catch (e) {
+      // Non-fatal — the nurse can still type the plan in by hand.
+    }
+  }
+
+  // Re-pulls the Plan from the Drug Course Chart on demand (orders change
+  // during the shift). Replaces whatever is in the box, so it asks first if
+  // there's already text there.
+  async function refreshPlan(id) {
+    const p = wardDoc.patients.find((x) => x.id === id);
+    const patientId = linkedPatientIdFor(p);
+    if (!patientId) return;
+    if (p.npPlan && !window.confirm('Replace the current Plan with the latest drugs from the Drug Course Chart?')) return;
+    try {
+      const text = await fetchCurrentDrugPlan(patientId);
+      if (!text) { window.alert('No active drugs found on this patient\u2019s Drug Course Chart.'); return; }
+      updatePatientField(id, 'npPlan', text);
+    } catch (e) {
+      window.alert('Couldn\u2019t load the Drug Course Chart: ' + (e.code || e.message || 'unknown error'));
+    }
+  }
+
   // Looks the typed EMR number up against the existing 'patients'
   // collection (the same master record used by the drug-course-chart
   // side of the app) and, if found, fills in Age/Name/Sex/DOA — but only
@@ -679,6 +730,7 @@ function useWardReport(wardKey, isAdmin, profile, user) {
       }));
       setEmrLookup((s) => ({ ...s, [id]: { text: 'Filled in from the patient record.', error: false } }));
       fillVitalsRoll(id, foundId);
+      fillPlan(id, foundId);
     } catch (e) {
       setEmrLookup((s) => ({ ...s, [id]: { text: "Couldn't look up patient: " + (e.code || e.message || 'unknown error'), error: true } }));
     }
@@ -727,6 +779,7 @@ function useWardReport(wardKey, isAdmin, profile, user) {
     }));
     setEmrLookup((s) => ({ ...s, [id]: { text: 'Filled in from ' + (record.name || 'the patient') + '\u2019s record.', error: false } }));
     fillVitalsRoll(id, sourcePatientId);
+    fillPlan(id, sourcePatientId);
   }
 
   function openNightUpdate() {
@@ -895,7 +948,7 @@ function useWardReport(wardKey, isAdmin, profile, user) {
     census, movementTotals, editable,
     updateWardDoc, updateShiftField, updateDuty, updateBeds, updateStartOcc,
     addPatient, removePatient, updatePatientField, updateDiagnosisField, updateVitalsSnapshotField,
-    updatePatientStatus, lookupPatientByEmr, selectPatientFromWard,
+    updatePatientStatus, lookupPatientByEmr, selectPatientFromWard, refreshPlan,
     openNightUpdate, saveReport, submitReport, pillClass, pillText,
     touchedDemographicFieldsRef
   };
@@ -1036,7 +1089,7 @@ function WardPanelRest({ h, showLabel, isAdmin, navigate, includeShiftTable = tr
     census, movementTotals, emrLookup, wardPatientOptions,
     updateWardDoc, updateShiftField, updateDuty, updateBeds, updateStartOcc,
     addPatient, removePatient, updatePatientField, updateDiagnosisField, updateVitalsSnapshotField,
-    updatePatientStatus, lookupPatientByEmr, selectPatientFromWard,
+    updatePatientStatus, lookupPatientByEmr, selectPatientFromWard, refreshPlan,
     nightUpdateOpen, openNightUpdate, saveReport, submitReport, pillClass, pillText
   } = h;
 
@@ -1200,6 +1253,10 @@ function WardPanelRest({ h, showLabel, isAdmin, navigate, includeShiftTable = tr
                                 onBlur={f.key === 'emr' ? (e) => lookupPatientByEmr(p.id, e.target.value) : undefined} />}
                           {f.key === 'diagnosis' && p.vitalsSnapshot && (
                             <VitalsChipRow snapshot={p.vitalsSnapshot} onChange={(field, value) => updateVitalsSnapshotField(p.id, field, value)} />
+                          )}
+                          {f.key === 'npPlan' && linkedPatientIdFor(p) && (
+                            <button className="btn btn-secondary" type="button" style={{ marginTop: 6, padding: '6px 10px', fontSize: 14 }}
+                              onClick={() => refreshPlan(p.id)}>{'\u21BB Refresh from Drug Course Chart'}</button>
                           )}
                           {f.key === 'emr' && emrLookup[p.id] && (
                             <div className="emr-lookup-note" style={{ color: emrLookup[p.id].error ? '#dc2626' : '#6b7280' }}>
