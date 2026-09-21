@@ -824,9 +824,9 @@ export default function Home() {
         )}
 
         <div className="card-box">
-          <h3 style={{ marginTop: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
-            <span>Patients on {myWard ? titleCase(myWard) : 'All Wards'} <span className="ward-count-badge">{wardPatientCount}</span></span>
-            <a href="/profile" onClick={(e) => { e.preventDefault(); navigate('/profile'); }} style={{ fontSize: 12, fontWeight: 'normal' }}>
+          <h3 className="ward-heading" style={{ marginTop: 0 }}>
+            <span className="ward-heading-title">Patients on {myWard ? titleCase(myWard) : 'All Wards'} <span className="ward-count-badge">{wardPatientCount}</span></span>
+            <a className="ward-heading-link" href="/profile" onClick={(e) => { e.preventDefault(); navigate('/profile'); }}>
               {myWard ? 'Switch ward' : 'Set your ward'}
             </a>
           </h3>

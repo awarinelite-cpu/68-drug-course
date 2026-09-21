@@ -781,7 +781,22 @@ table.chart td input { width:100%; border:none; background:transparent; text-ali
 
 /* --- Ward patient count / new-patient-transfer notification badges --- */
 .ward-count-badge { display:inline-flex; align-items:center; justify-content:center; min-width:24px; height:24px; padding:0 6px; border-radius:999px; background:var(--primary-blue); color:var(--surface); font-size:13px; font-weight:700; margin-left:6px; vertical-align:middle; }
+/* "Patients on <ward>" heading on the Home page: bigger than a normal h3 so
+   the nurse can see at a glance which ward's list this is. Phone/tablet keep
+   the title left with "Switch ward" on the right; on desktop the title is
+   centered (the link stays pinned right via a 3-column grid). */
+.ward-heading { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px; font-size:22px; }
+.ward-heading-title { font-size:1em; }
+.ward-heading-link { font-size:12px; font-weight:normal; }
+.ward-heading .ward-count-badge { min-width:32px; height:32px; font-size:17px; padding:0 9px; margin-left:10px; }
+@media (min-width: 900px) {
+  .ward-heading { display:grid; grid-template-columns:1fr auto 1fr; font-size:32px; margin-bottom:16px; }
+  .ward-heading-title { grid-column:2; text-align:center; }
+  .ward-heading-link { grid-column:3; justify-self:end; }
+  .ward-heading .ward-count-badge { min-width:40px; height:40px; font-size:21px; padding:0 12px; }
+}
 .ward-split-counts { display:flex; flex-wrap:wrap; gap:10px; margin:-4px 0 10px 0; }
+@media (min-width: 900px) { .ward-split-counts { justify-content:center; } }
 .ward-split-badge { display:inline-flex; align-items:center; gap:4px; font-size:13px; font-weight:600; color:var(--text-secondary); background:var(--primary-light); border:1px solid var(--border); border-radius:8px; padding:4px 8px 4px 10px; }
 .notif-bell-btn { position:relative; }
 .notif-count-badge { position:absolute; top:-6px; right:-6px; background:#dc2626; color:#fff; border-radius:999px; font-size:11px; font-weight:700; min-width:18px; height:18px; display:flex; align-items:center; justify-content:center; padding:0 4px; line-height:1; }
