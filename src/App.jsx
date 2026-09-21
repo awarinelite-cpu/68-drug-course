@@ -5,6 +5,7 @@ import { NavProvider } from "./contexts/NavContext.jsx";
 import { ThemeProvider } from "./contexts/ThemeContext.jsx";
 import RequireAuth from "./components/RequireAuth.jsx";
 import NavDrawer from "./components/NavDrawer.jsx";
+import Footer from "./components/Footer.jsx";
 import OfflineBanner from "./components/OfflineBanner.jsx";
 import OfflineCacheStatus from "./components/OfflineCacheStatus.jsx";
 import PageLoading from "./components/PageLoading.jsx";
@@ -49,6 +50,7 @@ function AuthedShell({ children }) {
     <RequireAuth>
       <NavDrawer />
       {children}
+      <Footer />
     </RequireAuth>
   );
 }
