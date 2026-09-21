@@ -53,6 +53,12 @@ export default function Admin() {
   const [allPatients, setAllPatients] = useState([]);
   const [patientFilter, setPatientFilter] = useState('');
   const [patientStatus, setPatientStatus] = useState('');
+  // Bulk delete: ids ticked in the All Patients table, plus the confirm modal.
+  const [selectedPatientIds, setSelectedPatientIds] = useState(() => new Set());
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
+  const [bulkDeleteInput, setBulkDeleteInput] = useState('');
+  const [bulkDeleteError, setBulkDeleteError] = useState('');
+  const [bulkDeleting, setBulkDeleting] = useState(false);
 
   // Delete modal is shared between patients and users — deleteTarget.type
   // says which one confirmDelete() below should act on.
@@ -222,22 +228,85 @@ export default function Admin() {
     else await runDeleteUser(record);
   }
 
-  async function runDeletePatient(p) {
-    setPatientStatus('Deleting ' + (p.name || 'patient') + '…');
+  // Deletes one patient's subcollections and then the patient doc itself.
+  // Throws on failure — callers decide how to report it.
+  async function deletePatientRecords(p) {
     async function deleteAllInSubcollection(sub) {
       const snap = await getDocs(collection(db, 'patients', p.id, sub));
       await Promise.all(snap.docs.map(d => deleteDoc(doc(db, 'patients', p.id, sub, d.id))));
     }
+    await Promise.all(PATIENT_SUBCOLLECTIONS.map(deleteAllInSubcollection));
+    await deleteDoc(doc(db, 'patients', p.id));
+  }
+
+  async function runDeletePatient(p) {
+    setPatientStatus('Deleting ' + (p.name || 'patient') + '…');
     try {
-      await Promise.all(PATIENT_SUBCOLLECTIONS.map(deleteAllInSubcollection));
-      await deleteDoc(doc(db, 'patients', p.id));
+      await deletePatientRecords(p);
     } catch (e) {
       alert('Delete failed: ' + (e.code || e.message || 'unknown error'));
       setPatientStatus('');
       return;
     }
     setAllPatients((list) => list.filter(x => x.id !== p.id));
+    setSelectedPatientIds((prev) => { const n = new Set(prev); n.delete(p.id); return n; });
     setPatientStatus('');
+  }
+
+  // Select all applies to whatever the filter currently shows, so an admin
+  // can filter by ward/name first and tick just that group.
+  const allFilteredSelected = filteredPatients.length > 0 && filteredPatients.every(p => selectedPatientIds.has(p.id));
+  const selectedPatients = allPatients.filter(p => selectedPatientIds.has(p.id));
+
+  function togglePatientSelected(id) {
+    setSelectedPatientIds((prev) => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+  }
+  function toggleSelectAllFiltered() {
+    setSelectedPatientIds((prev) => {
+      const n = new Set(prev);
+      if (allFilteredSelected) filteredPatients.forEach(p => n.delete(p.id));
+      else filteredPatients.forEach(p => n.add(p.id));
+      return n;
+    });
+  }
+
+  function openBulkDeleteModal() {
+    if (!selectedPatients.length) return;
+    setBulkDeleteInput('');
+    setBulkDeleteError('');
+    setBulkDeleteOpen(true);
+  }
+  function closeBulkDeleteModal() { if (!bulkDeleting) setBulkDeleteOpen(false); }
+
+  async function confirmBulkDelete() {
+    if (bulkDeleting) return;
+    if (normalizeConfirmText(bulkDeleteInput) !== 'delete') {
+      setBulkDeleteError('That didn\u2019t match — nothing was deleted. Please type DELETE exactly.');
+      return;
+    }
+    const targets = selectedPatients;
+    setBulkDeleting(true);
+    setBulkDeleteError('');
+    const deletedIds = [];
+    const failed = [];
+    for (let i = 0; i < targets.length; i++) {
+      const p = targets[i];
+      setPatientStatus('Deleting patient ' + (i + 1) + ' of ' + targets.length + '…');
+      try {
+        await deletePatientRecords(p);
+        deletedIds.push(p.id);
+      } catch (e) {
+        failed.push((p.name || 'Unnamed') + ' (' + (e.code || e.message || 'unknown error') + ')');
+      }
+    }
+    const gone = new Set(deletedIds);
+    setAllPatients((list) => list.filter(x => !gone.has(x.id)));
+    setSelectedPatientIds((prev) => { const n = new Set(prev); deletedIds.forEach(id => n.delete(id)); return n; });
+    setPatientStatus(failed.length
+      ? 'Deleted ' + deletedIds.length + ' patient(s); ' + failed.length + ' failed: ' + failed.join(', ')
+      : 'Deleted ' + deletedIds.length + ' patient(s).');
+    setBulkDeleting(false);
+    setBulkDeleteOpen(false);
   }
 
   async function runDeleteUser(u) {
@@ -336,13 +405,32 @@ export default function Admin() {
           <div style={{ fontSize: 12, color: '#666', marginTop: 6 }}>
             {patientStatus || (filteredPatients.length + ' of ' + allPatients.length + ' patient(s)' + (patientFilter.trim() ? ' matching "' + patientFilter.trim() + '"' : ''))}
           </div>
+          {selectedPatients.length > 0 && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 8, flexWrap: 'wrap' }}>
+              <button className="btn" style={{ background: '#dc2626', color: '#fff' }} disabled={bulkDeleting} onClick={openBulkDeleteModal}>
+                Delete selected ({selectedPatients.length})
+              </button>
+              <button className="btn btn-secondary" disabled={bulkDeleting} onClick={() => setSelectedPatientIds(new Set())}>Clear selection</button>
+            </div>
+          )}
           <div className="table-wrap">
             <table className="entries">
-              <thead><tr><th>Name</th><th>EMR</th><th>Ward</th><th>Diagnosis</th><th>Admission Date</th><th></th></tr></thead>
+              <thead><tr>
+                <th style={{ width: 36 }}>
+                  <input type="checkbox" style={{ width: 'auto' }} aria-label="Select all patients shown"
+                    title={allFilteredSelected ? 'Unselect all shown' : 'Select all shown'}
+                    checked={allFilteredSelected} disabled={!filteredPatients.length || bulkDeleting} onChange={toggleSelectAllFiltered} />
+                </th>
+                <th>Name</th><th>EMR</th><th>Ward</th><th>Diagnosis</th><th>Admission Date</th><th></th>
+              </tr></thead>
               <tbody>
-                {!filteredPatients.length && <tr><td colSpan={6} style={{ color: '#666' }}>No patients found.</td></tr>}
+                {!filteredPatients.length && <tr><td colSpan={7} style={{ color: '#666' }}>No patients found.</td></tr>}
                 {filteredPatients.map((p) => (
                   <tr key={p.id}>
+                    <td>
+                      <input type="checkbox" style={{ width: 'auto' }} aria-label={'Select ' + (p.name || 'patient')}
+                        checked={selectedPatientIds.has(p.id)} disabled={bulkDeleting} onChange={() => togglePatientSelected(p.id)} />
+                    </td>
                     <td style={{ textAlign: 'left', cursor: 'pointer' }} title={'Open ' + (p.name || 'this patient') + '\u2019s overview'} onClick={() => openPatient(p)}>{p.name || 'Unnamed'}</td>
                     <td style={{ cursor: 'pointer' }} onClick={() => openPatient(p)}>{p.emr || '-'}</td>
                     <td style={{ cursor: 'pointer' }} onClick={() => openPatient(p)}>{p.ward || '-'}</td>
@@ -524,6 +612,33 @@ export default function Admin() {
           </div>
         </div>
       </div>
+
+      {bulkDeleteOpen && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+          <div className="card-box" style={{ maxWidth: 420, width: '100%', margin: 0 }}>
+            <h3 style={{ marginTop: 0, color: '#dc2626' }}>Delete {selectedPatients.length} Patient{selectedPatients.length === 1 ? '' : 's'}</h3>
+            <p style={{ fontSize: 14, color: '#374151' }}>
+              This permanently deletes {selectedPatients.length === allPatients.length ? 'ALL ' : ''}{selectedPatients.length} selected patient{selectedPatients.length === 1 ? '' : 's'} and every
+              chart, drug list, and closed-admission record for them. This cannot be undone. Consider downloading a
+              full backup (further down this page) first.
+            </p>
+            <div className="field">
+              <label>Type DELETE to confirm</label>
+              <input type="text" autoComplete="off" autoCapitalize="off" autoCorrect="off" spellCheck="false"
+                value={bulkDeleteInput} onChange={(e) => setBulkDeleteInput(e.target.value)} disabled={bulkDeleting}
+                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); confirmBulkDelete(); } else if (e.key === 'Escape') closeBulkDeleteModal(); }}
+                autoFocus />
+            </div>
+            {bulkDeleteError && <div className="error-msg">{bulkDeleteError}</div>}
+            <div style={{ display: 'flex', gap: 10, marginTop: 6 }}>
+              <button className="btn btn-secondary" style={{ flex: 1 }} disabled={bulkDeleting} onClick={closeBulkDeleteModal}>Cancel</button>
+              <button className="btn" style={{ flex: 1, background: '#dc2626', color: '#fff' }} disabled={bulkDeleting} onClick={confirmBulkDelete}>
+                {bulkDeleting ? 'Deleting…' : 'Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {deleteTarget && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
