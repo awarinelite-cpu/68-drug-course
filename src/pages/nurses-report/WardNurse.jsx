@@ -617,6 +617,28 @@ function useWardReport(wardKey, isAdmin, profile, user) {
     }));
   }
 
+  // Fills the "Vital Signs Roll" box (stored as npAssessment) with the
+  // linked patient's most recent Vital Signs Chart reading, in the same
+  // T/P/R/BP/SPO2 line format used elsewhere in this file. Blank-only,
+  // like every other auto-fill here, so it never overwrites anything the
+  // nurse typed or edited — and since the result is plain text in a
+  // normal textarea, she can still change any of it. Silent no-op if the
+  // patient has no vitals recorded or the lookup fails.
+  async function fillVitalsRoll(id, patientId) {
+    if (!patientId) return;
+    try {
+      const latest = await fetchLatestVitals(patientId);
+      if (!latest) return;
+      const line = formatVitalsLine({ temp: latest.temp || '', pulse: latest.pulse || '', resp: latest.resp || '', bp: latest.bp || '', spo2: latest.spo2 || '' });
+      setWardDoc((d) => ({
+        ...d,
+        patients: d.patients.map((p) => (p.id === id && !p.npAssessment) ? { ...p, npAssessment: line } : p)
+      }));
+    } catch (e) {
+      // Non-fatal — the nurse can still type vitals in by hand.
+    }
+  }
+
   // Looks the typed EMR number up against the existing 'patients'
   // collection (the same master record used by the drug-course-chart
   // side of the app) and, if found, fills in Age/Name/Sex/DOA — but only
@@ -651,6 +673,7 @@ function useWardReport(wardKey, isAdmin, profile, user) {
         })
       }));
       setEmrLookup((s) => ({ ...s, [id]: { text: 'Filled in from the patient record.', error: false } }));
+      fillVitalsRoll(id, foundId);
     } catch (e) {
       setEmrLookup((s) => ({ ...s, [id]: { text: "Couldn't look up patient: " + (e.code || e.message || 'unknown error'), error: true } }));
     }
@@ -696,6 +719,7 @@ function useWardReport(wardKey, isAdmin, profile, user) {
       })
     }));
     setEmrLookup((s) => ({ ...s, [id]: { text: 'Filled in from ' + (record.name || 'the patient') + '\u2019s record.', error: false } }));
+    fillVitalsRoll(id, sourcePatientId);
   }
 
   function openNightUpdate() {

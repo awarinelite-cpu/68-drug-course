@@ -423,7 +423,11 @@ export const PATIENT_FIELDS = [
   // entries (type 'textarea', big true) means they render, save, and
   // display read-only on the Overall Nurse and Archive views for free —
   // same as every other field here — with no extra wiring needed.
-  { key: 'npAssessment',        label: 'Assessment',         type: 'textarea', big: true },
+  // Key stays 'npAssessment' so any write-ups already saved under it keep
+  // their content; only the heading changed. WardNurse.jsx auto-fills this
+  // with the linked patient's latest Vital Signs Chart reading, and it
+  // stays a normal editable textarea so the nurse can correct it.
+  { key: 'npAssessment',        label: 'Vital Signs Roll',   type: 'textarea', big: true },
   { key: 'npNursingDiagnosis',  label: 'Nursing Diagnosis',  type: 'textarea', big: true },
   { key: 'npPlanning',          label: 'Planning',           type: 'textarea', big: true },
   { key: 'npImplementation',    label: 'Implementation',     type: 'textarea', big: true },
