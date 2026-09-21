@@ -200,7 +200,10 @@ a { text-decoration: none; color: inherit; }
   background-color: #eaf6fd;
   pointer-events: none;
 }
-.login-card {
+/* Doubled selector on purpose: the plain .card-box rule further down sets an
+   opaque background at the same specificity and, coming later, was winning
+   over this one — which is why the card looked solid instead of see-through. */
+.card-box.login-card {
   background: rgba(255,255,255,0.14); backdrop-filter: blur(2px); -webkit-backdrop-filter: blur(2px);
   box-shadow: 0 8px 32px rgba(15,35,80,0.35);
   border: 1px solid rgba(255,255,255,0.4);
