@@ -2,7 +2,7 @@ import { WARD_OPTIONS, PED_BED_TYPES } from "../lib/drugChartHelpers.js";
 import { classifyAffiliation, AFFILIATION_LABEL } from "../lib/patientAffiliation.js";
 
 // lockWard: true on the Patient page's own Edit Patient Information form
-// (see Patient.jsx) — ward is deliberately not editable there anymore.
+// (see Patient.jsx) — ward is not editable there for ordinary users.
 // A patient's ward should only ever change through an action that also
 // keeps Shift Statistics and the roster honest about it: Transfer,
 // Admit Patient, Register New Patient (reusing an existing record), or
@@ -11,6 +11,13 @@ import { classifyAffiliation, AFFILIATION_LABEL } from "../lib/patientAffiliatio
 // census actually reflect. Register New Patient's own form (Home.jsx)
 // is unaffected — picking a ward there is exactly how that admission
 // itself happens, not an edit to an existing one.
+//
+// The one exception: Patient.jsx passes lockWard={false} when the signed-in
+// user is an admin, so this field opens up into the same plain ward select
+// used elsewhere. That's a deliberate escape hatch for correcting a wrongly
+// recorded ward without it counting as a Transfer (no Transfer In/Out figure
+// on either ward's Shift Statistics, no admission-status audit trail) — see
+// the admin-only note on saveEditPatient in Patient.jsx.
 export default function PatientForm({ form, setForm, lockWard }) {
   const set = (key) => (e) => setForm({ ...form, [key]: e.target.value });
   const setWard = (e) => setForm({ ...form, ward: e.target.value, pedBedType: e.target.value === 'PEDIATRIC/NICU WARD' ? form.pedBedType : '' });

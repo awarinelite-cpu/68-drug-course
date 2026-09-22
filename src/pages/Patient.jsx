@@ -19,6 +19,10 @@ const SELECTED_PATIENT_KEY = 'selectedPatientId';
 
 export default function Patient() {
   const { profile, user } = useAuth();
+  // Only admin (not subadmin, not doctor/nurse) may correct a patient's
+  // ward directly from this Edit form — see the admin-only note on
+  // saveEditPatient below and the lockWard comment in PatientForm.jsx.
+  const isAdmin = profile?.role === 'admin';
   const navigate = useNavigate();
   const goBack = useGoBack('/');
   useBackLock('/');
@@ -157,14 +161,25 @@ export default function Patient() {
       // out of search results until an admin ran the reindex.
       nameLower: name.toLowerCase(), emrLower: emr.toLowerCase(), nameTokens: nameSearchTokens(name),
       diagnosis: editForm.diagnosis.trim(),
-      // Ward/pedBedType are deliberately never written from here — the
-      // Edit form locks that field (see PatientForm's lockWard) so this
-      // is belt-and-suspenders: even if editForm.ward somehow differs
-      // from patient.ward, Save Changes must never be how a ward
-      // changes. Transfer / Admit Patient / Register New Patient /
-      // Readmit (patientAdmissionStatus.js) are the only paths that are
-      // allowed to move a patient, since those are the ones that also
-      // keep Shift Statistics and the roster in sync with the move.
+      // Ward/pedBedType are only ever written from here for admin. For
+      // everyone else the Edit form locks the field (see PatientForm's
+      // lockWard) so this is belt-and-suspenders: even if editForm.ward
+      // somehow differs from patient.ward, a non-admin Save Changes must
+      // never be how a ward changes. Transfer / Admit Patient / Register
+      // New Patient / Readmit (patientAdmissionStatus.js) remain the only
+      // paths for everyone else, since those also keep Shift Statistics
+      // and the roster in sync with the move.
+      //
+      // Admin's correction here is deliberately a plain field overwrite:
+      // it does NOT go through applyPatientStatus/admitExistingPatientToWard,
+      // so it does not add a Transfer In/Out figure to either ward's Shift
+      // Statistics and leaves no admission-status audit entry — this is
+      // for fixing a wrongly recorded ward, not for recording a real
+      // transfer of care.
+      ...(isAdmin ? {
+        ward: editForm.ward,
+        pedBedType: editForm.ward === 'PEDIATRIC/NICU WARD' ? (editForm.pedBedType || '') : ''
+      } : {}),
       age: editForm.age.trim(),
       hospNo: editForm.hospNo.trim(), admissionDate: editForm.admissionDate.trim(), allergies: editForm.allergies.trim(),
       insurance: editForm.insurance.trim(),
@@ -329,7 +344,7 @@ export default function Patient() {
             {showEditForm && editForm && (
               <div className="card-box" style={{ marginTop: 12, boxShadow: 'none', border: '1px solid #e5e7eb' }}>
                 <h3 style={{ marginTop: 0 }}>Edit Patient Information</h3>
-                <PatientForm form={editForm} setForm={setEditForm} lockWard />
+                <PatientForm form={editForm} setForm={setEditForm} lockWard={!isAdmin} />
                 <button className="btn btn-primary" onClick={saveEditPatient}>Save Changes</button>
                 <button className="btn btn-secondary" onClick={() => setShowEditForm(false)}>Cancel</button>
                 {editMsg && <div className="error-msg">{editMsg}</div>}
