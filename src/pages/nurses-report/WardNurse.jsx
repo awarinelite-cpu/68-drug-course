@@ -839,7 +839,7 @@ function useWardReport(wardKey, isAdmin, profile, user) {
     const finalDoc = { ...doc_, occ: reconciledCensus.occ, vac: reconciledCensus.vac, ...reconciledTotals };
     try {
       await setDoc(ref, { ...finalDoc, updatedAt: serverTimestamp(), updatedBy: profile.name || 'Unknown' }, { merge: true });
-      setSaveStatus({ text: 'Saved.', error: false });
+      setSaveStatus({ text: '\u2705 Saved.', error: false });
     } catch (e) {
       setSaveStatus({ text: "Couldn't save: " + (e.code || e.message || 'unknown error'), error: true });
     }
@@ -942,7 +942,7 @@ function useWardReport(wardKey, isAdmin, profile, user) {
       await setDoc(ref, payload, { merge: true });
       setSaveStatus(archiveErrors.length
         ? { text: 'Report submitted, but could not archive: ' + archiveErrors.join('; '), error: true }
-        : { text: 'Report submitted.', error: false });
+        : { text: '\u2705 Report submitted.', error: false });
       setWardDoc((d) => ({ ...d, ...doc_, submitted: true, locked: true, nightUpdateBy: payload.nightUpdateBy || d.nightUpdateBy }));
 
       // A patient tagged AE_TRANSFER/NEW_PATIENT (see wardPatientOptions
@@ -1334,7 +1334,7 @@ function WardPanelRest({ h, showLabel, isAdmin, navigate, includeShiftTable = tr
                 )}
               </div>
             )}
-            <div className="save-status" style={{ color: saveStatus.error ? '#dc2626' : '#6b7280' }}>{saveStatus.text}</div>
+            <div className="save-status" style={{ color: saveStatus.error ? '#dc2626' : (saveStatus.text ? '#16a34a' : undefined), fontWeight: saveStatus.text && !saveStatus.error ? 'bold' : 'normal' }}>{saveStatus.text}</div>
           </div>
         </>
       )}

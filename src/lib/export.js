@@ -7,6 +7,7 @@ import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 import { db } from "../firebase.js";
 import { formatDateTime } from "./time-format.js";
+import { formatHHMM12 } from "./drugChartHelpers.js";
 
 // ---------- data gathering ----------
 
@@ -268,7 +269,7 @@ function addDrugChartSection(pdf, y, dc) {
   const drugRows = (dc.drugs || []).filter(d => d && d.name).map(d => [d.name, d.route, d.frequency, (d.action === 'Inactive' && d.actionNote) ? d.action + ' - ' + d.actionNote : d.action, d.duration]);
   y = addTable(pdf, y, ['Drug', 'Route', 'Frequency', 'Action', 'Duration'], drugRows);
 
-  const adminRows = (dc.rows || []).filter(r => r && (r.date || r.sno || r.time)).map(r => [r.date, r.sno, r.time, r.dose, r.route, r.nurse, r.remark]);
+  const adminRows = (dc.rows || []).filter(r => r && (r.date || r.sno || r.time)).map(r => [r.date, r.sno, formatHHMM12(r.time), r.dose, r.route, r.nurse, r.remark]);
   y = addTable(pdf, y, ['Date', 'Drug S/N', 'Time', 'Dose', 'Route', 'Nurse', 'Remark'], adminRows);
 
   const voRows = (dc.verbalOrders || []).map(o => [o.at ? formatDateTime(o.at, { year: true }) : '', o.text || '', o.nurse || '']);

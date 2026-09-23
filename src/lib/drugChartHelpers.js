@@ -33,6 +33,21 @@ export const PED_BED_TYPES = ['Bed', 'Cot'];
 const ACTION_COLORS = { Ongoing: '#2563eb', Inactive: '#7c3aed', Completed: '#16a34a', Discontinued: '#dc2626', Withheld: '#d97706', Other: '#6b7280' };
 export function actionColor(action) { return ACTION_COLORS[action] || '#9ca3af'; }
 
+// The drug administration record's Time column is stored as a 24-hour
+// "HH:MM" string (same shape TimePicker.jsx writes/reads) so sorting and
+// due-time math elsewhere in this file stay simple — but nurses read it
+// off the chart as 12-hour AM/PM, matching how the TimePicker itself is
+// laid out (an AM/PM sidebar, not a 24-hour dial). This only changes the
+// display string; the stored value is untouched.
+export function formatHHMM12(hhmm) {
+  if (!hhmm || !/^\d{2}:\d{2}$/.test(hhmm)) return hhmm || '';
+  const [h, m] = hhmm.split(':').map(Number);
+  const ampm = h >= 12 ? 'PM' : 'AM';
+  let h12 = h % 12;
+  if (h12 === 0) h12 = 12;
+  return h12 + ':' + String(m).padStart(2, '0') + ' ' + ampm;
+}
+
 export function defaultRow() {
   return { date: '', sno: '', time: '', dose: 'AP', route: '', nurse: '', remark: '', skipped: [] };
 }

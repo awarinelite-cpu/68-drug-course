@@ -15,7 +15,7 @@ import {
   dueLabelFor, withDrugCompletionChecked, activateFollowOnDrugs, computeRouteFromSno, parseBulkText,
   parseDoseSequence, administrationTimesFor, flaggedDrugRefs, flaggedDrugMessage, diffFields,
   autoDurationForFrequency, buildSnoSegments, buildSnoText, abbreviateReason,
-  parseWeeklyFrequency, weeklyDosesGivenThisWeek
+  parseWeeklyFrequency, weeklyDosesGivenThisWeek, formatHHMM12
 } from "../lib/drugChartHelpers.js";
 import { ROSTER_TAG_FOR_REASON, clearAllocationsForPatient, EXIT_STAT_KEY, EXIT_DEMOGRAPHIC_CATEGORY } from "../lib/patientAdmissionStatus.js";
 import { bumpShiftStatForPatientWard, bumpDemographicStatForPatientWard } from "../lib/shiftStatsSync.js";
@@ -1131,7 +1131,7 @@ export default function DrugCourseChart() {
                           type="button"
                           className={'time-picker-btn' + (row.time ? '' : ' placeholder')}
                           onClick={() => setTimePickerRow(i)}
-                        >{row.time || 'Set time'}</button>
+                        >{row.time ? formatHHMM12(row.time) : 'Set time'}</button>
                       </td>
                       <td className="col-dose"><input type="text" value={row.dose || 'AP'} onChange={(e) => updateChartRow(i, { dose: e.target.value })} /></td>
                       <td className="col-route"><input type="text" value={row.route || ''} onChange={(e) => updateChartRow(i, { route: e.target.value })} /></td>
@@ -1168,7 +1168,7 @@ export default function DrugCourseChart() {
                         );
                       })()}
                     </td>
-                    <td className="col-time view-cell">{row.time || '\u00A0'}</td>
+                    <td className="col-time view-cell">{row.time ? formatHHMM12(row.time) : '\u00A0'}</td>
                     <td className="col-dose view-cell">{row.dose || 'AP'}</td>
                     <td className="col-route view-cell">{row.route || '\u00A0'}</td>
                     <td className="col-nurse view-cell">{row.nurse || '\u00A0'}</td>
