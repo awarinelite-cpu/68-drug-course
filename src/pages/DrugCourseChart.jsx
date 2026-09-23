@@ -416,6 +416,16 @@ export default function DrugCourseChart() {
     const newVal = diagEditText.trim();
     if (oldVal !== newVal) {
       logAudit('Diagnosis edited\nDiagnosis: ' + (newVal || '—'));
+      // The Drug Course Chart's diagnosis is the source of truth going
+      // forward — mirror it onto the patient's personal-info record too,
+      // so every other screen that still reads patient.diagnosis (ward
+      // reports' Select Patient fill, Admin, Overview, Home, PDF/JSON
+      // export…) shows the same up-to-date diagnosis without a nurse
+      // having to open and re-type it in two places.
+      updateDoc(doc(db, 'patients', patientId), { diagnosis: newVal }).catch(() => {
+        // Best-effort — the chart's own field (updateField below) is the
+        // record that matters most and always saves regardless.
+      });
     }
     updateField('f_diagnosis', diagEditText);
     setDiagModalOpen(false);

@@ -12,7 +12,7 @@ import {
   reportDateId, occDelta, blankShift, defaultWardDoc, wardSelectorOptions,
   isWardDocUntouched
 } from "../../lib/nurses-report-common.js";
-import { patientWardAndBedTypeForReportKey } from "../../lib/wardNameMatch.js";
+import { patientWardAndBedTypeForReportKey, wardSelectorKeyForPatientWard } from "../../lib/wardNameMatch.js";
 import { wardHeadcount } from "../../lib/wardCensus.js";
 import { applyPatientStatus, closeOutDischargedPatient, activeAdmissionTag, clearAdmissionTag, ADMISSION_TAG_LABEL, ADMISSION_TAG_STATUS_STAMP } from "../../lib/patientAdmissionStatus.js";
 import Topbar from "../../components/Topbar.jsx";
@@ -102,6 +102,19 @@ async function fetchCurrentDrugPlan(patientId) {
   const snap = await getDocSafe(doc(db, 'patients', patientId, 'drugCourseChart', 'main'));
   if (!snap || !snap.exists()) return '';
   return formatPlanDrugs(snap.data().drugs);
+}
+
+// The patient's Drug Course Chart is the up-to-date diagnosis (f_diagnosis,
+// same field DrugCourseChart.jsx's own banner reads) — the write-up's
+// "Diagnosis:" line should track that, not the older diagnosis captured on
+// the patient's personal-info record at registration. Falls back to '' if
+// the chart hasn't had a diagnosis typed into it yet (blank-only fill in
+// the callers below then leaves the personal-info value in place, same as
+// before this existed).
+async function fetchChartDiagnosis(patientId) {
+  const snap = await getDocSafe(doc(db, 'patients', patientId, 'drugCourseChart', 'main'));
+  if (!snap || !snap.exists()) return '';
+  return (snap.data().f_diagnosis || '').trim();
 }
 
 const VITALS_CHIPS = [
@@ -715,6 +728,10 @@ function useWardReport(wardKey, isAdmin, profile, user) {
       }
       const record = snap.docs[0].data();
       const foundId = snap.docs[0].id;
+      // The Drug Course Chart's diagnosis (if one's been typed in) takes
+      // priority over the older personal-info diagnosis — see
+      // fetchChartDiagnosis above.
+      const chartDiagnosis = await fetchChartDiagnosis(foundId).catch(() => '');
       setWardDoc((d) => ({
         ...d,
         patients: d.patients.map((p) => {
@@ -723,7 +740,8 @@ function useWardReport(wardKey, isAdmin, profile, user) {
           if (!next.name && record.name) next.name = record.name;
           if (!next.age && record.age) next.age = record.age;
           if (!next.doa && record.admissionDate) next.doa = record.admissionDate;
-          if (record.diagnosis) next.diagnosis = withPatientDiagnosis(next.diagnosis, record.diagnosis);
+          const diagnosisSource = chartDiagnosis || record.diagnosis;
+          if (diagnosisSource) next.diagnosis = withPatientDiagnosis(next.diagnosis, diagnosisSource);
           if (!next.sex && record.gender) next.sex = record.gender === 'M' ? 'Male' : record.gender === 'F' ? 'Female' : record.gender;
           return next;
         })
@@ -743,10 +761,14 @@ function useWardReport(wardKey, isAdmin, profile, user) {
   // (`sourcePatientId`), which submitReport() below needs to actually
   // discharge/refer that patient when the card's status calls for it.
   // Clearing the dropdown back to blank clears that link too.
-  function selectPatientFromWard(id, sourcePatientId) {
+  async function selectPatientFromWard(id, sourcePatientId) {
     if (!sourcePatientId) { setWardDoc((d) => ({ ...d, patients: d.patients.map((p) => p.id === id ? { ...p, sourcePatientId: '' } : p) })); return; }
     const record = wardPatientOptions.find((p) => p.id === sourcePatientId);
     if (!record) return;
+    // The Drug Course Chart's diagnosis (if one's been typed in) takes
+    // priority over the older personal-info diagnosis — see
+    // fetchChartDiagnosis above.
+    const chartDiagnosis = await fetchChartDiagnosis(sourcePatientId).catch(() => '');
     setWardDoc((d) => ({
       ...d,
       patients: d.patients.map((p) => {
@@ -762,7 +784,8 @@ function useWardReport(wardKey, isAdmin, profile, user) {
         if (!next.doa && record.admissionDate) next.doa = record.admissionDate;
         // The patient's diagnosis goes on the bold "Diagnosis:" line at the
         // top of the Notes box (blank-only, existing notes are kept below it).
-        if (record.diagnosis) next.diagnosis = withPatientDiagnosis(next.diagnosis, record.diagnosis);
+        const diagnosisSource = chartDiagnosis || record.diagnosis;
+        if (diagnosisSource) next.diagnosis = withPatientDiagnosis(next.diagnosis, diagnosisSource);
         // Picking someone already tagged DISCHARGE/TRANS OUT (see
         // WardPatientPicker) means this write-up is their closing note —
         // pre-fill Status to match so submitReport recognizes it and the
@@ -1570,8 +1593,24 @@ export default function WardNurse() {
 
   const wardOptions = useMemo(() => wardSelectorOptions(), []);
   const [groupKey, setGroupKey] = useState('');
-  const activeOption = wardOptions.find(o => o.key === groupKey) || null;
   const isAdmin = profile?.role === 'admin';
+  const isSubadmin = profile?.role === 'subadmin';
+  // Only admin/subadmin pick a ward manually (they may need to cover or
+  // check any ward). An ordinary nurse is taken straight to the ward set
+  // as her Current Ward on My Profile — she never sees the "-- Select
+  // your ward --" dropdown at all.
+  const canPickWard = isAdmin || isSubadmin;
+
+  const autoKey = useMemo(
+    () => (canPickWard ? null : wardSelectorKeyForPatientWard(profile?.ward)),
+    [canPickWard, profile?.ward]
+  );
+
+  useEffect(() => {
+    if (!canPickWard) setGroupKey(autoKey || '');
+  }, [canPickWard, autoKey]);
+
+  const activeOption = wardOptions.find(o => o.key === groupKey) || null;
 
   return (
     <>
@@ -1580,14 +1619,26 @@ export default function WardNurse() {
       </Topbar>
       <div className="ward-select-page" style={{ backgroundImage: `url(${wardSelectBg})` }} />
       <div className="container">
-        <div className="card-box">
-          <div className="ward-select-row">
-            <select value={groupKey} onChange={(e) => setGroupKey(e.target.value)}>
-              <option value="">-- Select your ward --</option>
-              {wardOptions.map(o => <option key={o.key} value={o.key}>{o.label}</option>)}
-            </select>
+        {canPickWard && (
+          <div className="card-box">
+            <div className="ward-select-row">
+              <select value={groupKey} onChange={(e) => setGroupKey(e.target.value)}>
+                <option value="">-- Select your ward --</option>
+                {wardOptions.map(o => <option key={o.key} value={o.key}>{o.label}</option>)}
+              </select>
+            </div>
           </div>
-        </div>
+        )}
+
+        {!canPickWard && !activeOption && (
+          <div className="card-box">
+            <p style={{ margin: 0 }}>
+              {profile?.ward
+                ? "Your Current Ward (" + profile.ward + ") doesn't match a ward report — ask an admin to check it."
+                : 'Your account has no Current Ward set yet. Set it on My Profile (Current Ward) so this page can take you straight to your ward.'}
+            </p>
+          </div>
+        )}
 
         {activeOption && (
           activeOption.mergedTable

@@ -1,4 +1,4 @@
-import { WARDS } from "./nurses-report-common.js";
+import { WARDS, wardSelectorOptions } from "./nurses-report-common.js";
 import { WARD_OPTIONS } from "./drugChartHelpers.js";
 
 // Patient charts (WARD_OPTIONS, in drugChartHelpers.js) and nurse reports
@@ -107,4 +107,20 @@ export function patientWardAndBedTypeForReportKey(reportWardKey) {
   const wardLabel = patientWardForReportKey(reportWardKey);
   if (!wardLabel) return null;
   return { wardLabel, bedType: PED_BED_TYPE_BY_REPORT_KEY[reportWardKey] || null };
+}
+
+// A nurse's "Current Ward" (profile.ward, a WARD_OPTIONS label set on My
+// Profile) tells the Ward Nurse report page which ward-selector option
+// (from nurses-report-common.js's wardSelectorOptions()) to jump straight
+// to, skipping the manual "-- Select your ward --" dropdown for ordinary
+// nurses. Handles the PAED WARD/MATERNITY WARD merged groups the same way
+// reportWardKeysForPatientWard does — matching on any of a group's member
+// wardKeys, not just its first. Returns null if the nurse's profile has no
+// ward set, or it doesn't match any report ward.
+export function wardSelectorKeyForPatientWard(patientWardLabel) {
+  const reportKeys = reportWardKeysForPatientWard(patientWardLabel);
+  if (!reportKeys.length) return null;
+  const options = wardSelectorOptions();
+  const match = options.find(o => o.wardKeys.some(k => reportKeys.includes(k)));
+  return match ? match.key : null;
 }
