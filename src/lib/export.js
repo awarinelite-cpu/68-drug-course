@@ -282,10 +282,20 @@ function addDrugChartSection(pdf, y, dc) {
   return y;
 }
 
+// Chart entries store time as 24-hour ("HH:MM", optionally with a separate
+// date field, or combined as "YYYY-MM-DDTHH:MM"). Exports show it as 12-hour AM/PM.
+function fmtStamp(time, date) {
+  if (!time) return date || '';
+  const m = /^(\d{4}-\d{2}-\d{2})[T ](\d{2}:\d{2})/.exec(time);
+  if (m) return m[1] + ' ' + formatHHMM12(m[2]);
+  if (/^\d{2}:\d{2}$/.test(time)) return (date ? date + ' ' : '') + formatHHMM12(time);
+  return time;
+}
+
 function addVitalsSection(pdf, y, vitals) {
   if (!vitals.length) return y;
   y = sectionTitle(pdf, y, 'Vital Signs');
-  const body = vitals.map(v => [v.time || '', v.temp || '', v.pulse || '', v.resp || '', v.bp || '', v.spo2 || '', v.notes || '']);
+  const body = vitals.map(v => [fmtStamp(v.time, v.date), v.temp || '', v.pulse || '', v.resp || '', v.bp || '', v.spo2 || '', v.notes || '']);
   return addTable(pdf, y, ['Time', 'Temp (°C)', 'Pulse', 'Resp', 'BP', 'SpO2 (%)', 'Notes'], body, {
     didParseCell(data) {
       if (data.section !== 'body') return;
@@ -345,7 +355,7 @@ function addIOSection(pdf, y, io, ioSummary) {
   if (!io.length) return y;
   y = sectionTitle(pdf, y, 'Intake & Output');
   const rows = withIOBalance(io);
-  const body = rows.map(r => [r.time || '', r.intakeType || '', r.intakeAmount || '', r.outputType || '', r.outputAmount || '', r.balance]);
+  const body = rows.map(r => [fmtStamp(r.time), r.intakeType || '', r.intakeAmount || '', r.outputType || '', r.outputAmount || '', r.balance]);
   y = addTable(pdf, y, ['Time', 'Route of Intake', 'Intake Vol. (ml)', 'Type of Output', 'Output Vol. (ml)', 'Balance (ml)'], body, {
     didParseCell(data) {
       if (data.section !== 'body') return;
@@ -369,7 +379,7 @@ function addIOSection(pdf, y, io, ioSummary) {
 function addSeizureSection(pdf, y, seizure) {
   if (!seizure.length) return y;
   y = sectionTitle(pdf, y, 'Seizure Chart');
-  const body = seizure.map(s => [s.time || '', s.duration || '', s.type || '', s.description || '']);
+  const body = seizure.map(s => [fmtStamp(s.time), s.duration || '', s.type || '', s.description || '']);
   return addTable(pdf, y, ['Time', 'Duration', 'Type', 'Description'], body);
 }
 

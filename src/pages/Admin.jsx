@@ -15,7 +15,7 @@ import {
   SOUND_OPTIONS, APPEARANCE_OPTIONS, REPEAT_OPTIONS, ALL_FREQUENCIES, GLUCOSE_INTERVAL_OPTIONS,
   OVERDUE_REPEAT_OPTIONS, loadAlarmSettings, saveAlarmSettings as persistAlarmSettings
 } from "../lib/alarm-settings.js";
-import { useTimeFormat, getTimeFormat, setTimeFormat } from "../lib/time-format.js";
+import { useTimeFormat } from "../lib/time-format.js";
 import Topbar from "../components/Topbar.jsx";
 
 // Every chart type and archived-admission record a patient can accumulate.
@@ -36,6 +36,34 @@ function normalizeConfirmText(s) {
 
 const functionsInstance = getFunctions(app);
 const deleteUserAccountFn = httpsCallable(functionsInstance, 'deleteUserAccount');
+
+// 12-hour AM/PM time control (value / onChange use 24-hour "HH:MM"). Replaces
+// <input type="time">, which follows the phone's own clock setting.
+function Time12Select({ value, onChange }) {
+  const [h24, m] = (value || "00:00").split(":").map(Number);
+  const ampm = h24 >= 12 ? "PM" : "AM";
+  const h12 = h24 % 12 === 0 ? 12 : h24 % 12;
+  const minutes = Array.from({ length: 12 }, (_, k) => k * 5);
+  if (!minutes.includes(m)) { minutes.push(m); minutes.sort((a, b) => a - b); }
+  const emit = (hh, mm, ap) => {
+    const h = (hh % 12) + (ap === "PM" ? 12 : 0);
+    onChange(String(h).padStart(2, "0") + ":" + String(mm).padStart(2, "0"));
+  };
+  return (
+    <div style={{ display: "flex", gap: 6 }}>
+      <select value={h12} onChange={(e) => emit(Number(e.target.value), m, ampm)}>
+        {[12, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11].map((h) => <option key={h} value={h}>{h}</option>)}
+      </select>
+      <select value={m} onChange={(e) => emit(h12, Number(e.target.value), ampm)}>
+        {minutes.map((mm) => <option key={mm} value={mm}>{String(mm).padStart(2, "0")}</option>)}
+      </select>
+      <select value={ampm} onChange={(e) => emit(h12, m, e.target.value)}>
+        <option value="AM">AM</option>
+        <option value="PM">PM</option>
+      </select>
+    </div>
+  );
+}
 
 export default function Admin() {
   const { user, profile, logout } = useAuth();
@@ -67,23 +95,7 @@ export default function Admin() {
   const [deleteError, setDeleteError] = useState('');
   const [userDeletingId, setUserDeletingId] = useState(null);
 
-  const timeFormat = useTimeFormat();
-  const [timeFormatSaving, setTimeFormatSaving] = useState(false);
-  const [timeFormatMsg, setTimeFormatMsg] = useState(null);
-
-  async function setSystemTimeFormat(next) {
-    if (next === getTimeFormat() || timeFormatSaving) return;
-    setTimeFormatSaving(true);
-    setTimeFormatMsg(null);
-    try {
-      await setTimeFormat(next);
-      setTimeFormatMsg({ type: "info", text: "System time format saved." });
-    } catch (e) {
-      setTimeFormatMsg({ type: "error", text: e.message || "Failed to save time format." });
-    } finally {
-      setTimeFormatSaving(false);
-    }
-  }
+  useTimeFormat();
 
   const [alarm, setAlarm] = useState(null); // null while loading
   const [freqChecked, setFreqChecked] = useState({});
@@ -479,31 +491,6 @@ export default function Admin() {
         </div>
 
         <div className="card-box">
-          <h3 style={{ marginTop: 0 }}>System Time Format</h3>
-          <p style={{ fontSize: 12, color: '#666', marginTop: -6 }}>
-            Controls how every clock and timestamp in the system is displayed — drug due-times, vitals, audit
-            logs, nurses reports, exports, everywhere. Applies to every user's device instantly, no reload needed.
-          </p>
-          <div className="field">
-            <div style={{ display: 'flex', gap: 8 }} role="group" aria-label="System time format">
-              <button type="button" className={"btn " + (timeFormat === "24" ? "btn-primary" : "")}
-                aria-pressed={timeFormat === "24"} disabled={timeFormatSaving}
-                onClick={() => setSystemTimeFormat("24")}>
-                24-Hour (e.g. 14:30)
-              </button>
-              <button type="button" className={"btn " + (timeFormat === "12" ? "btn-primary" : "")}
-                aria-pressed={timeFormat === "12"} disabled={timeFormatSaving}
-                onClick={() => setSystemTimeFormat("12")}>
-                12-Hour, AM/PM (e.g. 2:30 PM)
-              </button>
-            </div>
-            {timeFormatMsg && (
-              <div className={timeFormatMsg.type === "error" ? "error-msg" : "info-msg"}>{timeFormatMsg.text}</div>
-            )}
-          </div>
-        </div>
-
-        <div className="card-box">
           <h3 style={{ marginTop: 0 }}>Drug-Due Alarm Settings</h3>
           <p style={{ fontSize: 12, color: '#666', marginTop: -6 }}>
             Controls the alert nurses get when a drug dose is due — see "Alerts" on the Profile page for how a nurse
@@ -540,11 +527,11 @@ export default function Admin() {
               <div style={{ display: 'flex', gap: 10 }}>
                 <div className="field" style={{ flex: 1 }}>
                   <label>Quiet From</label>
-                  <input type="time" value={alarm.quietHours.start} onChange={(e) => setAlarm({ ...alarm, quietHours: { ...alarm.quietHours, start: e.target.value } })} />
+                  <Time12Select value={alarm.quietHours.start} onChange={(v) => setAlarm({ ...alarm, quietHours: { ...alarm.quietHours, start: v } })} />
                 </div>
                 <div className="field" style={{ flex: 1 }}>
                   <label>Quiet Until</label>
-                  <input type="time" value={alarm.quietHours.end} onChange={(e) => setAlarm({ ...alarm, quietHours: { ...alarm.quietHours, end: e.target.value } })} />
+                  <Time12Select value={alarm.quietHours.end} onChange={(v) => setAlarm({ ...alarm, quietHours: { ...alarm.quietHours, end: v } })} />
                 </div>
               </div>
               <div className="field">

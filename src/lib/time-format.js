@@ -16,15 +16,12 @@ import { db } from "../firebase.js";
 export const TIME_SETTINGS_DOC_PATH = ["settings", "system"];
 
 const CACHE_KEY = "wardcharts-time-format";
-const DEFAULT_FORMAT = "24";
+const DEFAULT_FORMAT = "12";
 
+// The whole app now always shows 12-hour AM/PM. The old admin 24-hour switch is
+// retired, so neither a cached value nor settings/system can turn 24-hour back on.
 function getCachedFormat() {
-  try {
-    const saved = localStorage.getItem(CACHE_KEY);
-    return saved === "12" || saved === "24" ? saved : DEFAULT_FORMAT;
-  } catch (e) {
-    return DEFAULT_FORMAT;
-  }
+  return DEFAULT_FORMAT;
 }
 
 let currentFormat = getCachedFormat();
@@ -49,7 +46,7 @@ function ensureWatching() {
     doc(db, ...TIME_SETTINGS_DOC_PATH),
     (snap) => {
       const val = snap.exists() ? snap.data().timeFormat : null;
-      setCurrentFormat(val === "12" ? "12" : DEFAULT_FORMAT);
+      setCurrentFormat(DEFAULT_FORMAT);
     },
     () => {
       // Offline, no permission yet, doc doesn't exist, etc. — keep
@@ -73,14 +70,14 @@ export function subscribeTimeFormat(fn) {
 }
 
 export async function setTimeFormat(next) {
-  const clean = next === "12" ? "12" : "24";
-  setCurrentFormat(clean);
+  // Locked to 12-hour AM/PM (see getCachedFormat above).
+  setCurrentFormat(DEFAULT_FORMAT);
   await setDoc(
     doc(db, ...TIME_SETTINGS_DOC_PATH),
-    { timeFormat: clean, updatedAt: serverTimestamp() },
+    { timeFormat: DEFAULT_FORMAT, updatedAt: serverTimestamp() },
     { merge: true }
   );
-  return clean;
+  return DEFAULT_FORMAT;
 }
 
 // For components that display a time during render (not just inside a
