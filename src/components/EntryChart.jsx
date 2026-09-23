@@ -8,6 +8,7 @@ import { useAuth } from "../contexts/AuthContext.jsx";
 import { useBackLock } from "../hooks/useBackLock.js";
 import { useChartBack, chartBackTarget } from "../hooks/useChartBack.js";
 import { usePatientHeader } from "../hooks/usePatientHeader.js";
+import { formatHHMM12 } from "../lib/drugChartHelpers.js";
 import Topbar from "./Topbar.jsx";
 import PatientBanner from "./PatientBanner.jsx";
 
@@ -54,7 +55,11 @@ const STATUS_LABELS = { referred: 'Referred to another hospital', transferred: '
 //          — renders a small auto-updating, auto-saved totals card above the table.
 
 function cellValue(row, col) {
-  return (row[col.key] !== undefined && row[col.key] !== null && row[col.key] !== '') ? row[col.key] : '';
+  const v = (row[col.key] !== undefined && row[col.key] !== null && row[col.key] !== '') ? row[col.key] : '';
+  // Time-only columns are stored as 24-hour "HH:MM" (so sorting stays simple);
+  // show them as 12-hour AM/PM. Display only — the stored value is untouched.
+  if (col.type === 'time' && typeof v === 'string') return formatHHMM12(v);
+  return v;
 }
 
 // A row's chronological sort key. Most charts on this component store a
