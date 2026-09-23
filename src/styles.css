@@ -1407,3 +1407,11 @@ h1.period-label { margin: 0; display: flex; align-items: center; flex-wrap: wrap
 .diagnosis-note-box:focus-within { border-color: var(--textarea-focus); box-shadow: 0 0 0 3px rgba(37,99,235,.25); }
 .diagnosis-note-box .diagnosis-note-input, .diagnosis-note-box .diagnosis-note-body { min-height: 0; box-shadow: none; }
 .diagnosis-note-box .diagnosis-note-body { min-height: 110px; }
+
+
+/* Drag-to-reorder drugs (Edit mode) */
+table.drugs-table tr.drag-row { -webkit-user-select:none; user-select:none; -webkit-touch-callout:none; }
+table.drugs-table tr.drag-row input, table.drugs-table tr.drag-row select { -webkit-user-select:text; user-select:text; }
+table.drugs-table tr.drag-source > td { opacity:.45; background:rgba(124,58,237,.12); }
+table.drugs-table tr.drop-before > td { box-shadow: inset 0 3px 0 0 #7c3aed; }
+table.drugs-table tr.drop-after > td { box-shadow: inset 0 -3px 0 0 #7c3aed; }

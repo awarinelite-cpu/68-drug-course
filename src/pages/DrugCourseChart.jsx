@@ -158,6 +158,10 @@ export default function DrugCourseChart() {
   const lastAppliedUpdatedAtRef = useRef(null); // Firestore Timestamp of the version currently shown on screen
   const drugRowSnapshots = useRef({}); // index -> the drug row as it was when its edit opened, for audit diffing
   const chartRowSnapshots = useRef({}); // index -> the chart row as it was when its edit opened, for audit diffing
+  const drugsTbodyRef = useRef(null);
+  const dragRef = useRef(null); // press / drag-to-reorder gesture state for the drugs table
+  const [dragDrug, setDragDrug] = useState(null); // { from, slot } while a drug row is being dragged
+  useEffect(() => () => { if (dragRef.current && dragRef.current.cleanup) dragRef.current.cleanup(); }, []);
   // Latest values for the debounced/interval/beforeunload/polling code to
   // read from, avoiding stale closures without re-subscribing on every keystroke.
   const latestRef = useRef({ fields, drugs, chartRows, verbalOrders, careInstructions, auditLog });
@@ -488,6 +492,161 @@ export default function DrugCourseChart() {
     setDrugs((d) => d.filter((_, idx) => idx !== i));
     setEditingDrugRows((e) => { const n = { ...e }; delete n[i]; return n; });
     scheduleSave();
+  }
+
+  // --- Reorder drugs (press & hold a row in Edit mode, drag, release) ------
+  // Chart rows refer to drugs by their 1-based position ("Drug S/N"), so when a
+  // drug moves, every chart row's S/N (and "not given" list) is renumbered so
+  // each dose stays attached to the same drug it was charted against.
+  function remapAfterMove(idx, from, to) {
+    if (idx === from) return to;
+    if (from < to && idx > from && idx <= to) return idx - 1;
+    if (from > to && idx >= to && idx < from) return idx + 1;
+    return idx;
+  }
+  function moveDrug(from, to) {
+    const cur = latestRef.current.drugs;
+    if (from === to || from < 0 || to < 0 || from >= cur.length || to >= cur.length) return;
+    const moved = cur[from];
+    const mapNum = (num) => remapAfterMove(num - 1, from, to) + 1;
+    const remapSno = (sno) => {
+      if (!sno) return sno;
+      if (/^[\d,\s]+$/.test(sno)) {
+        return (sno.match(/\d+/g) || []).map((n) => mapNum(parseInt(n, 10))).sort((a, b) => a - b).join(', ');
+      }
+      return sno.replace(/\d+/g, (n) => String(mapNum(parseInt(n, 10))));
+    };
+    const remapRow = (row) => ({
+      ...row,
+      sno: remapSno(row.sno),
+      skipped: Array.isArray(row.skipped) ? row.skipped.map((sk) => ({ ...sk, num: mapNum(sk.num) })) : row.skipped
+    });
+    const remapKeys = (obj) => {
+      const out = {};
+      Object.keys(obj).forEach((k) => { out[remapAfterMove(Number(k), from, to)] = obj[k]; });
+      return out;
+    };
+
+    setDrugs((d) => { const n = [...d]; const [m] = n.splice(from, 1); n.splice(to, 0, m); return n; });
+    setChartRows((rows) => rows.map(remapRow));
+    setEditingDrugRows((e) => remapKeys(e));
+    drugRowSnapshots.current = remapKeys(drugRowSnapshots.current);
+    Object.keys(chartRowSnapshots.current).forEach((k) => { chartRowSnapshots.current[k] = remapRow(chartRowSnapshots.current[k]); });
+    logAudit('Drug #' + (from + 1) + ' moved to #' + (to + 1) + ': ' + (moved?.name || '(unnamed)') + '\nChart Drug S/N numbers updated to match the new order');
+    scheduleSave();
+  }
+
+  function scrollParentOf(el) {
+    let n = el && el.parentElement;
+    while (n && n !== document.body && n !== document.documentElement) {
+      const oy = getComputedStyle(n).overflowY;
+      if ((oy === 'auto' || oy === 'scroll') && n.scrollHeight > n.clientHeight) return n;
+      n = n.parentElement;
+    }
+    return window;
+  }
+  function drugSlotFromY(y) {
+    const rows = drugsTbodyRef.current && drugsTbodyRef.current.rows;
+    if (!rows) return 0;
+    for (let k = 0; k < rows.length; k++) {
+      const r = rows[k].getBoundingClientRect();
+      if (y < r.top + r.height / 2) return k;
+    }
+    return rows.length;
+  }
+
+  function onDrugRowPointerDown(e, i) {
+    if (!drugsEditMode || isArchived || latestRef.current.drugs.length < 2) return;
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    if (e.target.closest && e.target.closest('input, select, textarea, button, a')) return;
+    if (dragRef.current && dragRef.current.cleanup) dragRef.current.cleanup();
+
+    const st = { from: i, x: e.clientX, y: e.clientY, sx: e.clientX, sy: e.clientY, pointerId: e.pointerId, active: false, timer: 0, raf: 0, scroller: null, slot: i };
+    dragRef.current = st;
+
+    const setSlot = () => {
+      const slot = drugSlotFromY(st.y);
+      if (slot !== st.slot) { st.slot = slot; setDragDrug({ from: st.from, slot }); }
+    };
+    const tick = () => {
+      if (dragRef.current !== st || !st.active) return;
+      const edge = 90;
+      const sc = st.scroller || window;
+      const top = sc === window ? 0 : sc.getBoundingClientRect().top;
+      const bottom = sc === window ? window.innerHeight : sc.getBoundingClientRect().bottom;
+      let dy = 0;
+      if (st.y < top + edge) dy = -12; else if (st.y > bottom - edge) dy = 12;
+      if (dy) { if (sc === window) window.scrollBy(0, dy); else sc.scrollTop += dy; }
+      setSlot();
+      st.raf = requestAnimationFrame(tick);
+    };
+    const onMove = (ev) => {
+      if (ev.pointerId !== st.pointerId) return;
+      st.x = ev.clientX; st.y = ev.clientY;
+      if (!st.active) {
+        // Moved before the hold finished → the person is scrolling, not reordering.
+        if (Math.hypot(st.x - st.sx, st.y - st.sy) > 10) cleanup();
+        return;
+      }
+      setSlot();
+    };
+    const onTouchMove = (ev) => {
+      if (!st.active) return;
+      ev.preventDefault(); // stop the page scrolling while a row is being dragged
+      const t = ev.touches && ev.touches[0];
+      if (t) { st.y = t.clientY; st.x = t.clientX; setSlot(); }
+    };
+    const onUp = (ev) => {
+      if (ev.pointerId !== st.pointerId) return;
+      const wasActive = st.active;
+      const from = st.from;
+      const slot = drugSlotFromY(st.y);
+      const cancelled = ev.type === 'pointercancel';
+      cleanup();
+      if (wasActive && !cancelled) moveDrug(from, slot > from ? slot - 1 : slot);
+    };
+    const cleanup = () => {
+      clearTimeout(st.timer);
+      cancelAnimationFrame(st.raf);
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('pointercancel', onUp);
+      window.removeEventListener('touchmove', onTouchMove);
+      if (dragRef.current === st) dragRef.current = null;
+      st.active = false;
+      setDragDrug(null);
+    };
+    st.cleanup = cleanup;
+
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+    window.addEventListener('pointercancel', onUp);
+    window.addEventListener('touchmove', onTouchMove, { passive: false });
+
+    st.timer = setTimeout(() => {
+      st.active = true;
+      st.scroller = scrollParentOf(drugsTbodyRef.current);
+      try { if (navigator.vibrate) navigator.vibrate(25); } catch (_) { /* not supported */ }
+      setDragDrug({ from: st.from, slot: st.from });
+      st.raf = requestAnimationFrame(tick);
+    }, 350);
+  }
+
+  function drugRowProps(i) {
+    if (!drugsEditMode) return {};
+    let cls = 'drag-row';
+    if (dragDrug) {
+      const { from, slot } = dragDrug;
+      const noop = slot === from || slot === from + 1;
+      if (from === i) cls += ' drag-source';
+      if (!noop && slot === i) cls += ' drop-before';
+      if (!noop && slot === latestRef.current.drugs.length && i === slot - 1) cls += ' drop-after';
+    }
+    return {
+      className: cls,
+      onPointerDown: (e) => onDrugRowPointerDown(e, i),
+      onContextMenu: (e) => { if (!e.target.closest || !e.target.closest('input, textarea')) e.preventDefault(); }
+    };
   }
 
   function openFreqModal(currentText, onApply) {
@@ -1020,7 +1179,7 @@ export default function DrugCourseChart() {
                   {drugsEditMode && <th className="no-print" style={{ width: 34 }}></th>}
                 </tr>
               </thead>
-              <tbody>
+              <tbody ref={drugsTbodyRef}>
                 {drugs.map((d, i) => {
                   const editing = drugsEditMode && editingDrugRows[i];
                   const showPencil = drugsEditMode && !editing;
@@ -1034,7 +1193,7 @@ export default function DrugCourseChart() {
 
                   if (editing) {
                     return (
-                      <tr key={i}>
+                      <tr key={i} {...drugRowProps(i)}>
                         <td className="col-rowedit no-print"><button className="row-lock-btn" title="Done editing this row" onClick={() => lockDrugRow(i)}>✓</button></td>
                         <td>{i + 1}</td>
                         <td className="col-drugname"><input type="text" value={d.name || ''} onChange={(e) => updateDrug(i, { name: e.target.value })} /></td>
@@ -1065,7 +1224,7 @@ export default function DrugCourseChart() {
                     );
                   }
                   return (
-                    <tr key={i}>
+                    <tr key={i} {...drugRowProps(i)}>
                       {showPencil && <td className="col-rowedit no-print"><button className="row-edit-btn" title="Edit this row" onClick={() => unlockDrugRow(i)}>🖊️</button></td>}
                       <td>{i + 1}</td>
                       <td className="col-drugname">{d.name || '—'}</td>
@@ -1099,6 +1258,11 @@ export default function DrugCourseChart() {
                 <button className="btn btn-secondary" onClick={addDrug}>+ Add Drug</button>
                 <button className="btn btn-secondary" onClick={openBulkModal}>+ Bulk Upload</button>
               </>}
+            </div>
+          )}
+          {!isArchived && drugsEditMode && drugs.length > 1 && (
+            <div className="no-print" style={{ fontSize: 12, color: '#6b7280', marginTop: 6 }}>
+              Tip: press and hold a drug row, then drag it to a new position and let go.
             </div>
           )}
         </div>
