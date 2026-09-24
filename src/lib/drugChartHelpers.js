@@ -545,8 +545,8 @@ export function abbreviateReason(text) {
 // (row.skipped: [{num, reason}]). Drugs whose reason means the same thing
 // are grouped into one bracketed segment — matched case/whitespace-
 // insensitively (so "No line" and "no  line" still group) — showing the
-// abbreviation, not the full sentence; the drug numbers are always inside the
-// bracket (even a single one, e.g. "(12) NL") with the abbreviation after it;
+// abbreviation, not the full sentence; the drug numbers AND the abbreviation are always
+// inside the bracket (even for a single drug, e.g. "(12 NL)", "(10,11 NL)");
 // the given numbers stay outside any bracket. Returns an ordered list of { type: 'given'|'skip', text,
 // nums?, fullReason? } segments for the caller to render (skip segments
 // get the orange color treatment and, via fullReason, a tap-to-view popup).
@@ -566,7 +566,7 @@ export function buildSnoSegments(sno, skipped) {
   groups.forEach(g => {
     const nums = g.nums.slice().sort((a, b) => a - b);
     const abbr = abbreviateReason(g.reason);
-    const label = '(' + nums.join(',') + ') ' + abbr;
+    const label = '(' + nums.join(',') + ' ' + abbr + ')';
     segments.push({ type: 'skip', text: label, nums, fullReason: g.reason });
   });
   return segments;
