@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { doc } from "firebase/firestore";
 import { useNavigate } from "react-router-dom";
 import { getDocSafe } from "../../lib/firestoreOffline.js";
 import { db } from "../../firebase.js";
