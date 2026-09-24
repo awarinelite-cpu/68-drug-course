@@ -632,6 +632,16 @@ export default function DrugCourseChart() {
     }, 350);
   }
 
+  // Row tone for the name/route/frequency cells: gray for any Action other
+  // than Ongoing (Inactive/Completed/Discontinued/Withheld/Other), else red
+  // when overdue, orange when the last due dose was documented as not given.
+  function drugTone(d, due) {
+    if (d.action && d.action !== 'Ongoing') return { color: '#9ca3af', background: '#f3f4f6' };
+    if (due.overdue) return { color: '#dc2626', fontWeight: 'bold' };
+    if (due.skippedPending) return { color: '#d97706', fontWeight: 'bold' };
+    return {};
+  }
+
   function drugRowProps(i) {
     if (!drugsEditMode) return {};
     let cls = 'drag-row';
@@ -1227,9 +1237,9 @@ export default function DrugCourseChart() {
                     <tr key={i} {...drugRowProps(i)}>
                       {showPencil && <td className="col-rowedit no-print"><button className="row-edit-btn" title="Edit this row" onClick={() => unlockDrugRow(i)}>🖊️</button></td>}
                       <td>{i + 1}</td>
-                      <td className="col-drugname">{d.name || '—'}</td>
-                      <td>{d.route || '—'}</td>
-                      <td>
+                      <td className="col-drugname" style={drugTone(d, due)}>{d.name || '—'}</td>
+                      <td style={drugTone(d, due)}>{d.route || '—'}</td>
+                      <td style={drugTone(d, due)}>
                         {d.frequency || '—'}
                         <DoseSequenceBadges drug={d} index={i} chartRows={chartRows} />
                         <WeeklyDoseBadges drug={d} index={i} chartRows={chartRows} now={now} />
