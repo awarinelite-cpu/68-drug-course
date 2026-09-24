@@ -49,8 +49,13 @@ function AuthedShell({ children }) {
   return (
     <RequireAuth>
       <NavDrawer />
-      {children}
-      <Footer />
+      {/* Sticky-footer layout: the shell is at least one screen tall and the
+          page area grows to fill it, so the copyright footer always sits at
+          the very bottom — even when the page content is empty or short. */}
+      <div className="app-shell">
+        <div className="app-shell-main">{children}</div>
+        <Footer />
+      </div>
     </RequireAuth>
   );
 }
