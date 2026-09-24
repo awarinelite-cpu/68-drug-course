@@ -255,6 +255,11 @@ export default function OverallNurse() {
 
   const [access, setAccess] = useState('checking'); // 'checking' | 'denied' | 'granted'
   const [deniedMsg, setDeniedMsg] = useState('');
+  // Everyone can VIEW this page; only admin/subadmin/the appointed Overall
+  // Nurse for the week can change anything (lock/open wards, archive).
+  const [canEdit, setCanEdit] = useState(false);
+  const [appointUid, setAppointUid] = useState('');
+  const [appointStatus, setAppointStatus] = useState({ text: '', error: false });
   const [whoLabel, setWhoLabel] = useState('');
   const [wardData, setWardData] = useState({});
   const [saveStatus, setSaveStatus] = useState({ text: '', error: false });
@@ -298,15 +303,15 @@ export default function OverallNurse() {
       const overall = roleSnap.exists() ? roleSnap.data().overallNurse : null;
       const isOverall = overall && overall.uid === user.uid;
 
-      if (!isAdmin && !isSubadmin && !isOverall) {
-        setDeniedMsg(overall
-          ? (overall.name || 'Another nurse') + ' is the Overall Nurse for this week. Ask them to hand off the role, or claim it yourself if it\u2019s free next week.'
-          : 'No one has assumed the Overall Nurse role this week yet.');
-        setAccess('denied');
-        return;
+      const editable = !!(isAdmin || isSubadmin || isOverall);
+      setCanEdit(editable);
+      if (editable) {
+        setWhoLabel('Overall Nurse this week: ' + (overall ? overall.name : profile.name) + ((isAdmin || isSubadmin) && !isOverall ? ' (viewing as ' + profile.role + ')' : ''));
+      } else {
+        setWhoLabel(overall
+          ? 'Overall Nurse this week: ' + (overall.name || 'Another nurse') + ' \u2014 view only'
+          : 'No Overall Nurse appointed this week \u2014 view only');
       }
-
-      setWhoLabel('Overall Nurse this week: ' + (overall ? overall.name : profile.name) + ((isAdmin || isSubadmin) && !isOverall ? ' (viewing as ' + profile.role + ')' : ''));
 
       // The overrides fetch, the users list, and the wards snapshot are all
       // independent of each other (and of the role check above, which only
@@ -339,7 +344,7 @@ export default function OverallNurse() {
       // submitted reports existed on the server the whole time. wardData
       // is now seeded synchronously from this fetch first, so the report
       // page — and Save to Archive — never render with stale/empty data.
-      await ensureSeeded(wardsSnap);
+      await ensureSeeded(wardsSnap, editable);
       setAccess('granted');
 
       unsub = onSnapshot(wardsCol, (snap) => {
@@ -355,7 +360,7 @@ export default function OverallNurse() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, profile]);
 
-  async function ensureSeeded(prefetchedSnap) {
+  async function ensureSeeded(prefetchedSnap, editable = canEdit) {
     let snap = prefetchedSnap;
     if (!snap) {
       try {
@@ -367,6 +372,8 @@ export default function OverallNurse() {
     }
     const map = {};
     snap.docs.forEach(d => { map[d.id] = d.data(); });
+    // View-only visitors never seed/write ward docs — they just read them.
+    if (!editable) { setWardData(map); return; }
     const existing = new Set(snap.docs.map(d => d.id));
     const missing = WARDS.filter(w => !existing.has(w.key));
     // Untouched existing docs (no shift figures entered on either shift
@@ -459,7 +466,25 @@ export default function OverallNurse() {
     setSyncBusy(false);
   }
 
+  // Admin/subadmin appoint the Overall Nurse for the current week. Nurses can
+  // no longer claim the role themselves (see RoleSelect.jsx + firestore.rules).
+  async function appointOverall() {
+    const u = usersByUid[appointUid];
+    if (!u) return;
+    try {
+      await setDoc(roleRef, {
+        weekId: wk,
+        overallNurse: { uid: appointUid, name: u.name || 'Unknown', assignedAt: serverTimestamp() }
+      }, { merge: true });
+      setWhoLabel('Overall Nurse this week: ' + (u.name || 'Unknown') + ' (viewing as ' + profile.role + ')');
+      setAppointStatus({ text: (u.name || 'Nurse') + ' is now the Overall Nurse for this week.', error: false });
+    } catch (e) {
+      setAppointStatus({ text: "Couldn't appoint: " + (e.code || e.message || 'unknown error'), error: true });
+    }
+  }
+
   async function toggleLock(wardKey) {
+    if (!canEdit) return;
     const locked = !!(wardData[wardKey] && wardData[wardKey].locked);
     try {
       await updateDoc(doc(wardsCol, wardKey), { locked: !locked });
@@ -639,6 +664,7 @@ export default function OverallNurse() {
   // the Overall Nurse *create* an archive entry — only admin/subadmin may
   // update an already-archived one.
   async function saveToArchive() {
+    if (!canEdit) return;
     // Belt-and-suspenders guard alongside the load-order fix above: never
     // archive (and then reset-overwrite) live ward data unless every
     // ward's doc has actually loaded into wardData.
@@ -873,7 +899,7 @@ export default function OverallNurse() {
                         )}
                       </td>
                       <td>
-                        <button className={"lock-btn " + (locked ? 'locked' : 'open')} onClick={() => toggleLock(w.key)}>
+                        <button className={"lock-btn " + (locked ? 'locked' : 'open')} disabled={!canEdit} title={canEdit ? undefined : 'View only \u2014 only the appointed Overall Nurse can change access'} style={canEdit ? undefined : { opacity: 0.7, cursor: 'default' }} onClick={() => toggleLock(w.key)}>
                           {locked ? '\uD83D\uDD12 Locked' : '\uD83D\uDD13 Open'}
                         </button>
                       </td>
@@ -955,7 +981,28 @@ export default function OverallNurse() {
           })}
         </div>
 
-        <div className="card-box">
+        {(isAdmin || isSubadmin) && (
+          <div className="card-box">
+            <h2>Appoint Overall Nurse — This Week</h2>
+            <p style={{ fontSize: 12, color: '#555', marginTop: -4 }}>
+              Only the nurse you appoint here can lock/open wards and save to the archive this week. Everyone else sees this page as view-only. The appointment ends automatically when the week changes.
+            </p>
+            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+              <select value={appointUid} onChange={(e) => setAppointUid(e.target.value)} style={{ padding: 8, minWidth: 200 }}>
+                <option value="">Select a nurse…</option>
+                {Object.entries(usersByUid)
+                  .filter(([, u]) => u && u.name && u.role !== 'admin' && u.role !== 'subadmin')
+                  .sort((a, b) => (a[1].name || '').localeCompare(b[1].name || ''))
+                  .map(([uid, u]) => <option key={uid} value={uid}>{u.name}</option>)}
+              </select>
+              <button className="btn btn-primary" style={{ padding: '8px 14px' }} disabled={!appointUid} onClick={appointOverall}>Appoint</button>
+            </div>
+            <div className="save-status" style={{ color: appointStatus.error ? '#dc2626' : '#16a34a' }}>{appointStatus.text}</div>
+          </div>
+        )}
+
+        {canEdit ? (
+          <div className="card-box">
           <h2>Finalize This Report</h2>
           <p style={{ fontSize: 12, color: '#555', marginTop: -4 }}>
             Once every ward report above looks right, save this 24-hour period to the permanent Ward Charts Archive.
@@ -965,6 +1012,14 @@ export default function OverallNurse() {
           <button className="btn btn-primary" style={{ padding: '10px 16px' }} disabled={archiveBusy} onClick={saveToArchive}>{'\uD83D\uDCBE Save to Archive'}</button>
           <div className="save-status" style={{ color: archiveStatus.error ? '#dc2626' : '#6b7280' }}>{archiveStatus.text}</div>
         </div>
+        ) : (
+          <div className="card-box">
+            <h2>View only</h2>
+            <p style={{ fontSize: 12, color: '#555', marginTop: -4 }}>
+              You can see every ward's report, but only the appointed Overall Nurse for this week (or an admin/subadmin) can lock or open wards and save to the archive.
+            </p>
+          </div>
+        )}
       </div>
 
       {contactModal && <ReportContactModal nurse={contactModal} onClose={() => setContactModal(null)} />}

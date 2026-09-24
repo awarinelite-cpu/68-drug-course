@@ -113,7 +113,10 @@ service cloud.firestore {
     // Overall Nurse page, matching how admin-only UI is gated elsewhere
     // without every collection needing its own role check here.
     match /nurseReportRoles/{weekId} {
-      allow read, write: if isKnownUser();
+      allow read: if isKnownUser();
+      // Only an admin/subadmin appoints the week's Overall Nurse — nurses
+      // can no longer claim the role themselves.
+      allow write: if isAdmin() || isSubadmin();
     }
     match /nurseReports/{dateId} {
       allow read, write: if isKnownUser();

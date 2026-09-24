@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { doc, setDoc, serverTimestamp } from "firebase/firestore";
 import { getDocSafe } from "../../lib/firestoreOffline.js";
 import { db } from "../../firebase.js";
 import { useAuth } from "../../contexts/AuthContext.jsx";
@@ -34,15 +33,13 @@ export default function RoleSelect() {
     const overall = data && data.overallNurse;
     if (!overall) {
       setStatus({
-        text: canViewDirectly ? 'Unassigned this week — tap to view.' : 'Unassigned this week — tap to take the role.',
+        text: 'No Overall Nurse appointed this week — tap to view.',
         className: 'status status-open'
       });
     } else if (user && overall.uid === user.uid) {
       setStatus({ text: "You're the Overall Nurse this week.", className: 'status status-you' });
-    } else if (canViewDirectly) {
-      setStatus({ text: (overall.name || 'Another nurse') + ' is the Overall Nurse this week — tap to view.', className: 'status status-taken' });
     } else {
-      setStatus({ text: (overall.name || 'Another nurse') + ' is the Overall Nurse this week.', className: 'status status-taken' });
+      setStatus({ text: (overall.name || 'Another nurse') + ' is the Overall Nurse this week — tap to view.', className: 'status status-taken' });
     }
     return overall;
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -58,25 +55,9 @@ export default function RoleSelect() {
     // in as the Overall Nurse and bump whoever actually holds the role this
     // week. OverallNurse.jsx already grants them read/edit access without
     // requiring the role doc, so just navigate straight there.
-    if (canViewDirectly) {
-      navigate('/nurses-report/overall-nurse');
-      return;
-    }
-
-    const overall = await refreshStatus();
-    if (overall && overall.uid !== user.uid) {
-      const ok = confirm((overall.name || 'Another nurse') + ' is currently the Overall Nurse for this week. Take over this role?');
-      if (!ok) return;
-    }
-    try {
-      await setDoc(roleRef, {
-        weekId: wk,
-        overallNurse: { uid: user.uid, name: profile.name || 'Unknown', assignedAt: serverTimestamp() }
-      }, { merge: true });
-    } catch (e) {
-      alert("Couldn't assign the role: " + (e.code || e.message || 'unknown error'));
-      return;
-    }
+    // Nurses can no longer claim the role — an admin/subadmin appoints the
+    // Overall Nurse from the Overall page. Everyone can open the page; it is
+    // view-only unless you're admin/subadmin or the appointed nurse.
     navigate('/nurses-report/overall-nurse');
   }
 
@@ -90,11 +71,11 @@ export default function RoleSelect() {
         <div className="role-grid">
           <button className="role-card" onClick={assumeOverall}>
             <span className="icon">🗂️</span>
-            <span className="title">{canViewDirectly ? 'OVERALL NURSE PAGE' : 'ASSUME OVERALL'}</span>
+            <span className="title">OVERALL NURSE PAGE</span>
             <span className="desc">
               {canViewDirectly
-                ? "View every ward's 24-hour report as " + (isAdmin ? 'admin' : 'subadmin') + " — you won't take over the Overall Nurse role from whoever holds it."
-                : "Become the Overall Nurse for this week — monitor and manage every ward's 24-hour report."}
+                ? "View every ward's 24-hour report as " + (isAdmin ? 'admin' : 'subadmin') + " — and appoint this week's Overall Nurse."
+                : "View every ward's 24-hour report. Only the appointed Overall Nurse can lock or open wards and archive."}
             </span>
             <div className={status.className}>{status.text}</div>
           </button>
