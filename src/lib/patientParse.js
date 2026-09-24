@@ -153,9 +153,18 @@ export function extractInsurance(text) {
   return out.trim();
 }
 
+// Title-cases a name segment word by word, preserving military/kinship
+// relational markers (W/O, S/O, D/O — "wife/son/daughter of") in upper case
+// instead of mangling them to "W/o".
+function titleCaseName(s) {
+  return s.trim().split(/\s+/).map((w) => (
+    /^[SWD]\/O$/i.test(w) ? w.toUpperCase() : w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()
+  )).join(' ');
+}
+
 export function parsePatientFields(text) {
   const norm = (text || '').replace(/\r\n/g, '\n');
-  const out = { name: '', emr: '', diagnosis: '', ward: '', age: '', hospNo: '', admissionDate: '', allergies: '', insurance: '' };
+  const out = { name: '', emr: '', diagnosis: '', ward: '', age: '', hospNo: '', admissionDate: '', allergies: '', insurance: '', gender: '' };
 
   // --- Name ----------------------------------------------------------------
   // 1) A name line immediately followed by a lone ID-number line — the
@@ -165,12 +174,30 @@ export function parsePatientFields(text) {
   // 2) Explicit "Name:" field on a structured assessment form.
   if (!out.name) out.name = grabLabel(norm, ['Name']);
   // 3) EMR patient-header line: "SURNAME, GIVENMale/Female, born X years ago".
+  // Both the surname and given/rank segments can be more than one word —
+  // e.g. dependent records styled "AISHA W/O, SSGT BALA ADAMUFemale, born
+  // 61.4 years ago" (relational marker after the surname, rank before the
+  // given name) — and "Male"/"Female" butts straight up against the last
+  // word with no space, so the given-name segment is captured non-greedily
+  // up to wherever "Male"/"Female" actually starts rather than assumed to
+  // be a single word.
   if (!out.name) {
-    const hm = norm.match(/^([A-Z][A-Za-z'.-]+),\s*([A-Z][A-Za-z'.-]+)\s*(Male|Female)\s*,?\s*born\s+([\d.]+)\s+years?\s+ago/im);
+    const hm = norm.match(/^([A-Z][A-Za-z0-9'.\/-]+(?:\s+[A-Za-z0-9'.\/-]+)*),\s*(.+?)\s*(Male|Female)\s*,?\s*born\s+([\d.]+)\s+years?\s+ago/im);
     if (hm) {
-      out.name = hm[2][0] + hm[2].slice(1).toLowerCase() + ' ' + hm[1][0] + hm[1].slice(1).toLowerCase();
+      out.name = titleCaseName(hm[2]) + ' ' + titleCaseName(hm[1]);
       out.age = out.age || String(Math.floor(parseFloat(hm[4])));
+      out.gender = hm[3][0].toUpperCase(); // 'Male'/'Female' -> 'M'/'F'
     }
+  }
+
+  // --- Gender ----------------------------------------------------------------
+  // Falls back to an explicit "Gender:"/"Sex:" label when the header-line
+  // pattern above didn't match (e.g. a structured assessment form instead
+  // of an EMR patient-header paste).
+  if (!out.gender) {
+    const g = grabLabel(norm, ['Gender', 'Sex']);
+    if (/^m(ale)?$/i.test(g)) out.gender = 'M';
+    else if (/^f(emale)?$/i.test(g)) out.gender = 'F';
   }
 
   // --- EMR / patient ID ------------------------------------------------------

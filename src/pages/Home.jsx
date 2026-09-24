@@ -296,7 +296,8 @@ export default function Home() {
       hospNo: fields.hospNo || f.hospNo,
       admissionDate: fields.admissionDate || f.admissionDate,
       allergies: fields.allergies || f.allergies,
-      insurance: fields.insurance || f.insurance
+      insurance: fields.insurance || f.insurance,
+      gender: fields.gender || f.gender
     }));
     const { ward: _unusedWard, ...countedFields } = fields;
     const foundCount = Object.values(countedFields).filter(Boolean).length;
