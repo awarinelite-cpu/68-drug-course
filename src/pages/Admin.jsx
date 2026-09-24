@@ -75,6 +75,7 @@ export default function Admin() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [gender, setGender] = useState('');
+  const [phone, setPhone] = useState('');
   const [newAccountRole, setNewAccountRole] = useState('nurse');
   const [msg, setMsg] = useState(null);
 
@@ -190,13 +191,13 @@ export default function Admin() {
       const secondaryAuth = getAuth(secondaryApp);
       const cred = await createUserWithEmailAndPassword(secondaryAuth, trimmedEmail, password);
       await setDoc(doc(db, 'users', cred.user.uid), {
-        name: trimmedName, email: trimmedEmail, gender, role: newAccountRole, createdAt: serverTimestamp()
+        name: trimmedName, email: trimmedEmail, phone: phone.trim(), gender, role: newAccountRole, createdAt: serverTimestamp()
       });
       await signOut(secondaryAuth);
       await deleteApp(secondaryApp);
 
       setMsg({ type: 'info', text: ROLE_OPTIONS.find(r => r.value === newAccountRole)?.label + ' account created for ' + trimmedEmail + '.' });
-      setName(''); setEmail(''); setPassword(''); setGender(''); setNewAccountRole('nurse');
+      setName(''); setEmail(''); setPassword(''); setPhone(''); setGender(''); setNewAccountRole('nurse');
       loadUsers();
     } catch (e) {
       setMsg({ type: 'error', text: e.message || 'Failed to create account.' });
@@ -386,6 +387,7 @@ export default function Admin() {
           <h3 style={{ marginTop: 0 }}>Create Account</h3>
           <div className="field"><label>Full Name</label><input type="text" value={name} onChange={(e) => setName(e.target.value)} /></div>
           <div className="field"><label>Email</label><input type="email" value={email} onChange={(e) => setEmail(e.target.value)} /></div>
+          <div className="field"><label>Phone Number</label><input type="tel" placeholder="e.g. 080XXXXXXXX" value={phone} onChange={(e) => setPhone(e.target.value)} /></div>
           <div className="field"><label>Temporary Password</label><input type="text" placeholder="At least 6 characters" value={password} onChange={(e) => setPassword(e.target.value)} /></div>
           <div className="field">
             <label>Gender</label>
@@ -463,12 +465,12 @@ export default function Admin() {
           <h3 style={{ marginTop: 0 }}>All Users</h3>
           <div className="table-wrap">
             <table className="entries">
-              <thead><tr><th></th><th>Name</th><th>Email</th><th>Role</th><th></th></tr></thead>
+              <thead><tr><th></th><th>Name</th><th>Email</th><th>Phone</th><th>Role</th><th></th></tr></thead>
               <tbody>
                 {users.map((u) => (
                   <tr key={u.id}>
                     <td dangerouslySetInnerHTML={{ __html: avatarMarkup(u, 32) }} />
-                    <td>{formatNameWithTitle(u.name, u.role)}</td><td>{u.email || ''}</td><td>{u.role || ''}</td>
+                    <td>{formatNameWithTitle(u.name, u.role)}</td><td>{u.email || ''}</td><td>{u.phone || ''}</td><td>{u.role || ''}</td>
                     <td>
                       {u.id !== user.uid && (u.role === 'nurse' || u.role === 'subadmin') && (
                         <button className="btn btn-secondary" style={{ padding: '4px 10px', fontSize: 11, marginRight: 6 }}
