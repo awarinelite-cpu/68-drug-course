@@ -15,7 +15,7 @@ import {
   dueLabelFor, withDrugCompletionChecked, activateFollowOnDrugs, computeRouteFromSno, parseBulkText,
   parseDoseSequence, administrationTimesFor, flaggedDrugRefs, flaggedDrugMessage, diffFields,
   autoDurationForFrequency, buildSnoSegments, buildSnoText, abbreviateReason,
-  parseWeeklyFrequency, weeklyDosesGivenThisWeek, formatHHMM12
+  parseWeeklyFrequency, weeklyDosesGivenThisWeek, formatHHMM12, computeChartNextDoseAt
 } from "../lib/drugChartHelpers.js";
 import { ROSTER_TAG_FOR_REASON, clearAllocationsForPatient, EXIT_STAT_KEY, EXIT_DEMOGRAPHIC_CATEGORY } from "../lib/patientAdmissionStatus.js";
 import { bumpShiftStatForPatientWard, bumpDemographicStatForPatientWard } from "../lib/shiftStatsSync.js";
@@ -364,7 +364,16 @@ export default function DrugCourseChart() {
   function saveChart() {
     if (isArchived || !chartRefPath.current) return;
     const { fields: f, drugs: d, chartRows: c, verbalOrders: v, careInstructions: ci, auditLog: al } = latestRef.current;
-    const data = { ...f, rows: c, drugs: d, verbalOrders: v, careInstructions: ci, auditLog: al, updatedAt: serverTimestamp() };
+    // Recomputed on every save (not just when a dose is logged) so any
+    // change that shifts a due time — a new order, a frequency edit, a
+    // discontinue — is reflected immediately. See computeChartNextDoseAt's
+    // own comment for why this must never end up later than the true next
+    // due time. null (not omitting the field) explicitly clears it when
+    // nothing on the chart is due-trackable anymore, so a discontinued
+    // drug's old due time can't linger and keep matching the Cloud
+    // Function's query forever.
+    const nextDoseAt = computeChartNextDoseAt(d, c) || null;
+    const data = { ...f, rows: c, drugs: d, verbalOrders: v, careInstructions: ci, auditLog: al, nextDoseAt, updatedAt: serverTimestamp() };
     // Not awaited — with offline persistence, this writes to the local cache
     // immediately and syncs on reconnect, but the Promise itself only
     // resolves once the backend acknowledges it. Awaiting it left

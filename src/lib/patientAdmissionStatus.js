@@ -1,6 +1,6 @@
 import { collection, doc, getDoc, getDocs, addDoc, query, where, orderBy, limit, updateDoc, setDoc, deleteDoc, serverTimestamp } from "firebase/firestore";
 import { db } from "../firebase.js";
-import { STATUS_LABELS, WARD_OPTIONS, defaultRow } from "./drugChartHelpers.js";
+import { STATUS_LABELS, WARD_OPTIONS, defaultRow, computeChartNextDoseAt } from "./drugChartHelpers.js";
 import { formatDateTime } from "./time-format.js";
 import { bumpShiftStat, bumpShiftStatForPatientWard, bumpDemographicStat, bumpDemographicStatForPatientWard } from "./shiftStatsSync.js";
 import { classifyAffiliation } from "./patientAffiliation.js";
@@ -560,7 +560,17 @@ export async function readmitLatestAdmission({ patientId, nurseName }) {
       nurse: nurseName || 'Unknown',
       at: new Date().toISOString()
     });
-    const restoredDrugChart = { ...dc, f_discharge: '', auditLog: restoredAuditLog, updatedAt: serverTimestamp() };
+    // dc's own nextDoseAt (if any) is whatever it was when this admission
+    // was archived — stale by however long the patient was away, and not
+    // safe to just carry over as-is (see computeChartNextDoseAt's comment:
+    // it must never end up LATER than the true next due time, but a stale
+    // archived value could easily be earlier or later depending on what's
+    // changed). Recompute fresh from the restored drugs/rows instead.
+    const restoredDrugChart = {
+      ...dc, f_discharge: '', auditLog: restoredAuditLog,
+      nextDoseAt: computeChartNextDoseAt(dc.drugs, dc.rows) || null,
+      updatedAt: serverTimestamp()
+    };
     const bg = admData.bloodGlucose || { chartType: '6point', rows6: [], rows3: [] };
     const ioSummary = admData.intakeOutputSummary || { intake: 0, output: 0, balance: 0, periodDate: new Date().toISOString().slice(0, 10) };
 

@@ -281,6 +281,36 @@ export function computeDueAt(d, i, chartRows) {
   return null;
 }
 
+// Earliest due time across every currently-relevant drug on a chart —
+// mirrors computeChartNextDoseAt in functions/index.js (kept in sync by
+// hand, same as the rest of this file's server-side twins). Written into
+// the chart doc's top-level nextDoseAt field on every full save (see
+// saveChart in DrugCourseChart.jsx, restoredDrugChart in
+// patientAdmissionStatus.js, and addDrugsToChart in Home.jsx) so the Cloud
+// Function's checkDueDrugs can query
+// collectionGroup('drugCourseChart').where('nextDoseAt','<=',now) instead
+// of pulling and scanning every chart on every cycle.
+//
+// Deliberately does NOT consider the admin's Alarm Settings frequency
+// on/off toggle (settings/alarm.frequencies) — that can change independent
+// of this chart's own data, and this field must never sit at a LATER time
+// than a drug's true next-due moment (that would make checkDueDrugs's query
+// silently skip an actually-due chart). Ignoring the toggle here means this
+// field can only ever be too EARLY relative to what actually gets alerted
+// on (safe — just an extra, cheap candidate for checkDueDrugs's per-drug
+// filter to discard), never too late.
+export function computeChartNextDoseAt(drugs, chartRows) {
+  let earliest = null;
+  (drugs || []).forEach((d, i) => {
+    if (d.action && d.action !== 'Ongoing') return;
+    const freq = normalizeFrequency(d.frequency);
+    if (!parseDoseSequence(freq) && !INTERVAL_HOURS[freq] && !parseWeeklyFrequency(freq)) return;
+    const dueAt = computeDueAt(d, i, chartRows);
+    if (dueAt && (!earliest || dueAt < earliest)) earliest = dueAt;
+  });
+  return earliest;
+}
+
 export function dueLabelFor(d, i, chartRows, now) {
   const dueAt = computeDueAt(d, i, chartRows);
   if (!dueAt) return { text: '—', overdue: false, skippedPending: false };

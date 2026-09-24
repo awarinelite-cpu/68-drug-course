@@ -17,7 +17,7 @@ import { WARDS } from "../lib/nurses-report-common.js";
 import { loadWardPatients, loadIncomingTransfers, searchPatients, findPatientByEmrExact, nameSearchTokens } from "../lib/patientDirectory.js";
 import { activeAdmissionTag, ADMISSION_TAG_LABEL, clearAdmissionTag, readmitLatestAdmission, READMIT_ELIGIBLE_TAGS, hasActiveAdmissionData } from "../lib/patientAdmissionStatus.js";
 import { bumpShiftStatForPatientWard, bumpDemographicStatForPatientWard } from "../lib/shiftStatsSync.js";
-import { WARD_OPTIONS } from "../lib/drugChartHelpers.js";
+import { WARD_OPTIONS, computeChartNextDoseAt } from "../lib/drugChartHelpers.js";
 import { classifyAffiliation } from "../lib/patientAffiliation.js";
 
 function normEmr(emr) { return (emr || '').trim().toLowerCase(); }
@@ -523,9 +523,14 @@ export default function Home() {
     if (!drugsParsed || !drugsParsed.length) return 0;
     const ref = doc(db, 'patients', patientId, 'drugCourseChart', 'main');
     let existingDrugs = [];
+    let existingNextDoseAtMs = null;
     try {
       const snap = await getDoc(ref);
-      if (snap.exists()) existingDrugs = Array.isArray(snap.data().drugs) ? snap.data().drugs : [];
+      if (snap.exists()) {
+        const snapData = snap.data();
+        existingDrugs = Array.isArray(snapData.drugs) ? snapData.drugs : [];
+        existingNextDoseAtMs = (snapData.nextDoseAt && snapData.nextDoseAt.toMillis) ? snapData.nextDoseAt.toMillis() : null;
+      }
     } catch (e) {
       console.warn('Could not read existing drug chart before merging bulk-uploaded drugs:', e);
     }
@@ -548,7 +553,21 @@ export default function Home() {
       .map(d => (d.startsAfterId && dupOf.has(d.startsAfterId)) ? { ...d, startsAfterId: dupOf.get(d.startsAfterId) } : d);
     if (!toAdd.length) return 0;
     const merged = [...existingList, ...toAdd];
-    setDoc(ref, { drugs: merged, updatedAt: serverTimestamp() }, { merge: true }).catch((e) => {
+    // toAdd are brand-new orders with no administration history yet, so
+    // their own earliest due time can be computed against an empty row
+    // history — no need to re-fetch/rescan the existing chart's full rows
+    // just to recompute nextDoseAt from scratch. Only ever LOWERS the
+    // existing value (never raises it) — see computeChartNextDoseAt's
+    // comment on why this field must never end up later than the true
+    // next due time.
+    const newDrugsNextDoseAt = computeChartNextDoseAt(toAdd, []);
+    let nextDoseAtMs = existingNextDoseAtMs;
+    if (newDrugsNextDoseAt && (nextDoseAtMs === null || newDrugsNextDoseAt.getTime() < nextDoseAtMs)) {
+      nextDoseAtMs = newDrugsNextDoseAt.getTime();
+    }
+    const payload = { drugs: merged, updatedAt: serverTimestamp() };
+    if (nextDoseAtMs !== null && nextDoseAtMs !== existingNextDoseAtMs) payload.nextDoseAt = new Date(nextDoseAtMs);
+    setDoc(ref, payload, { merge: true }).catch((e) => {
       console.warn('Bulk-uploaded drugs write queued locally; will retry once back online:', e);
     });
     return toAdd.length;

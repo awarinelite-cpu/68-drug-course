@@ -274,6 +274,29 @@ function computeDueAt(drug, chartRows, drugIndex) {
   return null;
 }
 
+// Earliest due time across every currently-relevant drug on a chart —
+// server-side twin of computeChartNextDoseAt in src/lib/drugChartHelpers.js
+// (kept in sync by hand, same as computeDueAt/INTERVAL_HOURS above). Used
+// after checkDueDrugs processes a chart to refresh its nextDoseAt field, and
+// by the one-time backfill script (scripts/backfill-next-dose-at.js) to seed
+// it on every chart that predates this field.
+//
+// Deliberately does NOT consider the admin's Alarm Settings frequency
+// on/off toggle (loadAlarmSettings().frequencies) — see the client-side
+// twin's comment for why: this field must never end up LATER than a drug's
+// true next-due moment, only ever earlier (a harmless, cheap extra
+// candidate for checkDueDrugs's own per-drug filter below to discard).
+function computeChartNextDoseAt(drugs, chartRows) {
+  let earliest = null;
+  (drugs || []).forEach((drug, i) => {
+    if (drug.action && drug.action !== 'Ongoing') return;
+    if (!parseDoseSequence(drug.frequency) && !intervalHoursFor(drug.frequency)) return;
+    const dueAt = computeDueAt(drug, chartRows, i);
+    if (dueAt && (!earliest || dueAt < earliest)) earliest = dueAt;
+  });
+  return earliest;
+}
+
 // Mirrors CHART_DEFS in charts/blood-glucose.html — each chart type's column
 // layout by index, so the scheduler can tell a reading cell from date/time/
 // remark bookkeeping. Kept in sync by hand, same as INTERVAL_HOURS above.
@@ -311,6 +334,28 @@ async function getTokenEntries(usersSnap) {
       const tokensSnap = await db.collection('users').doc(u.id).collection('pushTokens').get();
       tokensSnap.forEach((t) => {
         if (t.data().token) tokenEntries.push({ token: t.data().token, ref: t.ref, uid: u.id, role });
+      });
+    })
+  );
+  return tokenEntries;
+}
+
+// Scoped alternative to getTokenEntries above: reads pushTokens only for the
+// given uids, instead of every user in the building. Used by checkDueDrugs
+// now that its candidate set is already narrowed to this cycle's actually-
+// due patients — role isn't included since neither this nor tokensForPatient
+// below ever branches on it (allocated-only alerting has no admin/subadmin
+// fallback), so there's no reason to also fetch each user doc just for that
+// field. getTokenEntries(usersSnap) above is now unused within this file
+// (was shared by checkDueGlucoseChecks, since removed) — left in place
+// rather than deleted; flagged in the PR notes.
+async function getTokenEntriesForUids(uids) {
+  const tokenEntries = []; // { token, ref, uid }
+  await Promise.all(
+    uids.map(async (uid) => {
+      const tokensSnap = await db.collection('users').doc(uid).collection('pushTokens').get();
+      tokensSnap.forEach((t) => {
+        if (t.data().token) tokenEntries.push({ token: t.data().token, ref: t.ref, uid });
       });
     })
   );
@@ -367,7 +412,7 @@ function tokensForPatient(patientId, tokenEntries, allocatedUidsByPatient, patie
 }
 
 exports.checkDueDrugs = onSchedule(
-  { schedule: 'every 1 minutes', timeZone: 'Africa/Lagos', region: 'us-central1' },
+  { schedule: 'every 5 minutes', timeZone: 'Africa/Lagos', region: 'us-central1' },
   async () => {
     const now = new Date();
     const alarmSettings = await loadAlarmSettings();
@@ -382,27 +427,42 @@ exports.checkDueDrugs = onSchedule(
       return;
     }
 
-    const [patientsSnap, chartsSnap, usersSnap, allocatedUidsByPatient] = await Promise.all([
-      db.collection('patients').get(),
-      db.collectionGroup('drugCourseChart').get(),
-      db.collection('users').get(),
-      loadAllocatedUidsByPatient()
-    ]);
+    // Indexed pre-filter instead of pulling every chart in the building —
+    // see computeChartNextDoseAt above for what this field means and why
+    // it's safe to filter on directly (it can only be too early, never too
+    // late, relative to a drug's true due time). Requires a collection-group
+    // index on drugCourseChart.nextDoseAt — see firestore.indexes.json.
+    const chartsSnap = await db.collectionGroup('drugCourseChart')
+      .where('nextDoseAt', '<=', now)
+      .get();
 
-    const patientNames = {};
-    patientsSnap.forEach((d) => { patientNames[d.id] = d.data().name || 'Unnamed patient'; });
-
-    const tokenEntries = await getTokenEntries(usersSnap);
-    if (tokenEntries.length === 0) {
-      console.log('No nurses subscribed to dose alerts — nothing to send.');
+    if (chartsSnap.empty) {
+      console.log('No charts with a due dose this cycle.');
       return;
     }
+
+    // This collection only ever holds one doc, 'main' — guard anyway in
+    // case of stray data from an old export/import.
+    const candidateDocs = chartsSnap.docs.filter((d) => d.id === 'main');
+    if (candidateDocs.length === 0) {
+      console.log('No charts with a due dose this cycle.');
+      return;
+    }
+
+    // Only fetch the specific patients these candidate charts belong to,
+    // not the whole patients collection — a batched getAll() instead of
+    // one .get() per id.
+    const patientIds = [...new Set(candidateDocs.map((d) => d.ref.parent.parent.id))];
+    const patientDocs = patientIds.length
+      ? await db.getAll(...patientIds.map((id) => db.collection('patients').doc(id)))
+      : [];
+    const patientNames = {};
+    patientDocs.forEach((d) => { if (d.exists) patientNames[d.id] = d.data().name || 'Unnamed patient'; });
 
     const dueByPatient = {}; // patientId -> [ "Drug name (FREQ)" ]
     const chartUpdates = [];
 
-    chartsSnap.forEach((chartDoc) => {
-      if (chartDoc.id !== 'main') return; // this collection only ever holds one doc, 'main'
+    candidateDocs.forEach((chartDoc) => {
       const patientId = chartDoc.ref.parent.parent.id;
       const data = chartDoc.data();
       const drugs = Array.isArray(data.drugs) ? data.drugs : [];
@@ -445,19 +505,52 @@ exports.checkDueDrugs = onSchedule(
         (dueByPatient[patientId] = dueByPatient[patientId] || []).push(label);
       });
 
-      if (changed) chartUpdates.push(chartDoc.ref.update({ drugs }));
+      // Refresh nextDoseAt for the whole chart (every drug, not just the
+      // one(s) that fired this cycle) so the next cycle's indexed query
+      // reflects the true next due time. Only written when it actually
+      // moved, to avoid a pointless write when nothing on this chart's due
+      // schedule changed (e.g. this doc only matched because another drug
+      // on it is still-overdue-and-repeating).
+      const newNextDoseAt = computeChartNextDoseAt(drugs, chartRows);
+      const prevMs = data.nextDoseAt && data.nextDoseAt.toMillis ? data.nextDoseAt.toMillis() : null;
+      const newMs = newNextDoseAt ? newNextDoseAt.getTime() : null;
+      const update = { drugs };
+      if (newMs !== prevMs) update.nextDoseAt = newNextDoseAt || null;
+      if (changed || update.nextDoseAt !== undefined) chartUpdates.push(chartDoc.ref.update(update));
     });
 
-    const patientIds = Object.keys(dueByPatient);
-    if (patientIds.length === 0) {
+    const duePatientIds = Object.keys(dueByPatient);
+    if (duePatientIds.length === 0) {
       await Promise.all(chartUpdates);
       console.log('No doses due this cycle.');
       return;
     }
 
+    // allocations/allocations_mhl are only scanned once we know there's
+    // actually something due to alert on this cycle — most 5-minute cycles
+    // have nothing due at all now that the query above pre-filters, so this
+    // full scan (still worth doing in full at this cadence — see PR notes)
+    // is skipped entirely on those.
+    const allocatedUidsByPatient = await loadAllocatedUidsByPatient();
+
+    // Push tokens are read only for nurses actually allocated to THIS
+    // cycle's due patients, not every user in the building.
+    const scopedUids = new Set();
+    duePatientIds.forEach((pid) => {
+      const uids = allocatedUidsByPatient[pid];
+      if (uids) uids.forEach((u) => scopedUids.add(u));
+    });
+
+    const tokenEntries = scopedUids.size ? await getTokenEntriesForUids([...scopedUids]) : [];
+    if (tokenEntries.length === 0) {
+      console.log('No allocated nurses with push tokens for this cycle\'s due patients.');
+      await Promise.all(chartUpdates);
+      return;
+    }
+
     let totalRecipientSends = 0;
 
-    const sends = patientIds.map(async (patientId) => {
+    const sends = duePatientIds.map(async (patientId) => {
       const labels = dueByPatient[patientId];
       const name = patientNames[patientId] || 'a patient';
       const title = labels.length === 1 ? `Drug due — ${name}` : `${labels.length} drugs due — ${name}`;
@@ -525,138 +618,14 @@ exports.checkDueDrugs = onSchedule(
     });
 
     await Promise.all([...chartUpdates, ...sends]);
-    console.log(`Sent due-dose alerts for ${patientIds.length} patient(s), ${totalRecipientSends} send(s) total.`);
-  }
-);
-
-// Runs every 1 minute, same cadence and admin-configured quiet-hours/sound
-// policy as checkDueDrugs above, but for the glycemic chart instead of the
-// drug course chart. Unlike drugs (which have a per-row frequency like
-// BD/TDS), the glycemic chart has no such field — "due" is instead a single
-// ward-wide interval (settings/alarm.glucose.intervalHours, admin-configured
-// in admin.html) counted from EACH PATIENT'S OWN last recorded reading (the
-// Date+Time of their most recent row with any glucose value filled in). A
-// patient with no reading yet has no baseline to count from, so they're
-// skipped rather than alerted immediately on admission.
-exports.checkDueGlucoseChecks = onSchedule(
-  { schedule: 'every 1 minutes', timeZone: 'Africa/Lagos', region: 'us-central1' },
-  async () => {
-    const now = new Date();
-    const alarmSettings = await loadAlarmSettings();
-
-    if (!alarmSettings.glucose.enabled) {
-      console.log('Glucose check reminders are turned off in Alarm Settings.');
-      return;
-    }
-    if (isWithinQuietHours(alarmSettings.quietHours, now)) {
-      console.log('Within admin-configured quiet hours — skipping glucose reminders this cycle.');
-      return;
-    }
-
-    const [patientsSnap, chartsSnap, usersSnap, allocatedUidsByPatient] = await Promise.all([
-      db.collection('patients').get(),
-      db.collectionGroup('bloodGlucose').get(),
-      db.collection('users').get(),
-      loadAllocatedUidsByPatient()
-    ]);
-
-    const patientNames = {};
-    patientsSnap.forEach((d) => { patientNames[d.id] = d.data().name || 'Unnamed patient'; });
-
-    const tokenEntries = await getTokenEntries(usersSnap);
-    if (tokenEntries.length === 0) {
-      console.log('No nurses subscribed to dose alerts — nothing to send.');
-      return;
-    }
-
-    const duePatientIds = [];
-    const chartUpdates = [];
-    const intervalMs = alarmSettings.glucose.intervalHours * 3600 * 1000;
-
-    chartsSnap.forEach((chartDoc) => {
-      if (chartDoc.id !== 'main') return; // this collection only ever holds one doc, 'main'
-      const patientId = chartDoc.ref.parent.parent.id;
-      const data = chartDoc.data();
-      const chartType = data.chartType === '3point' ? '3point' : '6point';
-      // The client (src/pages/BloodGlucose.jsx) keeps 6-point and 3-point
-      // rows in separate fields (rows6/rows3) so a toggle between them
-      // doesn't lose either one's data, falling back to a legacy single
-      // `rows` field for any doc written before that split. Each saved row
-      // is also wrapped as { cells: [...] } there — Firestore can't store
-      // nested arrays directly — so unwrap it back to a plain array here
-      // the same way the client's own `unwrap()` does on read.
-      const rawRows = data[chartType === '3point' ? 'rows3' : 'rows6'];
-      const rows = (Array.isArray(rawRows) ? rawRows : (Array.isArray(data.rows) ? data.rows : []))
-        .map((r) => (r && r.cells) || r);
-
-      const lastReadingAt = lastGlucoseReadingAt(rows, chartType);
-      if (!lastReadingAt) return; // no reading recorded yet — nothing to base a "due" time on
-
-      const dueAt = new Date(lastReadingAt.getTime() + intervalMs);
-      if (dueAt > now) return;
-
-      const dueSlotKey = dueAt.toISOString();
-      if (data.lastAlertedForGlucose === dueSlotKey) return; // already alerted for this exact slot
-
-      chartUpdates.push(chartDoc.ref.update({ lastAlertedForGlucose: dueSlotKey }));
-      duePatientIds.push(patientId);
-    });
-
-    if (duePatientIds.length === 0) {
-      await Promise.all(chartUpdates);
-      console.log('No glucose checks due this cycle.');
-      return;
-    }
-
-    let totalRecipientSends = 0;
-
-    const sends = duePatientIds.map(async (patientId) => {
-      const name = patientNames[patientId] || 'a patient';
-
-      // Scoped to this patient's allocated nurse(s) — same as checkDueDrugs.
-      const recipientEntries = tokensForPatient(patientId, tokenEntries, allocatedUidsByPatient, name);
-      if (recipientEntries.length === 0) {
-        console.log(`No allocated nurse for ${name} — no alert sent.`);
-        return;
-      }
-      const recipientTokens = recipientEntries.map((t) => t.token);
-      totalRecipientSends += recipientTokens.length;
-
-      const resp = await messaging.sendEachForMulticast({
-        tokens: recipientTokens,
-        // Data-only — see the drug-due send above for why.
-        data: {
-          title: `Glucose check due — ${name}`,
-          body: 'A blood glucose reading is due.',
-          link: `/charts/blood-glucose?patient=${patientId}`,
-          tag: `glucose-${patientId}`
-        },
-        android: {
-          priority: 'high',
-          notification: { channelId: 'dose-due-alerts', sound: 'default' }
-        }
-      });
-
-      // Indices line up with recipientEntries (this patient's scoped
-      // subset), not the full tokenEntries list — see checkDueDrugs above.
-      resp.responses.forEach((r, idx) => {
-        if (r.success) return;
-        const code = r.error?.code || '';
-        if (code.includes('registration-token-not-registered') || code.includes('invalid-argument')) {
-          chartUpdates.push(recipientEntries[idx].ref.delete());
-        }
-      });
-    });
-
-    await Promise.all([...chartUpdates, ...sends]);
-    console.log(`Sent glucose-check reminders for ${duePatientIds.length} patient(s), ${totalRecipientSends} send(s) total.`);
+    console.log(`Sent due-dose alerts for ${duePatientIds.length} patient(s), ${totalRecipientSends} send(s) total.`);
   }
 );
 
 // -- New message alerts -------------------------------------------------
 //
-// Unlike the dose/glucose checks above (which poll on a schedule because
-// "due" is a moving target computed from elapsed time), a chat message is
+// Unlike the scheduled due-dose check above (which polls because "due" is a
+// moving target computed from elapsed time), a chat message is
 // itself the trigger — so this fires straight off the Firestore write
 // (js/messages.html's send handlers, both text and image) instead of
 // polling. Sends to every OTHER participant's registered device(s); the
@@ -1073,3 +1042,9 @@ exports.clearAllocationsOnPatientStatusChange = onDocumentUpdated(
     console.log(`Cleared ${refs.length} allocation(s) for patient ${patientId} after status change.`);
   }
 );
+
+// Exposed only for scripts/backfill-next-dose-at.js (the one-time migration
+// that seeds nextDoseAt on every chart that predates this field) — a plain
+// object export, not an onSchedule/onCall/onDocumentX trigger, so
+// `firebase deploy --only functions` ignores it; it isn't deployed.
+exports._internal = { computeChartNextDoseAt };
