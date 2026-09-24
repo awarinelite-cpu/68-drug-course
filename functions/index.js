@@ -24,7 +24,7 @@
 
 const { onSchedule } = require('firebase-functions/v2/scheduler');
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
-const { onDocumentCreated, onDocumentUpdated } = require('firebase-functions/v2/firestore');
+const { onDocumentCreated, onDocumentUpdated, onDocumentWritten } = require('firebase-functions/v2/firestore');
 const admin = require('firebase-admin');
 
 admin.initializeApp();
@@ -739,6 +739,55 @@ exports.onNewMessage = onDocumentCreated(
     await Promise.all(cleanup);
 
     console.log(`Sent message alert for conversation ${convoId} to ${tokens.length} device(s).`);
+  }
+);
+
+// -- Overall Nurse appointment alert -----------------------------------
+//
+// When an admin/subadmin appoints (or changes) the Overall Nurse for a week
+// (nurseReportRoles/<weekId>.overallNurse), tell the appointed nurse on her
+// phone. Only fires when the appointed uid actually changes, so re-saving
+// the same appointment doesn't buzz her again. Uses the same pushTokens
+// subcollection as the other alerts (she must have enabled alerts once).
+exports.onOverallNurseAppointed = onDocumentWritten(
+  { document: 'nurseReportRoles/{weekId}', region: 'us-central1' },
+  async (event) => {
+    const after = event.data && event.data.after && event.data.after.exists ? event.data.after.data() : null;
+    const before = event.data && event.data.before && event.data.before.exists ? event.data.before.data() : null;
+    const newUid = after && after.overallNurse && after.overallNurse.uid;
+    const oldUid = before && before.overallNurse && before.overallNurse.uid;
+    if (!newUid || newUid === oldUid) return;
+
+    const tokensSnap = await db.collection('users').doc(newUid).collection('pushTokens').get();
+    const tokenEntries = [];
+    tokensSnap.forEach((t) => { if (t.data().token) tokenEntries.push({ token: t.data().token, ref: t.ref }); });
+    if (tokenEntries.length === 0) return;
+
+    const weekId = event.params.weekId;
+    const resp = await messaging.sendEachForMulticast({
+      tokens: tokenEntries.map((t) => t.token),
+      data: {
+        title: 'You are the Overall Nurse this week',
+        body: 'You have been appointed Overall Nurse. Tap to open the Overall Nurse page.',
+        link: '/nurses-report/overall-nurse',
+        tag: `overall-${weekId}`
+      },
+      android: {
+        priority: 'high',
+        notification: { channelId: 'dose-due-alerts', sound: 'default' }
+      }
+    });
+
+    const cleanup = [];
+    resp.responses.forEach((r, idx) => {
+      if (r.success) return;
+      const code = (r.error && r.error.code) || '';
+      if (code.includes('registration-token-not-registered') || code.includes('invalid-argument')) {
+        cleanup.push(tokenEntries[idx].ref.delete());
+      }
+    });
+    await Promise.all(cleanup);
+    console.log(`Sent Overall Nurse appointment alert to ${newUid} for week ${weekId}.`);
   }
 );
 

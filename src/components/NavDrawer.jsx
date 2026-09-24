@@ -2,6 +2,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { useNav } from "../contexts/NavContext.jsx";
 import { useAuth } from "../contexts/AuthContext.jsx";
 import { formatNameWithTitle } from "../lib/roles.js";
+import { useOverallNurseThisWeek } from "../hooks/useOverallNurseThisWeek.js";
 
 // Falls back to the currently selected patient (stored by Home in
 // sessionStorage) so the Overview link still works from the home page, where
@@ -13,6 +14,7 @@ function getActivePatientId(searchParams) {
 export default function NavDrawer() {
   const { open, closeDrawer } = useNav();
   const { profile, logout } = useAuth();
+  const isOverallNurse = useOverallNurseThisWeek();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const patientId = getActivePatientId(searchParams);
@@ -59,7 +61,7 @@ export default function NavDrawer() {
           </button>
           <button className="gnav-link" onClick={() => go("/profile")}><span className="gnav-icon">&#128100;</span>My Profile</button>
           <button className="gnav-link" onClick={() => go("/my-patients")}><span className="gnav-icon">&#128101;</span>My Patients</button>
-          <button className="gnav-link" onClick={() => go("/nurses-report/role-select")}><span className="gnav-icon">&#128203;</span>Nurses Report</button>
+          <button className="gnav-link" onClick={() => go("/nurses-report/role-select")}><span className="gnav-icon">&#128203;</span>Nurses Report{isOverallNurse && <span style={{ marginLeft: 8, fontSize: 10, fontWeight: "bold", background: "#16a34a", color: "#fff", borderRadius: 999, padding: "2px 8px" }}>OVERALL</span>}</button>
           <button className="gnav-link" onClick={() => go(patientId ? "/charts/calculators?patient=" + encodeURIComponent(patientId) : "/charts/calculators")}><span className="gnav-icon">&#129518;</span>Calculators</button>
           <button className="gnav-link" onClick={() => go("/charts/lab-reference")}><span className="gnav-icon">&#128300;</span>Lab Reference</button>
           {profile?.role === "admin" && (

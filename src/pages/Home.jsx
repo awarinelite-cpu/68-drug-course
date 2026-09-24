@@ -4,6 +4,7 @@ import { collection, getDoc, doc, setDoc, serverTimestamp } from "firebase/fires
 import { db } from "../firebase.js";
 import { useAuth } from "../contexts/AuthContext.jsx";
 import { useExitOnDoubleBack } from "../hooks/useExitOnDoubleBack.js";
+import { useOverallNurseThisWeek } from "../hooks/useOverallNurseThisWeek.js";
 import { avatarMarkup } from "../lib/avatar.js";
 import Topbar from "../components/Topbar.jsx";
 import PatientForm from "../components/PatientForm.jsx";
@@ -123,6 +124,7 @@ function titleCase(str) {
 }
 
 export default function Home() {
+  const isOverallNurse = useOverallNurseThisWeek();
   const { user, profile } = useAuth();
   const navigate = useNavigate();
   const searchInputRef = useRef(null);
@@ -697,6 +699,19 @@ export default function Home() {
       </Topbar>
 
       <div className="container">
+        {isOverallNurse && (
+          <div
+            className="card-box"
+            role="button"
+            tabIndex={0}
+            onClick={() => navigate('/nurses-report/overall-nurse')}
+            onKeyDown={(e) => { if (e.key === 'Enter') navigate('/nurses-report/overall-nurse'); }}
+            style={{ cursor: 'pointer', borderLeft: '5px solid #16a34a', background: 'var(--surface-bg, #f0fdf4)' }}
+          >
+            <strong>{'\u2B50'} You are the Overall Nurse this week</strong>
+            <div style={{ fontSize: 13, marginTop: 4 }}>Tap to open the Overall Nurse page — you can lock/open wards and save to the archive until the week ends.</div>
+          </div>
+        )}
         <div className="card-box">
           <label>Search Patient (EMR number or name)</label>
           <div className="search-row">
