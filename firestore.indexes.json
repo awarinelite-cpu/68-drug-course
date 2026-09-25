@@ -1,0 +1,12 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "drugCourseChart",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "nextDoseAt", "order": "ASCENDING" }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}

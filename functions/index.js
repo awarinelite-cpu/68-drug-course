@@ -26,14 +26,20 @@ const { onSchedule } = require('firebase-functions/v2/scheduler');
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const { onDocumentCreated, onDocumentUpdated, onDocumentWritten } = require('firebase-functions/v2/firestore');
 const admin = require('firebase-admin');
+const {
+  INTERVAL_HOURS,
+  parseDoseSequence,
+  intervalHoursFor,
+  administrationCountFor,
+  toWardDate,
+  lastGivenFor,
+  computeDueAt,
+  isSchedulable
+} = require('./lib/dueLogic');
 
 admin.initializeApp();
 const db = admin.firestore();
 const messaging = admin.messaging();
-
-// Ward is Africa/Lagos — WAT, UTC+1 year-round, no DST — so this offset is
-// safe to hardcode rather than depending on the function runtime's TZ.
-const WARD_UTC_OFFSET = '+01:00';
 
 // Mirrors WARDS in js/nurses-report-common.js — kept in sync by hand, same
 // as INTERVAL_HOURS below, since that file is an ES module written for the
@@ -60,94 +66,11 @@ const WARDS = [
   { key: 'esw',      label: 'ESW',       beds: 20 }
 ];
 
-// Only standard, unambiguous frequencies are covered for now. STAT (one-off),
-// PRN (as-needed), and any custom free-text frequency are intentionally
-// skipped — there's no reliable interval to compute a "next due" from.
-const INTERVAL_HOURS = {
-  OD: 24, Mane: 24, Nocte: 24, AM: 24, PM: 24, HS: 24,
-  BD: 12, TDS: 8, QDS: 6, QOD: 48,
-  Q4H: 4, Q6H: 6, Q8H: 8, Q12H: 12,
-  Weekly: 168,
-  'STAT then Q4H': 4, 'STAT then Q6H': 6, 'STAT then Q8H': 8, 'STAT then Q12H': 12
-};
-
-// Open-ended "N times weekly" frequencies ("Twice Weekly", "Thrice Weekly",
-// "4x Weekly", ...) aren't fixed keys in INTERVAL_HOURS above since the
-// count is unbounded — mirrors parseWeeklyFrequency in
-// src/lib/drugChartHelpers.js (kept in sync by hand, same as INTERVAL_HOURS
-// itself, since that file is an ES module and this is a CommonJS Function).
-const WEEKLY_WORD_MULTIPLIERS = { once: 1, twice: 2, thrice: 3, four: 4, five: 5, six: 6, seven: 7 };
-function parseWeeklyFrequency(freqText) {
-  const t = (freqText || '').trim().toLowerCase().replace(/\s+/g, ' ');
-  if (!t) return null;
-  if (t === 'weekly') return 1;
-  const word = t.replace(/\s*weekly$/, '');
-  if (/ weekly$/.test(t) && WEEKLY_WORD_MULTIPLIERS[word]) return WEEKLY_WORD_MULTIPLIERS[word];
-  let m = t.match(/^(\d+)\s*(?:x|times)\s*weekly$/);
-  if (m) return parseInt(m[1], 10);
-  m = t.match(/^(\d+)\s*\/\s*week(?:ly)?$/);
-  if (m) return parseInt(m[1], 10);
-  return null;
-}
-function intervalHoursFor(frequency) {
-  const fixed = INTERVAL_HOURS[frequency];
-  if (fixed) return fixed;
-  const weeklyN = parseWeeklyFrequency(frequency);
-  return weeklyN ? (7 * 24) / weeklyN : null;
-}
-
-// Fixed dose-sequence frequencies (e.g. "0,12,24hr") — mirrors
-// parseDoseSequence in src/lib/drugChartHelpers.js (kept in sync by hand,
-// same as INTERVAL_HOURS/parseWeeklyFrequency above, since that file is an
-// ES module and this is a CommonJS Function). A doctor writes a loading
-// dose followed by fixed hour-offsets rather than one repeating interval;
-// this recognizes that pattern so the scheduler can step through its own
-// hour-gaps (12h each for "0,12,24hr") instead of skipping it entirely.
-function parseDoseSequence(freqText) {
-  if (!freqText) return null;
-  const text = freqText.trim();
-  const statThen = text.match(
-    /^stat\b[,\s]*then\b.*?(\d+)\s*(?:hrly|hourly|hr|hrs|hours?)\b.*?(\d+)\s*(?:hr|hrs|hours?)\b/i
-  );
-  if (statThen) {
-    const interval = parseInt(statThen[1], 10);
-    const total = parseInt(statThen[2], 10);
-    if (interval > 0 && total >= interval) {
-      const nums = [];
-      for (let h = 0; h <= total; h += interval) nums.push(h);
-      if (nums.length >= 2) return nums;
-    }
-  }
-  const hourMatches = [...text.matchAll(/(\d+)\s*(?:hrs?|hours?)\b/gi)];
-  if (hourMatches.length >= 2) {
-    const nums = [...new Set(hourMatches.map((m) => parseInt(m[1], 10)))].sort((a, b) => a - b);
-    if (nums.length >= 2) return nums;
-  }
-  const compact = text.replace(/\s+/g, '');
-  const m = compact.match(/^(\d+(?:,\d+)+)(hrs?|hours?|h)?$/i);
-  if (!m) return null;
-  const nums = [...new Set(m[1].split(',').map((n) => parseInt(n, 10)))].sort((a, b) => a - b);
-  return nums.length >= 2 ? nums : null;
-}
-
-// Count of doses actually recorded as given for this drug (matched by Drug
-// S/N on the chart below) — mirrors administrationTimesFor's row-matching
-// in src/lib/drugChartHelpers.js, but only needs the count here, not the
-// timestamps themselves (lastGivenFor below already gets the latest one).
-function administrationCountFor(drugIndex, chartRows) {
-  let count = 0;
-  for (const row of chartRows || []) {
-    const nums = (row.sno || '').match(/\d+/g) || [];
-    if (nums.some((n) => parseInt(n, 10) === drugIndex + 1)) count++;
-  }
-  return count;
-}
-
-function toWardDate(dateStr, timeStr) {
-  if (!dateStr || !timeStr) return null;
-  const d = new Date(`${dateStr}T${timeStr}:00${WARD_UTC_OFFSET}`);
-  return isNaN(d.getTime()) ? null : d;
-}
+// INTERVAL_HOURS, parseWeeklyFrequency, intervalHoursFor, parseDoseSequence,
+// administrationCountFor, and toWardDate now live in ./lib/dueLogic (see the
+// import at the top of this file) — moved there, unchanged, so the
+// checkDueDrugs schedule, the updateNextDoseAt trigger below, and the
+// standalone backfill-script.js can all share exactly one copy.
 
 // Same doc admin.html writes to and js/alarm-settings.js reads on the client
 // (settings/alarm) — mirrored here by hand since Cloud Functions can't
@@ -209,70 +132,8 @@ function isWithinQuietHours(quietHours, now) {
   return minutesNow >= startMin || minutesNow < endMin; // wraps past midnight
 }
 
-// Chart rows are matched back to a drug by its "S/N" column, which contains
-// the drug's 1-based row number (see refreshDrugSnoList() in
-// charts/drug-course-chart.html) — same lookup drug-course-chart.html itself
-// uses to infer a drug's start date from its administration history.
-function lastGivenFor(drugIndex, chartRows) {
-  let latest = null;
-  for (const row of chartRows || []) {
-    const nums = (row.sno || '').match(/\d+/g) || [];
-    const givenMatch = nums.some((n) => parseInt(n, 10) === drugIndex + 1);
-    // A drug that was documented as "not given" (reason written via the
-    // Select Drug(s) Given picker's pencil icon) still advances the due
-    // clock the same as an actual dose — it just isn't counted as given
-    // anywhere else (dose-sequence ticks, auto-complete). Without this, the
-    // scheduler would keep re-firing the overdue alert for a dose the nurse
-    // already explicitly accounted for.
-    const skippedMatch = Array.isArray(row.skipped) &&
-      row.skipped.some((s) => s && parseInt(s.num, 10) === drugIndex + 1);
-    if (!givenMatch && !skippedMatch) continue;
-    const dt = toWardDate(row.date, row.time);
-    if (dt && (!latest || dt > latest)) latest = dt;
-  }
-  return latest;
-}
-
-function computeDueAt(drug, chartRows, drugIndex) {
-  // Fixed dose-sequence (e.g. "0,12,24hr"): step through the sequence's own
-  // hour-gaps (12h each, for that example) instead of one repeating
-  // interval — see parseDoseSequence above and computeDueAt in
-  // src/lib/drugChartHelpers.js (client-side twin of this function).
-  const seq = parseDoseSequence(drug.frequency);
-  if (seq) {
-    const givenCount = administrationCountFor(drugIndex, chartRows);
-    if (givenCount >= seq.length) return null; // sequence complete
-    if (givenCount === 0) {
-      if (drug.activatedAt) { const at = new Date(drug.activatedAt); if (!isNaN(at.getTime())) return at; }
-      if (drug.startDate) return toWardDate(drug.startDate, '00:00');
-      if (drug.createdAt) {
-        const d = new Date(drug.createdAt);
-        return isNaN(d.getTime()) ? null : d;
-      }
-      return null;
-    }
-    const lastGiven = lastGivenFor(drugIndex, chartRows);
-    if (!lastGiven) return null;
-    const stepHours = seq[givenCount] - seq[givenCount - 1];
-    return new Date(lastGiven.getTime() + stepHours * 3600 * 1000);
-  }
-
-  const lastGiven = lastGivenFor(drugIndex, chartRows);
-  if (lastGiven) {
-    const intervalHours = intervalHoursFor(drug.frequency);
-    return new Date(lastGiven.getTime() + intervalHours * 3600 * 1000);
-  }
-  // Never administered yet — anchor to whichever of these is available.
-  // A follow-on drug (2nd half of an "X then Y" order) is due from the moment
-  // it was activated, not midnight of that day.
-  if (drug.activatedAt) { const at = new Date(drug.activatedAt); if (!isNaN(at.getTime())) return at; }
-  if (drug.startDate) return toWardDate(drug.startDate, '00:00');
-  if (drug.createdAt) {
-    const d = new Date(drug.createdAt);
-    return isNaN(d.getTime()) ? null : d;
-  }
-  return null;
-}
+// lastGivenFor and computeDueAt now live in ./lib/dueLogic too — same note
+// as above.
 
 // NOTE: the automated glucose-check reminder (checkDueGlucoseChecks) was
 // removed to cut Firestore read costs — it was one of two scheduled
@@ -283,21 +144,25 @@ function computeDueAt(drug, chartRows, drugIndex) {
 // and lastGlucoseReadingAt, which existed solely to support that reminder,
 // were removed as dead code along with it.
 
-// Reads every nurse's registered push token across all users (see
-// js/push.js's pushTokens subcollection). Shared by both scheduled checks
-// below so each does this Firestore read only once per its own cycle.
-// Includes uid/role alongside each token so callers can scope a given
-// patient's alert down to just the nurse(s) that patient is allocated to
-// (see allocatedUidsByPatient / tokensForPatient below) rather than
-// blasting every nurse in the building for every patient.
-async function getTokenEntries(usersSnap) {
+// Reads registered push tokens (see js/push.js's pushTokens subcollection)
+// for ONLY the given uids, instead of scanning every user in the building.
+// Used by checkDueDrugs below, scoped each cycle to just the nurses
+// allocated to that cycle's actually-due patients (see
+// loadAllocatedUidsByPatient / tokensForPatient below). Includes role
+// alongside each token, kept for parity with the rest of the token-entry
+// shape used elsewhere in this file, though nothing here currently filters
+// on it.
+async function getTokenEntriesForUids(uids) {
   const tokenEntries = []; // { token, ref, uid, role }
   await Promise.all(
-    usersSnap.docs.map(async (u) => {
-      const role = (u.data() || {}).role || '';
-      const tokensSnap = await db.collection('users').doc(u.id).collection('pushTokens').get();
+    uids.map(async (uid) => {
+      const [userSnap, tokensSnap] = await Promise.all([
+        db.collection('users').doc(uid).get(),
+        db.collection('users').doc(uid).collection('pushTokens').get()
+      ]);
+      const role = userSnap.exists ? (userSnap.data().role || '') : '';
       tokensSnap.forEach((t) => {
-        if (t.data().token) tokenEntries.push({ token: t.data().token, ref: t.ref, uid: u.id, role });
+        if (t.data().token) tokenEntries.push({ token: t.data().token, ref: t.ref, uid, role });
       });
     })
   );
@@ -353,22 +218,74 @@ function tokensForPatient(patientId, tokenEntries, allocatedUidsByPatient, patie
   return [];
 }
 
-// Every 5 minutes (previously every 1 minute) — this is the single biggest
-// Firestore-read line item in the project, since every cycle does a full,
-// unconditional scan of patients, users, allocations/allocations_mhl, and
-// the drugCourseChart collection group (no where()/limit() — see
-// loadAllocatedUidsByPatient and getTokenEntries below). At 1-minute
-// cadence that's ~1,440 full scans/day; at 5 minutes it's ~288/day, an ~80%
-// cut in reads with, at most, a few extra minutes' delay before an overdue
-// dose is alerted — acceptable given overdueRepeatMinutes below already
-// re-alerts periodically for anything still overdue. A further reduction
-// (querying only currently-due doses via a stored nextDoseAt field instead
-// of re-deriving due-ness from full chart data every cycle) is possible but
-// was deliberately NOT done here — it requires mirroring this function's
-// dose-sequence/admin-frequency-toggle/overdue-repeat logic into whatever
-// screen logs a dose as given, and any drift between the two copies could
-// silently stop real alerts. Worth doing later, with careful testing
-// against the write path, not as a blind refactor.
+// Fires automatically after every write to a patient's drug chart (i.e.
+// every DrugCourseChart.jsx saveChart() call — see src/pages/
+// DrugCourseChart.jsx, chartRefPath.current = doc(db, 'patients',
+// patientId, 'drugCourseChart', 'main')). Recomputes nextDoseAt — the
+// EARLIEST computeDueAt across this patient's Ongoing, schedulable drugs —
+// using the exact same computeDueAt already used by checkDueDrugs below
+// (imported from ./lib/dueLogic, not re-implemented here), and stores it on
+// the same chart doc so checkDueDrugs can query
+// `where('nextDoseAt', '<=', now)` instead of scanning every chart every
+// cycle. This keeps computeDueAt defined in exactly ONE place — no new
+// hand-sync burden, no client-side duplication, no risk of the write path
+// silently drifting from the alert logic.
+//
+// Deliberately does NOT apply the admin alarmSettings.frequencies toggle
+// (checkDueDrugs does that) — that setting lives in a separate doc and can
+// change at any time independent of this chart's own writes, so baking it
+// into nextDoseAt here could leave a chart's nextDoseAt stuck excluding a
+// drug the admin later re-enables, with nothing to re-trigger this trigger.
+// Being over-inclusive here is safe: checkDueDrugs still does its own
+// per-drug alarmSettings/quiet-hours/overdue-repeat filtering before it
+// actually sends anything — nextDoseAt only narrows which chart docs are
+// even considered.
+exports.updateNextDoseAt = onDocumentWritten(
+  { document: 'patients/{patientId}/drugCourseChart/{chartId}', region: 'us-central1' },
+  async (event) => {
+    if (event.params.chartId !== 'main') return; // this collection only ever holds one doc, 'main'
+
+    const after = event.data && event.data.after;
+    if (!after || !after.exists) return; // doc deleted — nothing to compute
+
+    const data = after.data() || {};
+    const drugs = Array.isArray(data.drugs) ? data.drugs : [];
+    const chartRows = Array.isArray(data.rows) ? data.rows : [];
+
+    let earliest = null;
+    drugs.forEach((drug, i) => {
+      if (drug.action && drug.action !== 'Ongoing') return; // discontinued/withheld/completed/other
+      if (!isSchedulable(drug.frequency)) return; // STAT / PRN / custom text — not covered
+
+      const dueAt = computeDueAt(drug, chartRows, i);
+      if (!dueAt) return;
+      if (!earliest || dueAt < earliest) earliest = dueAt;
+    });
+
+    const newValue = earliest ? admin.firestore.Timestamp.fromDate(earliest) : null;
+
+    // Self-trigger-loop guard: this write itself re-fires this same
+    // trigger. Compare the freshly computed value against what's already
+    // stored and skip the write when nothing changed — the recursive
+    // invocation then sees the same drugs/rows, recomputes the identical
+    // value, finds it already matches, and stops. This is the standard
+    // pattern for onDocumentWritten triggers that write back to the
+    // document they're watching.
+    const existing = data.nextDoseAt || null;
+    const existingMs = existing && existing.toMillis ? existing.toMillis() : null;
+    const newMs = newValue ? newValue.toMillis() : null;
+    if (existingMs === newMs) return;
+
+    await after.ref.set({ nextDoseAt: newValue }, { merge: true });
+  }
+);
+
+// Every 5 minutes. Queries only chart docs with something currently due
+// (nextDoseAt <= now, kept fresh by updateNextDoseAt above) instead of
+// scanning every patient's chart every cycle, then narrows the
+// patients/users/allocation reads down to just that cycle's actually-due
+// patients — see the collectionGroup query, db.getAll(...), and
+// getTokenEntriesForUids(...) below.
 exports.checkDueDrugs = onSchedule(
   { schedule: 'every 5 minutes', timeZone: 'Africa/Lagos', region: 'us-central1' },
   async () => {
@@ -385,27 +302,45 @@ exports.checkDueDrugs = onSchedule(
       return;
     }
 
-    const [patientsSnap, chartsSnap, usersSnap, allocatedUidsByPatient] = await Promise.all([
-      db.collection('patients').get(),
-      db.collectionGroup('drugCourseChart').get(),
-      db.collection('users').get(),
+    const [dueChartsSnap, allocatedUidsByPatient] = await Promise.all([
+      db.collectionGroup('drugCourseChart')
+        .where('nextDoseAt', '<=', admin.firestore.Timestamp.fromDate(now))
+        .get(),
       loadAllocatedUidsByPatient()
     ]);
 
-    const patientNames = {};
-    patientsSnap.forEach((d) => { patientNames[d.id] = d.data().name || 'Unnamed patient'; });
+    // this collection only ever holds one doc, 'main' — collectionGroup
+    // scope theoretically returns other doc ids too, so keep the guard.
+    const dueChartDocs = dueChartsSnap.docs.filter((d) => d.id === 'main');
+    if (dueChartDocs.length === 0) {
+      console.log('No doses due this cycle.');
+      return;
+    }
 
-    const tokenEntries = await getTokenEntries(usersSnap);
+    const patientIds = [...new Set(dueChartDocs.map((d) => d.ref.parent.parent.id))];
+
+    const patientsSnap = await db.getAll(...patientIds.map((id) => db.collection('patients').doc(id)));
+    const patientNames = {};
+    patientsSnap.forEach((d) => { patientNames[d.id] = (d.exists && d.data().name) || 'Unnamed patient'; });
+
+    // Only nurses allocated to one of THIS cycle's due patients need their
+    // tokens loaded — scoped via allocatedUidsByPatient instead of every
+    // user, per getTokenEntriesForUids above.
+    const scopedUids = new Set();
+    patientIds.forEach((pid) => {
+      const uids = allocatedUidsByPatient[pid];
+      if (uids) uids.forEach((u) => scopedUids.add(u));
+    });
+    const tokenEntries = await getTokenEntriesForUids([...scopedUids]);
     if (tokenEntries.length === 0) {
-      console.log('No nurses subscribed to dose alerts — nothing to send.');
+      console.log('No allocated nurses with push tokens for this cycle\'s due patients — nothing to send.');
       return;
     }
 
     const dueByPatient = {}; // patientId -> [ "Drug name (FREQ)" ]
     const chartUpdates = [];
 
-    chartsSnap.forEach((chartDoc) => {
-      if (chartDoc.id !== 'main') return; // this collection only ever holds one doc, 'main'
+    dueChartDocs.forEach((chartDoc) => {
       const patientId = chartDoc.ref.parent.parent.id;
       const data = chartDoc.data();
       const drugs = Array.isArray(data.drugs) ? data.drugs : [];
@@ -451,8 +386,8 @@ exports.checkDueDrugs = onSchedule(
       if (changed) chartUpdates.push(chartDoc.ref.update({ drugs }));
     });
 
-    const patientIds = Object.keys(dueByPatient);
-    if (patientIds.length === 0) {
+    const duePatientIds = Object.keys(dueByPatient);
+    if (duePatientIds.length === 0) {
       await Promise.all(chartUpdates);
       console.log('No doses due this cycle.');
       return;
@@ -460,7 +395,7 @@ exports.checkDueDrugs = onSchedule(
 
     let totalRecipientSends = 0;
 
-    const sends = patientIds.map(async (patientId) => {
+    const sends = duePatientIds.map(async (patientId) => {
       const labels = dueByPatient[patientId];
       const name = patientNames[patientId] || 'a patient';
       const title = labels.length === 1 ? `Drug due — ${name}` : `${labels.length} drugs due — ${name}`;
@@ -528,7 +463,7 @@ exports.checkDueDrugs = onSchedule(
     });
 
     await Promise.all([...chartUpdates, ...sends]);
-    console.log(`Sent due-dose alerts for ${patientIds.length} patient(s), ${totalRecipientSends} send(s) total.`);
+    console.log(`Sent due-dose alerts for ${duePatientIds.length} patient(s), ${totalRecipientSends} send(s) total.`);
   }
 );
 
