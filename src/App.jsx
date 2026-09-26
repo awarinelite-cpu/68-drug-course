@@ -19,6 +19,7 @@ import { prefetchReportData } from "./lib/prefetchData.js";
 // so there's no benefit to splitting it out and it avoids a loading
 // flicker on the very first screen.
 import Login from "./pages/Login.jsx";
+import RequestAccount from "./pages/RequestAccount.jsx";
 
 // Everything else is lazy-loaded: Vite splits each into its own chunk,
 // so the initial bundle only contains the app shell. prefetchRoutes()
@@ -95,6 +96,7 @@ export default function App() {
         <Suspense fallback={<PageLoading />}>
         <Routes>
           <Route path="/login" element={<Login />} />
+          <Route path="/request-account" element={<RequestAccount />} />
           <Route path="/" element={<AuthedShell><Home /></AuthedShell>} />
           <Route path="/patient" element={<AuthedShell><Patient /></AuthedShell>} />
           <Route path="/my-patients" element={<AuthedShell><MyPatients /></AuthedShell>} />

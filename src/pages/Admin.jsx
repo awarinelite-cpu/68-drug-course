@@ -11,6 +11,7 @@ import { downloadFullBackup } from "../lib/export.js";
 import { rebuildSearchIndex } from "../lib/patientDirectory.js";
 import { avatarMarkup } from "../lib/avatar.js";
 import { ROLE_OPTIONS, formatNameWithTitle } from "../lib/roles.js";
+import StaffRegistrationCard from "../components/StaffRegistrationCard.jsx";
 import {
   SOUND_OPTIONS, APPEARANCE_OPTIONS, REPEAT_OPTIONS, ALL_FREQUENCIES, GLUCOSE_INTERVAL_OPTIONS,
   OVERDUE_REPEAT_OPTIONS, loadAlarmSettings, saveAlarmSettings as persistAlarmSettings
@@ -78,6 +79,14 @@ export default function Admin() {
   const [phone, setPhone] = useState('');
   const [newAccountRole, setNewAccountRole] = useState('nurse');
   const [msg, setMsg] = useState(null);
+
+  // Pending self-registration applications (see RequestAccount.jsx /
+  // StaffRegistrationCard.jsx) — role an admin approves them under
+  // defaults to whatever the applicant requested, but is editable before
+  // approving, in case they picked the wrong one.
+  const [pendingRoleChoice, setPendingRoleChoice] = useState({}); // { [uid]: role }
+  const [approvingId, setApprovingId] = useState(null);
+  const [approveMsg, setApproveMsg] = useState(null);
 
   const [allPatients, setAllPatients] = useState([]);
   const [patientFilter, setPatientFilter] = useState('');
@@ -203,6 +212,9 @@ export default function Admin() {
       setMsg({ type: 'error', text: e.message || 'Failed to create account.' });
     }
   }
+
+  const pendingUsers = users.filter(u => u.status === 'pending');
+  const approvedUsers = users.filter(u => u.status !== 'pending');
 
   const filteredPatients = (() => {
     const q = patientFilter.trim().toLowerCase();
@@ -336,6 +348,20 @@ export default function Admin() {
     loadUsers();
   }
 
+  async function approveApplication(u) {
+    const chosenRole = pendingRoleChoice[u.id] || u.role || 'nurse';
+    setApprovingId(u.id);
+    setApproveMsg(null);
+    try {
+      await updateDoc(doc(db, 'users', u.id), { status: 'approved', role: chosenRole });
+      setApproveMsg({ type: 'info', text: (u.name || u.email || 'Applicant') + '\u2019s account has been approved.' });
+    } catch (e) {
+      setApproveMsg({ type: 'error', text: "Couldn't approve: " + (e.code || e.message || 'unknown error') });
+    }
+    setApprovingId(null);
+    loadUsers();
+  }
+
   async function setUserRole(u, newRole) {
     try {
       await updateDoc(doc(db, 'users', u.id), { role: newRole });
@@ -411,6 +437,51 @@ export default function Admin() {
           </p>
         </div>
 
+        <StaffRegistrationCard />
+
+        <div className="card-box">
+          <h3 style={{ marginTop: 0 }}>Pending Account Applications</h3>
+          <p style={{ fontSize: 12, color: '#666', marginTop: -6 }}>
+            Self-registered via the QR code above. Approving assigns them the role picked below (defaults
+            to what they applied for) and lets them log in right away with the password they set; rejecting
+            deletes the application entirely — nothing is created until you approve.
+          </p>
+          {!pendingUsers.length && <div style={{ fontSize: 13, color: '#666' }}>No pending applications.</div>}
+          {pendingUsers.length > 0 && (
+            <div className="table-wrap">
+              <table className="entries">
+                <thead><tr><th></th><th>Name</th><th>Email</th><th>Phone</th><th>Applying As</th><th></th></tr></thead>
+                <tbody>
+                  {pendingUsers.map((u) => (
+                    <tr key={u.id}>
+                      <td dangerouslySetInnerHTML={{ __html: avatarMarkup(u, 32) }} />
+                      <td>{u.name || 'Unnamed'}</td><td>{u.email || ''}</td><td>{u.phone || ''}</td>
+                      <td>
+                        <select value={pendingRoleChoice[u.id] || u.role || 'nurse'}
+                          onChange={(e) => setPendingRoleChoice((m) => ({ ...m, [u.id]: e.target.value }))}
+                          disabled={approvingId === u.id}>
+                          {ROLE_OPTIONS.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
+                        </select>
+                      </td>
+                      <td>
+                        <button className="btn btn-primary" style={{ padding: '4px 10px', fontSize: 11, marginRight: 6 }}
+                          disabled={approvingId === u.id} onClick={() => approveApplication(u)}>
+                          {approvingId === u.id ? 'Approving…' : 'Approve'}
+                        </button>
+                        <button className="btn btn-secondary" style={{ padding: '4px 10px', fontSize: 11, background: '#dc2626', color: '#fff', border: 'none' }}
+                          disabled={approvingId === u.id || userDeletingId === u.id} onClick={() => openDeleteUserModal(u)}>
+                          {userDeletingId === u.id ? 'Rejecting…' : 'Reject'}
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+          {approveMsg && <div className={approveMsg.type === 'error' ? 'error-msg' : 'info-msg'}>{approveMsg.text}</div>}
+        </div>
+
         <div className="card-box">
           <h3 style={{ marginTop: 0 }}>All Patients</h3>
           <div className="search-row">
@@ -467,7 +538,7 @@ export default function Admin() {
             <table className="entries">
               <thead><tr><th></th><th>Name</th><th>Email</th><th>Phone</th><th>Role</th><th></th></tr></thead>
               <tbody>
-                {users.map((u) => (
+                {approvedUsers.map((u) => (
                   <tr key={u.id}>
                     <td dangerouslySetInnerHTML={{ __html: avatarMarkup(u, 32) }} />
                     <td>{formatNameWithTitle(u.name, u.role)}</td><td>{u.email || ''}</td><td>{u.phone || ''}</td><td>{u.role || ''}</td>

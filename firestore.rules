@@ -5,8 +5,18 @@ service cloud.firestore {
     function isSignedIn() {
       return request.auth != null;
     }
+    // A "known user" is a signed-in account with a Firestore profile that
+    // isn't sitting in the pending-approval queue. Self-registered nurse/
+    // doctor accounts (see /request-account) are created with
+    // status: 'pending' and stay locked out of every collection gated by
+    // isKnownUser() until an admin approves them (status becomes
+    // 'approved') or removes the status field entirely — accounts created
+    // the old way (Admin > Create Account) never had a status field, and
+    // .get(field, default) treats that the same as 'approved' so nothing
+    // about them changes.
     function isKnownUser() {
-      return isSignedIn() && exists(/databases/$(database)/documents/users/$(request.auth.uid));
+      return isSignedIn() && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('status', 'approved') != 'pending';
     }
     function isAdmin() {
       return isSignedIn()
@@ -37,18 +47,41 @@ service cloud.firestore {
 
     // User profiles / roles
     match /users/{uid} {
-      allow read: if isKnownUser();
-      allow create: if isSignedIn() && isAdmin();
-      // Admins can update anything. A signed-in user may also edit their own
-      // profile (phone, gender, ward, etc.) but may not change their own
-      // role, email, or name through this path — name changes need an
-      // admin, same as role/email, since it's the identity shown on every
-      // chart/audit entry a nurse makes.
+      // A pending applicant needs to read her OWN doc to find out she's
+      // still pending (see AuthContext.jsx / RequireAuth.jsx's waiting
+      // screen), even though isKnownUser() above now excludes her — so
+      // self-read is allowed unconditionally, but reading anyone else's
+      // profile still requires being an approved, known user.
+      allow read: if isKnownUser() || (isSignedIn() && request.auth.uid == uid);
+      // Admins create fully-approved accounts directly (Admin > Create
+      // Account). Anyone else may only create her OWN doc, as a pending
+      // application from /request-account — self-selecting only 'nurse'/
+      // 'doctor', never 'admin'/'subadmin', always status 'pending' (never
+      // pre-approved), and with an email that matches the Auth account she
+      // just created (no impersonating another address).
+      allow create: if isSignedIn() && (
+        isAdmin() ||
+        (
+          request.auth.uid == uid &&
+          request.resource.data.status == 'pending' &&
+          request.resource.data.role in ['nurse', 'doctor'] &&
+          request.resource.data.name is string && request.resource.data.name.size() > 0 &&
+          request.resource.data.email == request.auth.token.email
+        )
+      );
+      // Admins can update anything — including approving a pending
+      // application (status: 'pending' -> 'approved') and confirming/
+      // changing the role on approval. A signed-in user may also edit her
+      // own profile (phone, gender, ward, etc.) but may not change her own
+      // role, email, name, or approval status through this path — those
+      // need an admin, same reasoning as before, now extended to status so
+      // a pending applicant can never self-approve.
       allow update: if isAdmin() || (
         isSignedIn() && request.auth.uid == uid &&
         request.resource.data.role == resource.data.role &&
         request.resource.data.email == resource.data.email &&
-        request.resource.data.name == resource.data.name
+        request.resource.data.name == resource.data.name &&
+        request.resource.data.get('status', 'approved') == resource.data.get('status', 'approved')
       );
       allow delete: if isAdmin();
 
