@@ -10,6 +10,8 @@ export default function StaffRegistrationCard() {
   const canvasRef = useRef(null);
   const link = window.location.origin + '/request-account';
   const [copyMsg, setCopyMsg] = useState('');
+  const [shareMsg, setShareMsg] = useState('');
+
 
   useEffect(() => {
     if (canvasRef.current) {
@@ -25,6 +27,35 @@ export default function StaffRegistrationCard() {
       setCopyMsg('Couldn\u2019t copy — select and copy the link manually.');
     }
     setTimeout(() => setCopyMsg(''), 2500);
+  }
+
+  async function shareToWhatsApp() {
+    try {
+      if (navigator.canShare) {
+        // Share the actual QR image (not just the link) so it drops into the
+        // WhatsApp chat as a photo the group can screenshot/scan directly.
+        const dataUrl = await QRCode.toDataURL(link, { width: 1000, margin: 1 });
+        const blob = await (await fetch(dataUrl)).blob();
+        const file = new File([blob], 'staff-registration-qr.png', { type: 'image/png' });
+        if (navigator.canShare({ files: [file] })) {
+          await navigator.share({
+            files: [file],
+            title: 'Staff Registration — 68 NARHY Ward Charts',
+            text: 'Scan to request a staff account: ' + link,
+          });
+          return;
+        }
+      }
+    } catch (e) {
+      if (e && e.name === 'AbortError') return; // user closed the share sheet — not an error
+    }
+    // No file-sharing support here (typically a desktop browser) — fall back
+    // to opening WhatsApp with the link pre-filled; the QR can still be
+    // printed/saved and attached by hand if the group needs the image itself.
+    setShareMsg('Sharing the link instead — attach the printed/saved QR image if the group needs the image itself.');
+    setTimeout(() => setShareMsg(''), 4000);
+    const text = encodeURIComponent('Scan to request a staff account for 68 NARHY Ward Charts: ' + link);
+    window.open('https://wa.me/?text=' + text, '_blank');
   }
 
   async function printCode() {
@@ -79,11 +110,13 @@ export default function StaffRegistrationCard() {
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
         <canvas ref={canvasRef} />
         <div style={{ fontSize: 12, color: '#555', wordBreak: 'break-all', textAlign: 'center' }}>{link}</div>
-        <div style={{ display: 'flex', gap: 10 }}>
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', justifyContent: 'center' }}>
           <button className="btn btn-secondary" onClick={copyLink}>Copy Link</button>
           <button className="btn btn-primary" onClick={printCode}>Print</button>
+          <button className="btn btn-secondary" onClick={shareToWhatsApp}>Share to WhatsApp</button>
         </div>
         {copyMsg && <div className="info-msg">{copyMsg}</div>}
+        {shareMsg && <div className="info-msg">{shareMsg}</div>}
       </div>
     </div>
   );
