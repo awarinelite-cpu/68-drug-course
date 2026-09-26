@@ -27,21 +27,45 @@ export default function StaffRegistrationCard() {
     setTimeout(() => setCopyMsg(''), 2500);
   }
 
-  function printCode() {
+  async function printCode() {
+    // Open the window synchronously (on the click) so popup blockers don't
+    // treat it as unsolicited once we await the QR generation below.
     const w = window.open('', '_blank', 'width=420,height=560');
     if (!w) return;
+
+    // Regenerate at high resolution for print rather than reusing the small
+    // on-screen canvas, so the code stays sharp when blown up to fill the page.
+    const dataUrl = await QRCode.toDataURL(link, { width: 1000, margin: 1 });
+
     w.document.write(
-      '<html><head><title>68 NARHY Ward Charts — Staff Registration</title></head>' +
-      '<body style="font-family:sans-serif;text-align:center;padding:24px;">' +
+      '<html><head><title>68 NARHY Ward Charts — Staff Registration</title>' +
+      '<style>' +
+      '@page { size: A4; margin: 10mm; }' +
+      'html, body { height: 100%; margin: 0; }' +
+      'body { font-family: sans-serif; text-align: center; box-sizing: border-box; ' +
+      'display: flex; flex-direction: column; align-items: center; justify-content: center; }' +
+      'h2 { margin: 0 0 6px; font-size: 32px; }' +
+      'p.subtitle { margin: 0 0 20px; font-size: 18px; color: #333; }' +
+      'img { width: 85vmin; height: 85vmin; max-width: 100%; }' +
+      'p.link { font-size: 15px; color: #555; word-break: break-all; margin-top: 22px; }' +
+      '</style></head>' +
+      '<body>' +
       '<h2>Scan to Request a Staff Account</h2>' +
-      '<p>68 NARHY Ward Charts — for nurses and doctors</p>' +
-      '<img src="' + canvasRef.current.toDataURL('image/png') + '" style="width:280px;height:280px;" />' +
-      '<p style="font-size:12px;color:#555;word-break:break-all;">' + link + '</p>' +
+      '<p class="subtitle">68 NARHY Ward Charts — for nurses and doctors</p>' +
+      '<img id="qr" src="' + dataUrl + '" />' +
+      '<p class="link">' + link + '</p>' +
       '</body></html>'
     );
     w.document.close();
-    w.focus();
-    w.print();
+
+    // Wait for the image to actually finish loading before printing — with
+    // the old code, w.print() fired right after document.write() and the
+    // print snapshot could be taken before the data-URL image had painted,
+    // leaving a blank box where the QR should be.
+    const img = w.document.getElementById('qr');
+    const doPrint = () => { w.focus(); w.print(); };
+    if (img.complete) doPrint();
+    else img.onload = doPrint;
   }
 
   return (
