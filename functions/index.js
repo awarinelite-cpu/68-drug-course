@@ -23,7 +23,7 @@
 // of the old static .html pages.
 
 const { onSchedule } = require('firebase-functions/v2/scheduler');
-const { onCall, HttpsError } = require('firebase-functions/v2/https');
+const { onCall, HttpsError, onRequest } = require('firebase-functions/v2/https');
 const { onDocumentCreated, onDocumentUpdated, onDocumentWritten } = require('firebase-functions/v2/firestore');
 const admin = require('firebase-admin');
 const {
@@ -36,6 +36,7 @@ const {
   computeDueAt,
   isSchedulable
 } = require('./lib/dueLogic');
+const { scheduleDoseAlertTask, cancelScheduledTask } = require('./lib/cloudTasksClient');
 
 admin.initializeApp();
 const db = admin.firestore();
@@ -111,6 +112,43 @@ async function loadAlarmSettings() {
       overdueRepeatMinutes: 15
     };
   }
+}
+
+// Drives the staged Cloud Tasks rollout (see checkDueDrugs and
+// sendDoseAlert below) without needing a redeploy to flip stages.
+// Defaults matter: if settings/doseAlertRollout doesn't exist yet, or the
+// read fails, both functions fall back to "polling is authoritative,
+// Cloud Tasks is logging-only" — the safe, already-working state — never
+// the other way around.
+async function loadRolloutSettings() {
+  try {
+    const snap = await db.collection('settings').doc('doseAlertRollout').get();
+    const d = snap.exists ? snap.data() : {};
+    return {
+      activeSender: d.activeSender === 'cloudTasks' ? 'cloudTasks' : 'polling',
+      cloudTasksLoggingOnly: d.cloudTasksLoggingOnly !== false
+    };
+  } catch (e) {
+    console.error('Failed to load rollout settings, defaulting to polling-only:', e);
+    return { activeSender: 'polling', cloudTasksLoggingOnly: true };
+  }
+}
+
+// Given the ward-local quiet-hours end time, the next absolute Date it
+// occurs at (today if still ahead, tomorrow if today's window already
+// passed). Ward is Africa/Lagos, UTC+1 no DST — mirrors the offset
+// arithmetic in wardMinutesNow below.
+function nextQuietHoursEndAt(quietHours, now) {
+  const [eh, em] = quietHours.end.split(':').map(Number);
+  const wardNow = new Date(now.getTime() + 60 * 60 * 1000); // UTC -> WAT
+  const wardEndToday = new Date(Date.UTC(
+    wardNow.getUTCFullYear(), wardNow.getUTCMonth(), wardNow.getUTCDate(), eh, em, 0
+  ));
+  let endUtc = new Date(wardEndToday.getTime() - 60 * 60 * 1000); // WAT -> UTC
+  if (endUtc.getTime() <= now.getTime()) {
+    endUtc = new Date(endUtc.getTime() + 24 * 60 * 60 * 1000);
+  }
+  return endUtc;
 }
 
 // Ward-local "now", for comparing against the admin's quiet-hours start/end
@@ -241,7 +279,7 @@ function tokensForPatient(patientId, tokenEntries, allocatedUidsByPatient, patie
 // actually sends anything — nextDoseAt only narrows which chart docs are
 // even considered.
 exports.updateNextDoseAt = onDocumentWritten(
-  { document: 'patients/{patientId}/drugCourseChart/{chartId}', region: 'us-central1' },
+  { document: 'patients/{patientId}/drugCourseChart/{chartId}', region: 'us-central1', retry: true },
   async (event) => {
     if (event.params.chartId !== 'main') return; // this collection only ever holds one doc, 'main'
 
@@ -276,7 +314,29 @@ exports.updateNextDoseAt = onDocumentWritten(
     const newMs = newValue ? newValue.toMillis() : null;
     if (existingMs === newMs) return;
 
-    await after.ref.set({ nextDoseAt: newValue }, { merge: true });
+    // Create the replacement task BEFORE canceling the old one. Both calls
+    // are wrapped so a Cloud Tasks failure (e.g. SEND_DOSE_ALERT_URL not
+    // yet configured, transient API error) never blocks the nextDoseAt
+    // write below — checkDueDrugs' polling fallback depends on nextDoseAt
+    // staying current no matter what happens with Cloud Tasks, so that
+    // write must never be skipped. A stale/duplicate task is
+    // self-correcting (sendDoseAlert always re-reads the chart fresh), so
+    // it's a far better failure mode here than losing nextDoseAt.
+    let newTaskName = null;
+    if (newValue) {
+      try {
+        newTaskName = await scheduleDoseAlertTask({ patientId: event.params.patientId, chartId: event.params.chartId, dueAt: earliest });
+      } catch (err) {
+        console.error('scheduleDoseAlertTask failed — nextDoseAt still updating, falling back to polling for this chart:', err);
+      }
+    }
+    try {
+      await cancelScheduledTask(data.scheduledTaskName);
+    } catch (err) {
+      console.error('cancelScheduledTask failed (non-fatal):', err);
+    }
+
+    await after.ref.set({ nextDoseAt: newValue, scheduledTaskName: newTaskName }, { merge: true });
   }
 );
 
@@ -291,6 +351,7 @@ exports.checkDueDrugs = onSchedule(
   async () => {
     const now = new Date();
     const alarmSettings = await loadAlarmSettings();
+    const rollout = await loadRolloutSettings();
 
     // Quiet hours suppress sending entirely for this cycle. Doses that go
     // due during the window are deliberately left un-marked (lastAlertedFor
@@ -411,6 +472,16 @@ exports.checkDueDrugs = onSchedule(
       const recipientTokens = recipientEntries.map((t) => t.token);
       totalRecipientSends += recipientTokens.length;
 
+      if (rollout.activeSender === 'cloudTasks') {
+        // Stage 3+ of the rollout: Cloud Tasks/sendDoseAlert is now
+        // authoritative. checkDueDrugs still ran all the due-detection and
+        // lastAlertedFor bookkeeping above (chartUpdates already queued) —
+        // only the send itself is skipped here, so this stays a
+        // meaningful passive safety net to compare against, not a no-op.
+        console.log(`[rollout: cloudTasks is authoritative] would have sent to ${recipientTokens.length} recipient(s) for ${name} — not sending from checkDueDrugs.`);
+        return;
+      }
+
       const resp = await messaging.sendEachForMulticast({
         tokens: recipientTokens,
         // Data-only on purpose — NOT a top-level `notification` field. When a
@@ -466,6 +537,208 @@ exports.checkDueDrugs = onSchedule(
     console.log(`Sent due-dose alerts for ${duePatientIds.length} patient(s), ${totalRecipientSends} send(s) total.`);
   }
 );
+
+// Scoped version of loadAllocatedUidsByPatient (above) for a SINGLE
+// patient — that one scans both allocations collections in full, which is
+// fine once per 5-min checkDueDrugs cycle but would be a read-cost
+// regression if called once per Cloud Tasks firing (one call per dose,
+// hospital-wide). This queries only the rows for this patientId.
+async function loadAllocatedUidsForPatient(patientId) {
+  const [snap, snapMhl] = await Promise.all([
+    db.collection('allocations').where('patientId', '==', patientId).get(),
+    db.collection('allocations_mhl').where('patientId', '==', patientId).get()
+  ]);
+  const uids = new Set();
+  snap.forEach((d) => { if (d.data().uid) uids.add(d.data().uid); });
+  snapMhl.forEach((d) => { if (d.data().uid) uids.add(d.data().uid); });
+  return uids;
+}
+
+// Cloud Tasks target for the "dose-due-alerts" queue. One task per chart,
+// scheduled/canceled by updateNextDoseAt above whenever nextDoseAt
+// changes. Fires once at the chart's earliest due time, then re-checks
+// everything fresh — never trusts the task payload as a snapshot of what
+// was true when it was scheduled.
+exports.sendDoseAlert = onRequest({ region: 'us-central1' }, async (req, res) => {
+  const { patientId, chartId } = req.body || {};
+
+  if (!patientId || !chartId) {
+    console.error('sendDoseAlert: missing patientId/chartId', req.body);
+    return res.status(200).send('bad payload, not retrying');
+  }
+  if (chartId !== 'main') {
+    // This collection only ever holds one doc, 'main' — same guard
+    // updateNextDoseAt uses.
+    return res.status(200).send('unexpected chartId, ignoring');
+  }
+
+  const now = new Date();
+  const alarmSettings = await loadAlarmSettings();
+  const rollout = await loadRolloutSettings();
+
+  if (isWithinQuietHours(alarmSettings.quietHours, now)) {
+    // Same policy as checkDueDrugs: suppress sending, don't mark anything
+    // alerted, catch it later. Difference from checkDueDrugs: there's no
+    // "next 5-min cycle" here, so explicitly reschedule for
+    // quiet-hours-end instead of just doing nothing.
+    const chartRef = db.collection('patients').doc(patientId).collection('drugCourseChart').doc(chartId);
+    const deferredAt = nextQuietHoursEndAt(alarmSettings.quietHours, now);
+    try {
+      const newTaskName = await scheduleDoseAlertTask({ patientId, chartId, dueAt: deferredAt });
+      await chartRef.update({ scheduledTaskName: newTaskName });
+    } catch (err) {
+      console.error('sendDoseAlert: failed to reschedule for quiet-hours-end, falling back to polling:', err);
+    }
+    console.log(`sendDoseAlert: chart ${chartId} deferred to quiet-hours-end (${deferredAt.toISOString()})`);
+    return res.status(200).send('deferred for quiet hours');
+  }
+
+  const chartRef = db.collection('patients').doc(patientId).collection('drugCourseChart').doc(chartId);
+  const chartSnap = await chartRef.get();
+
+  if (!chartSnap.exists) {
+    console.log(`sendDoseAlert: chart ${chartId} no longer exists`);
+    return res.status(200).send('chart gone');
+  }
+
+  const data = chartSnap.data() || {};
+  const drugs = Array.isArray(data.drugs) ? data.drugs : [];
+  const chartRows = Array.isArray(data.rows) ? data.rows : [];
+
+  // Mirrors checkDueDrugs' per-drug loop exactly, scoped to this one
+  // chart, freshly re-read — this re-check is the safety property of the
+  // whole design. A drug given/discontinued/rescheduled since this task
+  // was queued is caught here, not assumed unchanged.
+  const dueLabels = [];
+  let changed = false;
+  let earliestRemaining = null; // for computing the repeat-alert time below
+
+  drugs.forEach((drug, i) => {
+    if (drug.action && drug.action !== 'Ongoing') return;
+    const doseSeq = parseDoseSequence(drug.frequency);
+    if (!doseSeq && !intervalHoursFor(drug.frequency)) return;
+    if (!doseSeq && !alarmSettings.frequencies.includes(drug.frequency)) return;
+
+    const dueAt = computeDueAt(drug, chartRows, i);
+    if (!dueAt) return;
+
+    if (dueAt > now) {
+      if (!earliestRemaining || dueAt < earliestRemaining) earliestRemaining = dueAt;
+      return; // not due yet — chart was edited since this task was scheduled
+    }
+
+    const dueSlotKey = dueAt.toISOString();
+    if (drug.lastAlertedFor === dueSlotKey) {
+      const lastAlertedAt = drug.lastAlertedAt ? new Date(drug.lastAlertedAt) : null;
+      const elapsedMs = lastAlertedAt ? now.getTime() - lastAlertedAt.getTime() : Infinity;
+      if (elapsedMs < alarmSettings.overdueRepeatMinutes * 60 * 1000) {
+        // Already alerted recently for this exact dose, not yet time to
+        // repeat — still counts as "remaining due" for rescheduling below.
+        if (!earliestRemaining || dueAt < earliestRemaining) earliestRemaining = dueAt;
+        return;
+      }
+    }
+
+    const isRepeat = drug.lastAlertedFor === dueSlotKey;
+    drug.lastAlertedFor = dueSlotKey;
+    drug.lastAlertedAt = now.toISOString();
+    changed = true;
+    if (!earliestRemaining || dueAt < earliestRemaining) earliestRemaining = dueAt;
+
+    dueLabels.push(`${drug.name || 'Unnamed drug'} (${drug.frequency})${isRepeat ? ' — still overdue' : ''}`);
+  });
+
+  if (dueLabels.length === 0) {
+    // Nothing actually due on re-check (given/discontinued/rescheduled
+    // since this task was queued, or every due drug is mid-repeat-cooldown).
+    // updateNextDoseAt should already be scheduling the correct task for
+    // whatever's next — but as a defensive fallback, if something is still
+    // pending, reschedule for it directly rather than leaving this chart
+    // with no task at all.
+    try {
+      if (earliestRemaining) {
+        const newTaskName = await scheduleDoseAlertTask({ patientId, chartId, dueAt: earliestRemaining });
+        await chartRef.update({ scheduledTaskName: newTaskName });
+      } else {
+        await chartRef.update({ scheduledTaskName: null }).catch(() => {});
+      }
+    } catch (err) {
+      console.error('sendDoseAlert: failed to reschedule on empty re-check, falling back to polling:', err);
+    }
+    console.log(`sendDoseAlert: nothing to alert for chart ${chartId} on re-check`);
+    return res.status(200).send('nothing due on re-check');
+  }
+
+  // Scoped token lookup — see loadAllocatedUidsForPatient above.
+  const allocatedUids = await loadAllocatedUidsForPatient(patientId);
+  const patientSnap = await db.collection('patients').doc(patientId).get();
+  const patientName = (patientSnap.exists && patientSnap.data().name) || 'Unnamed patient';
+
+  let sent = false;
+  if (allocatedUids.size === 0) {
+    console.warn(`No nurse allocated to ${patientName} — no alert sent (allocated-only alerting).`);
+  } else {
+    const tokenEntries = await getTokenEntriesForUids([...allocatedUids]);
+    const recipientTokens = tokenEntries.map((t) => t.token);
+
+    if (recipientTokens.length > 0) {
+      const title = dueLabels.length === 1 ? `Drug due — ${patientName}` : `${dueLabels.length} drugs due — ${patientName}`;
+      const body = dueLabels.slice(0, 3).join(', ') + (dueLabels.length > 3 ? `, +${dueLabels.length - 3} more` : '');
+
+      if (rollout.cloudTasksLoggingOnly) {
+        // Stage 1–2 of the rollout: checkDueDrugs is still the one
+        // actually alerting nurses. This logs what Cloud Tasks WOULD have
+        // sent, for the side-by-side comparison, without double-alerting
+        // anyone.
+        console.log(`[rollout: logging-only] would send to ${recipientTokens.length} recipient(s) for ${patientName}: "${title}" — ${body}`);
+      } else {
+        const resp = await messaging.sendEachForMulticast({
+          tokens: recipientTokens,
+          data: {
+            title,
+            body,
+            link: `/charts/drug-course-chart?patient=${patientId}`,
+            tag: `due-${patientId}`
+          },
+          android: { priority: 'high', notification: { channelId: 'dose-due-alerts', sound: 'default' } }
+        });
+
+        resp.responses.forEach((r, idx) => {
+          if (r.success) return;
+          const code = r.error?.code || '';
+          if (code.includes('registration-token-not-registered') || code.includes('invalid-argument')) {
+            tokenEntries[idx].ref.delete().catch(() => {});
+          }
+        });
+      }
+
+      sent = true;
+    }
+  }
+
+  // Still due (not given): reschedule for the overdue-repeat interval —
+  // explicit self-reschedule replacing the implicit "next 5-min cycle
+  // re-finds it" behavior of checkDueDrugs. Wrapped so a Cloud Tasks
+  // failure here still lets the lastAlertedFor bookkeeping below persist —
+  // checkDueDrugs' polling will still catch this chart as overdue.
+  let newTaskName = null;
+  try {
+    const nextAlertAt = new Date(now.getTime() + alarmSettings.overdueRepeatMinutes * 60 * 1000);
+    newTaskName = await scheduleDoseAlertTask({ patientId, chartId, dueAt: nextAlertAt });
+  } catch (err) {
+    console.error('sendDoseAlert: failed to schedule repeat task, falling back to polling:', err);
+  }
+
+  // Single write covers both the lastAlertedFor/lastAlertedAt bookkeeping
+  // AND the new task pointer — this also re-fires updateNextDoseAt, but
+  // its existingMs === newMs guard no-ops since nextDoseAt itself hasn't
+  // changed (the drug still hasn't been given).
+  const update = changed ? { drugs, scheduledTaskName: newTaskName } : { scheduledTaskName: newTaskName };
+  await chartRef.update(update);
+
+  console.log(`sendDoseAlert: chart ${chartId} — ${sent ? 'alert sent' : 'no recipients'}, repeat scheduled: ${!!newTaskName}`);
+  return res.status(200).send(sent ? 'alert sent, repeat scheduled' : 'no recipients, repeat scheduled');
+});
 
 // -- New message alerts -------------------------------------------------
 //
