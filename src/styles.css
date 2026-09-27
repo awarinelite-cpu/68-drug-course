@@ -1,14 +1,15 @@
 :root {
-  --primary-navy: #1B3266;
-  --primary-blue: #3070C7;
+  --primary-navy: #16294F;
+  --primary-navy-2: #21396B;
+  --primary-blue: #2E67C4;
   --primary-active: #0879D1;
   --primary-light: #EFF6FF;
 
-  --background: #F3F4F9;
+  --background: #EEF1F7;
   --surface: #FFFFFF;
   --surface-bg: var(--surface);
 
-  --text-primary: #232F56;
+  --text-primary: #1D2545;
   --text-secondary: #525A76;
   --text-muted: #64748B;
 
@@ -25,6 +26,16 @@
   --danger-text: #7F1D1D;
 
   --accent-purple: #7C3AED;
+  --accent-teal: #0D9488;
+
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, Helvetica, sans-serif;
+
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+
+  --shadow-card: 0 1px 2px rgba(16,24,40,.06), 0 6px 16px -8px rgba(16,24,40,.14), 0 16px 32px -18px rgba(16,24,40,.16);
+  --shadow-card-hover: 0 2px 4px rgba(16,24,40,.08), 0 10px 22px -8px rgba(16,24,40,.18), 0 22px 40px -16px rgba(16,24,40,.2);
 }
 
 /* ── App-wide dark mode — same palette as the Lab Reference night theme ── */
@@ -142,8 +153,9 @@
 
 * { box-sizing: border-box; }
 html, body { overflow-x: hidden; max-width: 100%; }
-body { font-family: Arial, Helvetica, sans-serif; margin: 0; background: var(--background); color: var(--text-primary); font-size: 16px; }
+body { font-family: var(--font-sans); margin: 0; background: var(--background); color: var(--text-primary); font-size: 16px; -webkit-font-smoothing: antialiased; }
 a { text-decoration: none; color: inherit; }
+h1, h2, h3, h4 { font-weight: 700; letter-spacing: -.01em; }
 
 /* Sticky footer: footer stays at the bottom of the screen even on short/empty pages. */
 .app-shell { min-height: 100vh; min-height: 100dvh; display: flex; flex-direction: column; }
@@ -151,10 +163,13 @@ a { text-decoration: none; color: inherit; }
 .app-shell > footer { flex-shrink: 0; margin-top: auto !important; }
 
 .topbar {
-  background: var(--primary-navy); color: var(--surface); padding: 12px 20px;
+  background: linear-gradient(155deg, var(--primary-navy-2) 0%, var(--primary-navy) 65%);
+  color: var(--surface); padding: 13px 22px;
   display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px;
+  box-shadow: 0 1px 0 rgba(255,255,255,.06) inset, 0 4px 14px -6px rgba(6,14,32,.45);
+  position: relative; z-index: 5;
 }
-.topbar .brand { font-weight: bold; font-size: 16px; }
+.topbar .brand { font-weight: 800; font-size: 16.5px; letter-spacing: -.01em; }
 .topbar .right { display: flex; align-items: center; gap: 10px; font-size: 16px; flex-wrap: wrap; }
 .theme-toggle-btn {
   display: flex; align-items: center; gap: 5px; padding: 6px 11px; border-radius: 20px;
@@ -170,9 +185,10 @@ a { text-decoration: none; color: inherit; }
 }
 
 .btn {
-  border: none; border-radius: 7px; padding: 10px 16px; font-weight: bold; font-size: 16px; cursor: pointer;
+  border: none; border-radius: var(--radius-sm); padding: 10px 18px; font-weight: 700; font-size: 15.5px; cursor: pointer;
+  font-family: var(--font-sans); letter-spacing: -.01em;
   position: relative; box-shadow: var(--btn-shadow, 0 3px 0 rgba(0,0,0,.28), 0 2px 3px rgba(0,0,0,.18), 0 6px 12px -4px rgba(0,0,0,.3));
-  transform: translateY(0); transition: transform .08s ease, box-shadow .08s ease, filter .08s ease;
+  transform: translateY(0); transition: transform .1s ease, box-shadow .1s ease, filter .1s ease;
 }
 .btn:hover { filter: brightness(1.06); }
 .btn:active {
@@ -189,7 +205,7 @@ a { text-decoration: none; color: inherit; }
 .btn-success  { background: var(--success);        color: var(--surface); --btn-shadow: 0 3px 0 rgba(0,0,0,.32), 0 2px 3px rgba(0,0,0,.18), 0 6px 12px -4px rgba(22,163,74,.5); --btn-shadow-active: 0 1px 0 rgba(0,0,0,.32), 0 1px 2px rgba(0,0,0,.18); }
 .btn-purple   { background: var(--accent-purple);  color: var(--surface); --btn-shadow: 0 3px 0 rgba(0,0,0,.32), 0 2px 3px rgba(0,0,0,.18), 0 6px 12px -4px rgba(147,51,234,.5); --btn-shadow-active: 0 1px 0 rgba(0,0,0,.32), 0 1px 2px rgba(0,0,0,.18); }
 
-.container { max-width: 960px; margin: 0 auto; padding: 20px 16px; }
+.container { max-width: 960px; margin: 0 auto; padding: 22px 16px 40px; }
 
 /* Login page: hospital-ward photo behind a mostly-transparent card so
    it stays visible through the form. */
@@ -213,7 +229,11 @@ a { text-decoration: none; color: inherit; }
   box-shadow: 0 8px 32px rgba(15,35,80,0.35);
   border: 1px solid rgba(255,255,255,0.4);
 }
-.card-box { background: var(--surface-bg); border-radius: 10px; padding: 20px; box-shadow: 0 1px 4px rgba(0,0,0,0.08); margin-bottom: 20px; }
+.card-box {
+  background: var(--surface-bg); border-radius: var(--radius-lg); padding: 22px;
+  box-shadow: var(--shadow-card); border: 1px solid var(--border); margin-bottom: 18px;
+}
+:root[data-theme="dark"] .card-box { box-shadow: 0 1px 4px rgba(0,0,0,0.35); }
 
 /* No color/background was ever set here, so every input/select in the app
    (this table's date/time/reading fields included) was left to the
@@ -224,10 +244,16 @@ a { text-decoration: none; color: inherit; }
 input[type=text], input[type=email], input[type=password], input[type=number],
 input[type=date], input[type=datetime-local], input[type=time], input[type=month],
 input[type=week], textarea, select {
-  width: 100%; padding: 10px; border: 1px solid var(--border); border-radius: 6px; font-size: 16px; font-family: inherit;
+  width: 100%; padding: 11px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 16px; font-family: inherit;
   color: var(--text-primary); background-color: var(--surface-bg);
+  transition: border-color .12s ease, box-shadow .12s ease;
 }
-label { font-weight: bold; font-size: 16px; display: block; margin-bottom: 4px; }
+input[type=text]:focus, input[type=email]:focus, input[type=password]:focus, input[type=number]:focus,
+input[type=date]:focus, input[type=datetime-local]:focus, input[type=time]:focus, input[type=month]:focus,
+input[type=week]:focus, textarea:focus, select:focus {
+  outline: none; border-color: var(--primary-blue); box-shadow: 0 0 0 3px rgba(46,103,196,.15);
+}
+label { font-weight: 700; font-size: 15.5px; color: var(--text-secondary); display: block; margin-bottom: 5px; }
 .field { margin-bottom: 14px; }
 .field-hint { font-size: 13px; color: #6b7280; margin-top: 6px; }
 .error-msg { color: var(--danger); font-size: 16px; margin-top: 8px; }
@@ -294,18 +320,20 @@ label { font-weight: bold; font-size: 16px; display: block; margin-bottom: 4px; 
 .search-row input { flex: 1 1 200px; }
 .search-results { margin-top: 10px; }
 .search-result-item {
-  background: var(--surface-bg); border: 1px solid var(--border); border-radius: 10px; padding: 12px 16px; margin-bottom: 10px;
+  background: var(--surface-bg); border: 1px solid var(--border); border-left: 3px solid var(--primary-blue);
+  border-radius: var(--radius-md); padding: 13px 16px; margin-bottom: 10px;
   cursor: pointer; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 4px;
-  box-shadow: 0 1px 0 rgba(255,255,255,.6) inset, 0 1px 2px rgba(16,24,40,.06), 0 6px 14px -6px rgba(16,24,40,.18), 0 14px 28px -12px rgba(16,24,40,.16);
+  box-shadow: var(--shadow-card);
   transform: translateZ(0);
   transition: transform .12s ease, box-shadow .12s ease, border-color .12s ease;
 }
 .search-result-item:hover {
   border-color: var(--primary-blue);
   transform: translateY(-2px);
-  box-shadow: 0 1px 0 rgba(255,255,255,.6) inset, 0 2px 4px rgba(16,24,40,.08), 0 10px 20px -6px rgba(16,24,40,.22), 0 20px 36px -12px rgba(16,24,40,.2);
+  box-shadow: var(--shadow-card-hover);
 }
 .search-result-item:active { transform: translateY(0); box-shadow: 0 1px 2px rgba(16,24,40,.12); }
+.search-result-item b { color: var(--text-primary); font-size: 16.5px; }
 :root[data-theme="dark"] .search-result-item {
   box-shadow: 0 1px 0 rgba(255,255,255,.04) inset, 0 1px 2px rgba(0,0,0,.4), 0 6px 14px -6px rgba(0,0,0,.55), 0 14px 28px -12px rgba(0,0,0,.5);
 }
@@ -573,9 +601,10 @@ td.flag-deficit input, td.flag-deficit select { color: #b45309 !important; font-
 }
 /* --- Nav drawer (ported from js/nav.js injectStyles()) --- */
 .gnav-toggle {
-  width: 34px; height: 34px; border: none; border-radius: 6px; flex-shrink: 0;
+  width: 36px; height: 36px; border: none; border-radius: var(--radius-sm); flex-shrink: 0;
   background: rgba(255,255,255,.14); color: var(--surface); font-size: 17px; line-height: 1;
   display: flex; align-items: center; justify-content: center; cursor: pointer; padding: 0;
+  transition: background-color .12s ease;
 }
 .gnav-toggle:hover { background: rgba(255,255,255,.26); }
 .gnav-topbar-left { display: flex; align-items: center; gap: 10px; min-width: 0; }
