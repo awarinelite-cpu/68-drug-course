@@ -170,7 +170,11 @@ h1, h2, h3, h4 { font-weight: 700; letter-spacing: -.01em; }
   position: relative; z-index: 5;
 }
 .topbar .brand { font-weight: 800; font-size: 16.5px; letter-spacing: -.01em; }
-.topbar .right { display: flex; align-items: center; gap: 10px; font-size: 16px; flex-wrap: wrap; }
+/* Reserve room on the right so this group never sits under the fixed
+   offline-cache status dot (.gnav-cache-status, pinned at top:12px right:12px
+   regardless of screen size) — without this, the last button here (often
+   "New Patient") ends up partly hidden behind that dot on narrow screens. */
+.topbar .right { display: flex; align-items: center; gap: 10px; font-size: 16px; flex-wrap: wrap; margin-right: 42px; }
 .theme-toggle-btn {
   display: flex; align-items: center; gap: 5px; padding: 6px 11px; border-radius: 20px;
   background: rgba(255,255,255,.14); color: var(--surface); border: none; cursor: pointer;
