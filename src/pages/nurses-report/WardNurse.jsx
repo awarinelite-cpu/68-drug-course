@@ -1198,8 +1198,8 @@ function WardPanelRest({ h, showLabel, isAdmin, navigate, includeShiftTable = tr
 
           {includeShiftTable && (
             <div className="card-box">
-              <h2>Shift Statistics</h2>
               <div className="table-wrap">
+                <div className="ward-report-title">24 HOURS WARD REPORT WEF 0900HRS OF 26/09/26 TO 0900HRS OF 27/09/26</div>
                 <ShiftTable wardDoc={wardDoc} census={census} movementTotals={movementTotals} editable={editable}
                   onBeds={updateBeds} onField={updateShiftField} onDuty={updateDuty} />
               </div>

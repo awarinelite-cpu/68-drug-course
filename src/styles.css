@@ -374,6 +374,10 @@ table.entries th { background: var(--background); text-transform: uppercase; fon
    just squeezes every column to fit width:100% and nothing ever overflows,
    so the scroll never engages. */
 .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+/* Sits inside .table-wrap, above the table, so it scrolls left/right
+   together with the table instead of staying fixed while the table
+   underneath it slides out from beneath it. */
+.ward-report-title { white-space: nowrap; font-weight: 700; font-size: 1.1rem; margin-bottom: 8px; color: inherit; }
 @media screen {
   .table-wrap table { width: max-content; min-width: 100%; table-layout: auto; }
   .table-wrap table th, .table-wrap table td { white-space: nowrap; }
