@@ -1142,17 +1142,6 @@ function WardPanelRest({ h, showLabel, isAdmin, navigate, includeShiftTable = tr
     addPatient();
   }
 
-  const [quickLookupId, setQuickLookupId] = useState('');
-  const quickLookupRecord = wardPatientOptions.find((o) => o.id === quickLookupId);
-  let quickLookupTag = null;
-  if (quickLookupRecord) {
-    quickLookupTag = quickLookupRecord.dischargeStatus
-      ? (quickLookupRecord.dischargeStatus === 'TRANS OUT' ? 'TRANS OUT' : quickLookupRecord.dischargeStatus === 'DEATH' ? 'Death' : quickLookupRecord.dischargeStatus === 'DAMA' ? 'DAMA' : quickLookupRecord.dischargeStatus === 'ABSC' ? 'Absconded' : 'Discharged')
-      : quickLookupRecord.admissionTag
-        ? (ADMISSION_TAG_LABEL[quickLookupRecord.admissionTag] || quickLookupRecord.admissionTag)
-        : 'Active \u2014 no status tag';
-  }
-
   return (
     <>
       {includeHeader && topStatus.text && (
@@ -1168,36 +1157,16 @@ function WardPanelRest({ h, showLabel, isAdmin, navigate, includeShiftTable = tr
             </div>
           )}
 
-          {includePreviousOcc && (
-            <div className="card-box">
-              <div className="patient-field" style={{ marginTop: 0 }}>
-                {wardPatientOptions && wardPatientOptions.length > 0 && (
-                  <label>Check a patient's status:</label>
-                )}
-                <div style={{ display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap' }}>
-                  {wardPatientOptions && wardPatientOptions.length > 0 && (
-                    <div style={{ flex: '1 1 180px', minWidth: 180 }}>
-                      <WardPatientPicker value={quickLookupId} options={wardPatientOptions} onSelect={setQuickLookupId} />
-                      {quickLookupTag && (
-                        <div style={{ fontSize: 12, marginTop: 4, fontWeight: 'bold', color: quickLookupRecord.dischargeStatus ? '#dc2626' : quickLookupRecord.admissionTag ? '#2563eb' : '#6b7280' }}>
-                          {quickLookupTag}
-                        </div>
-                      )}
-                    </div>
-                  )}
-                  {includeHeader && w && (
-                    <button className="btn btn-secondary" style={{ padding: '6px 12px' }} type="button"
-                      onClick={() => navigate('/nurses-report/archive-list?type=ward&ward=' + encodeURIComponent(w.key) + '&label=' + encodeURIComponent(w.label))}>
-                      {'\uD83D\uDCC1 Archive'}
-                    </button>
-                  )}
-                </div>
-              </div>
-            </div>
-          )}
-
           {includeShiftTable && (
             <div className="card-box">
+              {includeHeader && w && (
+                <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 10 }}>
+                  <button className="btn btn-secondary" style={{ padding: '6px 12px' }} type="button"
+                    onClick={() => navigate('/nurses-report/archive-list?type=ward&ward=' + encodeURIComponent(w.key) + '&label=' + encodeURIComponent(w.label))}>
+                    {'\uD83D\uDCC1 Archive'}
+                  </button>
+                </div>
+              )}
               <div className="table-wrap">
                 <div className="ward-report-title">24 HOURS WARD REPORT WEF 0900HRS OF 26/09/26 TO 0900HRS OF 27/09/26</div>
                 <ShiftTable wardDoc={wardDoc} census={census} movementTotals={movementTotals} editable={editable}
