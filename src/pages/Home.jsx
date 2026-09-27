@@ -3,18 +3,11 @@ import { useNavigate } from "react-router-dom";
 import { collection, getDoc, doc, setDoc, serverTimestamp } from "firebase/firestore";
 import { db } from "../firebase.js";
 import { useAuth } from "../contexts/AuthContext.jsx";
-import { useNav } from "../contexts/NavContext.jsx";
-import { useTheme } from "../contexts/ThemeContext.jsx";
 import { useExitOnDoubleBack } from "../hooks/useExitOnDoubleBack.js";
 import { useOverallNurseThisWeek } from "../hooks/useOverallNurseThisWeek.js";
 import { avatarMarkup } from "../lib/avatar.js";
+import Topbar from "../components/Topbar.jsx";
 import PatientForm from "../components/PatientForm.jsx";
-import {
-  MenuIcon, HospitalLogoIcon, SunIcon, ChevronDownIcon, ChevronRightIcon,
-  ShieldIcon, SearchIcon, XIcon, UsersIcon, UserPlusIcon, FolderIcon,
-  BedIcon, BellIcon, ClipboardXIcon, PersonIcon
-} from "../components/HomeIcons.jsx";
-import "../styles/home-v2.css";
 import NewPatientTransfersModal from "../components/NewPatientTransfersModal.jsx";
 import { parsePatientFields } from "../lib/patientParse.js";
 import { generateCsvTemplate, parsePatientCsv } from "../lib/patientCsv.js";
@@ -110,6 +103,18 @@ function AdmissionTagBadge({ patient }) {
   );
 }
 
+// Small tag shown just under a patient's diagnosis in the ward list so a
+// nurse who doesn't yet know a patient by name can find them by bed number.
+// hospNo is the same field edited as "Hospital Bed No" on PatientForm.
+function BedTag({ patient }) {
+  const bed = (patient.hospNo || '').trim();
+  return (
+    <span className={"patient-bed-tag" + (bed ? '' : ' patient-bed-tag-missing')}>
+      Bed: {bed || 'not set'}
+    </span>
+  );
+}
+
 const EMPTY_FORM = { name: '', emr: '', diagnosis: '', ward: '', pedBedType: '', age: '', hospNo: '', admissionDate: '', allergies: '', insurance: '', gender: '', armyNumber: '' };
 
 // Wards are stored/compared in ALL CAPS (matches WARD_OPTIONS); this is
@@ -118,27 +123,11 @@ function titleCase(str) {
   return (str || '').toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-const ROLE_LABELS = { admin: 'Ward Administrator' };
-const PATIENT_CARD_COLORS = ['blue', 'yellow', 'green'];
-
 export default function Home() {
   const isOverallNurse = useOverallNurseThisWeek();
   const { user, profile } = useAuth();
-  const { openDrawer } = useNav();
-  const themeCtx = useTheme();
   const navigate = useNavigate();
   const searchInputRef = useRef(null);
-
-  const [isOnline, setIsOnline] = useState(navigator.onLine);
-  useEffect(() => {
-    const update = () => setIsOnline(navigator.onLine);
-    window.addEventListener('online', update);
-    window.addEventListener('offline', update);
-    return () => {
-      window.removeEventListener('online', update);
-      window.removeEventListener('offline', update);
-    };
-  }, []);
 
   const [searchQuery, setSearchQuery] = useState('');
   // Just this ward's patients (see patientDirectory.js) — replaces what
@@ -691,82 +680,26 @@ export default function Home() {
       })()
     : null;
 
-  const roleLabel = ROLE_LABELS[profile?.role] || titleCase(profile?.role || '');
-  const patientRowProps = { onOpen: openPatient, readmitBusyId, readmitMsgs, onReadmit: handleReadmit };
-
   return (
-    <div className="home-v2">
-      <div className="top-header">
-        <div className="header-left">
-          <button className="menu-button no-print" aria-label="Open menu" onClick={openDrawer}>
-            <MenuIcon />
-          </button>
-          <div className="hospital-logo"><HospitalLogoIcon /></div>
-          <div className="header-divider" />
-          <div className="brand">
-            <h1>68 NARHY</h1>
-            <h2>Ward Charts</h2>
-            <p>Efficient Care <span>{'\u2022'}</span> Better Outcomes</p>
-          </div>
-        </div>
-        <div className="online-status no-print">
-          <span />
-          {isOnline ? 'Online' : 'Offline'}
-        </div>
-      </div>
-
-      <div className="page">
-        <div className="staff-panel no-print">
-          <button
-            className="day-selector"
-            onClick={themeCtx?.toggleTheme}
-            aria-label="Toggle day/night mode"
-          >
-            <SunIcon />
-            {themeCtx?.theme === 'dark' ? 'Night' : 'Day'}
-            <ChevronDownIcon />
-          </button>
-
-          <a
-            className="staff-profile"
-            href="/profile"
-            onClick={(e) => { e.preventDefault(); navigate('/profile'); }}
-            style={{ textDecoration: 'none', color: 'inherit', cursor: 'pointer' }}
-          >
-            <span
-              className="profile-avatar"
-              dangerouslySetInnerHTML={{ __html: profile ? avatarMarkup(profile, 60) : '' }}
-            />
-            <div>
-              <h3>{profile ? profile.name + ' (' + profile.role + ')' : ''}</h3>
-              <p>{roleLabel}</p>
-            </div>
+    <>
+      <Topbar brand="68 NARHY Ward Charts">
+        <a className="whoami-link" onClick={(e) => { e.preventDefault(); navigate('/profile'); }} href="/profile">
+          <span className="whoami-avatar" dangerouslySetInnerHTML={{ __html: profile ? avatarMarkup(profile, 32) : '' }} />
+          <span className="whoami-name">{profile ? profile.name + ' (' + profile.role + ')' : ''}</span>
+        </a>
+        {profile?.role === 'admin' && (
+          <a href="/admin" className="btn btn-purple" style={{ padding: '6px 12px' }} onClick={(e) => { e.preventDefault(); navigate('/admin'); }}>Admin</a>
+        )}
+        <a href="/my-patients" className="btn btn-secondary" style={{ padding: '6px 12px' }} onClick={(e) => { e.preventDefault(); navigate('/my-patients'); }}>My Patients</a>
+        {myWard && (
+          <a href="#" className="btn btn-secondary notif-bell-btn" style={{ padding: '6px 12px' }} onClick={(e) => { e.preventDefault(); setShowTransfers(true); }}>
+            🔔 New Patient
+            {incomingTransfers.length > 0 && <span className="notif-count-badge">{incomingTransfers.length}</span>}
           </a>
+        )}
+      </Topbar>
 
-          {myWard && (
-            <button
-              className="admin-button"
-              style={{ background: 'linear-gradient(135deg,#2ea8e0,#1675df)', marginRight: profile?.role === 'admin' ? 12 : 0, position: 'relative' }}
-              onClick={() => setShowTransfers(true)}
-              aria-label="New patient transfers"
-            >
-              <BellIcon />
-              {incomingTransfers.length > 0 && (
-                <span style={{ position: 'absolute', top: -6, right: -6, background: '#e14f4f', color: '#fff', borderRadius: 999, minWidth: 22, height: 22, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700 }}>
-                  {incomingTransfers.length}
-                </span>
-              )}
-            </button>
-          )}
-
-          {profile?.role === 'admin' && (
-            <button className="admin-button" onClick={() => navigate('/admin')}>
-              <ShieldIcon />
-              Admin
-            </button>
-          )}
-        </div>
-
+      <div className="container">
         {isOverallNurse && (
           <div
             className="card-box"
@@ -774,62 +707,27 @@ export default function Home() {
             tabIndex={0}
             onClick={() => navigate('/nurses-report/overall-nurse')}
             onKeyDown={(e) => { if (e.key === 'Enter') navigate('/nurses-report/overall-nurse'); }}
-            style={{ cursor: 'pointer', borderLeft: '5px solid #16a34a', background: 'var(--surface-bg, #f0fdf4)', marginTop: 20 }}
+            style={{ cursor: 'pointer', borderLeft: '5px solid #16a34a', background: 'var(--surface-bg, #f0fdf4)' }}
           >
             <strong>{'\u2B50'} You are the Overall Nurse this week</strong>
             <div style={{ fontSize: 13, marginTop: 4 }}>Tap to open the Overall Nurse page — you can lock/open wards and save to the archive until the week ends.</div>
           </div>
         )}
-
-        <div className="action-grid">
-          <button className="action-card patients" onClick={() => navigate('/my-patients')}>
-            <div className="action-icon"><UsersIcon /></div>
-            <div className="action-content">
-              <h3>My Patients</h3>
-              <p>View your patients</p>
-            </div>
-            <div className="action-arrow"><ChevronRightIcon /></div>
-          </button>
-
-          <button
-            className="action-card new-patient"
-            onClick={() => { setNewForm((f) => ({ ...f, ward: f.ward || myWard })); setShowNewForm(true); }}
-          >
-            <div className="action-icon"><UserPlusIcon /></div>
-            <div className="action-content">
-              <h3>New Patient</h3>
-              <p>Register a new patient</p>
-            </div>
-            <div className="action-arrow"><ChevronRightIcon /></div>
-          </button>
-
-          {profile?.role === 'admin' && (
-            <button className="action-card bulk-upload" onClick={() => setShowBulkUpload(true)}>
-              <div className="action-icon"><FolderIcon /></div>
-              <div className="action-content">
-                <h3>Bulk Upload</h3>
-                <p>Upload patient data</p>
-              </div>
-              <div className="action-arrow"><ChevronRightIcon /></div>
-            </button>
-          )}
-        </div>
-
-        <div className="search-section">
-          <div className="search-box">
-            <SearchIcon />
+        <div className="card-box">
+          <label>Search Patient (EMR number or name)</label>
+          <div className="search-row">
             <input
               id="searchInput"
               ref={searchInputRef}
               type="text"
-              placeholder="Search Patient (EMR number or name)"
+              placeholder="e.g. EMR12345 or John Doe"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
             />
-            {searchQuery && (
-              <button className="clear-search" aria-label="Clear search" onClick={() => setSearchQuery('')}>
-                <XIcon />
-              </button>
+            <button className="btn btn-primary" onClick={() => searchInputRef.current && searchInputRef.current.focus()}>Search</button>
+            <button className="btn btn-success" onClick={() => { setNewForm((f) => ({ ...f, ward: f.ward || myWard })); setShowNewForm(true); }}>+ New Patient</button>
+            {profile?.role === 'admin' && (
+              <button className="btn btn-secondary" onClick={() => setShowBulkUpload(true)}>📁 Bulk Upload</button>
             )}
           </div>
         </div>
@@ -941,27 +839,17 @@ export default function Home() {
           </div>
         )}
 
-        <div className="ward-section">
-          <div className="ward-header">
-            <div className="ward-title-group">
-              <div className="ward-icon"><BedIcon /></div>
-              <div>
-                <h2>Patients on {myWard ? titleCase(myWard) : 'All Wards'}</h2>
-                <a
-                  className="switch-ward"
-                  href="/select-ward"
-                  onClick={(e) => { e.preventDefault(); navigate('/select-ward'); }}
-                >
-                  {myWard ? 'Switch ward' : 'Set your ward'} <ChevronRightIcon width={14} height={14} />
-                </a>
-              </div>
-            </div>
-            <div className="patient-count">
-              <strong>{wardPatientCount}</strong>
-              <span>Patients</span>
-            </div>
-          </div>
-
+        <div className="card-box">
+          <h3 className="ward-heading" style={{ marginTop: 0 }}>
+            <span className="ward-heading-title">Patients on {myWard ? titleCase(myWard) : 'All Wards'} <span className="ward-count-badge">{wardPatientCount}</span></span>
+            <a
+              className={'ward-heading-link' + (myWard ? '' : ' ward-heading-link--attn')}
+              href="/select-ward"
+              onClick={(e) => { e.preventDefault(); navigate('/select-ward'); }}
+            >
+              {myWard ? 'Switch ward' : 'Set your ward'}
+            </a>
+          </h3>
           {isSplitWard && (
             <div className="ward-split-counts">
               {wardBreakdown.map(({ key: k, count }) => {
@@ -974,47 +862,57 @@ export default function Home() {
               })}
             </div>
           )}
-
-          <div className="patient-list">
+          <div className="search-results">
             {!patientsLoaded && (searching ? 'Searching…' : 'Loading patients…')}
             {patientsLoaded && visiblePatients.length === 0 && (
-              <div className="empty-state">
-                <ClipboardXIcon width={48} height={48} />
-                <h3>No patients found</h3>
-                <p>
-                  {q ? 'No patient matches that search.' :
-                    (myWard ? 'No patients on ' + myWard + ' yet. Use "New Patient" above to register one.' : 'Set your ward to see patients in your ward.')}
-                </p>
+              <div className="error-msg">
+                {q ? 'No patient matches that search.' :
+                  (myWard ? 'No patients on ' + myWard + ' yet. Use "+ New Patient" to register one.' : 'Set your ward to see patients in your ward. Click "Set your ward" above.')}
               </div>
             )}
-            {patientsLoaded && visiblePatients.length > 0 && pedGroups && (() => {
-              let colorIdx = 0;
-              return (
-                <>
-                  {pedGroups.groups.map((g) => (
-                    <div key={g.key} style={{ marginBottom: 10 }}>
-                      <div style={{ fontWeight: 'bold', fontSize: 14, margin: '4px 0 10px' }}>{g.label} ({g.patients.length})</div>
-                      {g.patients.length === 0 && <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 10 }}>No patients yet.</div>}
-                      <div className="patient-list">
-                        {g.patients.map(p => <PatientRow key={p.id} p={p} color={PATIENT_CARD_COLORS[colorIdx++ % 3]} {...patientRowProps} />)}
+            {patientsLoaded && visiblePatients.length > 0 && pedGroups && (
+              <>
+                {pedGroups.groups.map((g) => (
+                  <div key={g.key} style={{ marginBottom: 10 }}>
+                    <div style={{ fontWeight: 'bold', fontSize: 13, margin: '8px 0 4px' }}>{g.label} ({g.patients.length})</div>
+                    {g.patients.length === 0 && <div style={{ fontSize: 12, color: '#888' }}>No patients yet.</div>}
+                    {g.patients.map(p => (
+                      <div key={p.id} className="search-result-item" onClick={() => openPatient(p)}>
+                        <span><b>{p.name || 'Unnamed'}</b>{'. '}EMR: {p.emr || 'N/A'}<AdmissionTagBadge patient={p} /><PendingDischargeBadge patient={p} busy={readmitBusyId === p.id} message={readmitMsgs[p.id]} onReadmit={handleReadmit} /></span>
+                        <span className="patient-diagnosis-col">
+                          <span>{p.diagnosis || ''}</span>
+                          <BedTag patient={p} />
+                        </span>
                       </div>
+                    ))}
+                  </div>
+                ))}
+                {pedGroups.unassigned.length > 0 && (
+                  <div style={{ marginBottom: 10 }}>
+                    <div style={{ fontWeight: 'bold', fontSize: 13, margin: '8px 0 4px', color: '#b45309' }}>
+                      Bed/Cot not set ({pedGroups.unassigned.length})
                     </div>
-                  ))}
-                  {pedGroups.unassigned.length > 0 && (
-                    <div style={{ marginBottom: 10 }}>
-                      <div style={{ fontWeight: 'bold', fontSize: 14, margin: '4px 0 10px', color: '#b45309' }}>
-                        Bed/Cot not set ({pedGroups.unassigned.length})
+                    {pedGroups.unassigned.map(p => (
+                      <div key={p.id} className="search-result-item" onClick={() => openPatient(p)}>
+                        <span><b>{p.name || 'Unnamed'}</b>{'. '}EMR: {p.emr || 'N/A'}<AdmissionTagBadge patient={p} /><PendingDischargeBadge patient={p} busy={readmitBusyId === p.id} message={readmitMsgs[p.id]} onReadmit={handleReadmit} /></span>
+                        <span className="patient-diagnosis-col">
+                          <span>{p.diagnosis || ''}</span>
+                          <BedTag patient={p} />
+                        </span>
                       </div>
-                      <div className="patient-list">
-                        {pedGroups.unassigned.map(p => <PatientRow key={p.id} p={p} color={PATIENT_CARD_COLORS[colorIdx++ % 3]} {...patientRowProps} />)}
-                      </div>
-                    </div>
-                  )}
-                </>
-              );
-            })()}
-            {patientsLoaded && visiblePatients.length > 0 && !pedGroups && visiblePatients.map((p, idx) => (
-              <PatientRow key={p.id} p={p} color={PATIENT_CARD_COLORS[idx % 3]} showWard={!!q} {...patientRowProps} />
+                    ))}
+                  </div>
+                )}
+              </>
+            )}
+            {patientsLoaded && visiblePatients.length > 0 && !pedGroups && visiblePatients.map(p => (
+              <div key={p.id} className="search-result-item" onClick={() => openPatient(p)}>
+                <span><b>{p.name || 'Unnamed'}</b>{'. '}EMR: {p.emr || 'N/A'}{q && p.ward ? '. Ward: ' + p.ward : ''}<AdmissionTagBadge patient={p} /><PendingDischargeBadge patient={p} busy={readmitBusyId === p.id} message={readmitMsgs[p.id]} onReadmit={handleReadmit} /></span>
+                <span className="patient-diagnosis-col">
+                  <span>{p.diagnosis || ''}</span>
+                  <BedTag patient={p} />
+                </span>
+              </div>
             ))}
           </div>
         </div>
@@ -1032,33 +930,6 @@ export default function Home() {
       {showExitToast && (
         <div className="exit-toast no-print" role="status">Press back again to exit</div>
       )}
-    </div>
-  );
-}
-
-// Single patient row on the Home ward list, styled per the 68 NARHY Ward
-// Charts home page design (patient-card / patient-avatar / bed-status —
-// see src/styles/home-v2.css). Cycles through blue/yellow/green same as
-// the mockup. Keeps every existing behavior (open chart on tap, admission/
-// discharge badges, inline Readmit) — just restyled.
-function PatientRow({ p, color, showWard, onOpen, readmitBusyId, readmitMsgs, onReadmit }) {
-  const bed = (p.hospNo || '').trim();
-  return (
-    <div className={'patient-card ' + color} onClick={() => onOpen(p)}>
-      <div className={'patient-avatar ' + color}><PersonIcon width={34} height={34} /></div>
-      <div className="patient-information">
-        <h3>{p.name || 'Unnamed'}</h3>
-        <div className="emr">
-          <strong>EMR:</strong> {p.emr || 'N/A'}{showWard && p.ward ? ' — Ward: ' + p.ward : ''}
-        </div>
-        {p.diagnosis && <div className="diagnosis">{p.diagnosis}</div>}
-        <span className={'bed-status' + (bed ? '' : ' not-set')}>
-          <BedIcon width={15} height={15} /> Bed: {bed || 'not set'}
-        </span>
-        <AdmissionTagBadge patient={p} />
-        <PendingDischargeBadge patient={p} busy={readmitBusyId === p.id} message={readmitMsgs[p.id]} onReadmit={onReadmit} />
-      </div>
-      <div className="patient-chevron"><ChevronRightIcon /></div>
-    </div>
+    </>
   );
 }
