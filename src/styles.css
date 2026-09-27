@@ -318,6 +318,18 @@ label { font-weight: 700; font-size: 15.5px; color: var(--text-secondary); displ
 
 .search-row { display: flex; gap: 8px; flex-wrap: wrap; }
 .search-row input { flex: 1 1 200px; }
+.search-row-actions { margin-top: 10px; }
+.search-input-wrap { position: relative; display: flex; }
+.search-input-wrap input { padding-right: 46px; }
+.search-input-btn {
+  position: absolute; top: 50%; right: 6px; transform: translateY(-50%);
+  width: 34px; height: 34px; border: none; border-radius: 8px;
+  background: var(--primary-blue); color: var(--surface); font-size: 15px;
+  display: flex; align-items: center; justify-content: center; cursor: pointer;
+  transition: filter .1s ease;
+}
+.search-input-btn:hover { filter: brightness(1.08); }
+.search-input-btn:active { filter: brightness(.95); }
 .search-results { margin-top: 10px; }
 .search-result-item {
   background: var(--surface-bg); border: 1px solid var(--border); border-left: 3px solid var(--primary-blue);

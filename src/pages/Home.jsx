@@ -714,8 +714,7 @@ export default function Home() {
           </div>
         )}
         <div className="card-box">
-          <label>Search Patient (EMR number or name)</label>
-          <div className="search-row">
+          <div className="search-input-wrap">
             <input
               id="searchInput"
               ref={searchInputRef}
@@ -724,7 +723,9 @@ export default function Home() {
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
             />
-            <button className="btn btn-primary" onClick={() => searchInputRef.current && searchInputRef.current.focus()}>Search</button>
+            <button className="search-input-btn" aria-label="Search" onClick={() => searchInputRef.current && searchInputRef.current.focus()}>🔍</button>
+          </div>
+          <div className="search-row search-row-actions">
             <button className="btn btn-success" onClick={() => { setNewForm((f) => ({ ...f, ward: f.ward || myWard })); setShowNewForm(true); }}>+ New Patient</button>
             {profile?.role === 'admin' && (
               <button className="btn btn-secondary" onClick={() => setShowBulkUpload(true)}>📁 Bulk Upload</button>
