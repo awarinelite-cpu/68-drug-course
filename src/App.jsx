@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect } from "react";
-import { Routes, Route } from "react-router-dom";
+import { Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "./contexts/AuthContext.jsx";
 import { NavProvider } from "./contexts/NavContext.jsx";
 import { ThemeProvider } from "./contexts/ThemeContext.jsx";
@@ -46,6 +46,19 @@ const WardNurse = lazy(() => import("./pages/nurses-report/WardNurse.jsx"));
 const OverallNurse = lazy(() => import("./pages/nurses-report/OverallNurse.jsx"));
 const ArchiveList = lazy(() => import("./pages/nurses-report/ArchiveList.jsx"));
 const ArchiveView = lazy(() => import("./pages/nurses-report/ArchiveView.jsx"));
+
+// Doctors only get the read-only Analytics view of Nurses Report — the
+// role-select hub, ward-nurse charting, Overall Nurse admin page, and the
+// shift-report archive are nurse/admin/subadmin territory (the nav drawer
+// already hides the link for doctors; this catches direct navigation to
+// the URL too).
+function NurseReportGate({ children }) {
+  const { profile } = useAuth();
+  if (profile?.role === "doctor") {
+    return <Navigate to="/nurses-report/analytics" replace />;
+  }
+  return children;
+}
 
 function AuthedShell({ children }) {
   return (
@@ -113,12 +126,12 @@ export default function App() {
           <Route path="/charts/seizure" element={<AuthedShell><Seizure /></AuthedShell>} />
           <Route path="/charts/calculators" element={<AuthedShell><Calculators /></AuthedShell>} />
           <Route path="/charts/lab-reference" element={<AuthedShell><LabReference /></AuthedShell>} />
-          <Route path="/nurses-report/role-select" element={<AuthedShell><RoleSelect /></AuthedShell>} />
+          <Route path="/nurses-report/role-select" element={<AuthedShell><NurseReportGate><RoleSelect /></NurseReportGate></AuthedShell>} />
           <Route path="/nurses-report/analytics" element={<AuthedShell><Analytics /></AuthedShell>} />
-          <Route path="/nurses-report/ward-nurse" element={<AuthedShell><WardNurse /></AuthedShell>} />
-          <Route path="/nurses-report/overall-nurse" element={<AuthedShell><OverallNurse /></AuthedShell>} />
-          <Route path="/nurses-report/archive-list" element={<AuthedShell><ArchiveList /></AuthedShell>} />
-          <Route path="/nurses-report/archive-view" element={<AuthedShell><ArchiveView /></AuthedShell>} />
+          <Route path="/nurses-report/ward-nurse" element={<AuthedShell><NurseReportGate><WardNurse /></NurseReportGate></AuthedShell>} />
+          <Route path="/nurses-report/overall-nurse" element={<AuthedShell><NurseReportGate><OverallNurse /></NurseReportGate></AuthedShell>} />
+          <Route path="/nurses-report/archive-list" element={<AuthedShell><NurseReportGate><ArchiveList /></NurseReportGate></AuthedShell>} />
+          <Route path="/nurses-report/archive-view" element={<AuthedShell><NurseReportGate><ArchiveView /></NurseReportGate></AuthedShell>} />
           <Route path="*" element={<AuthedShell><Home /></AuthedShell>} />
         </Routes>
         </Suspense>

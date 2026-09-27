@@ -61,7 +61,11 @@ export default function NavDrawer() {
           </button>
           <button className="gnav-link" onClick={() => go("/profile")}><span className="gnav-icon">&#128100;</span>My Profile</button>
           <button className="gnav-link" onClick={() => go("/my-patients")}><span className="gnav-icon">&#128101;</span>My Patients</button>
-          <button className="gnav-link" onClick={() => go("/nurses-report/role-select")}><span className="gnav-icon">&#128203;</span>Nurses Report{isOverallNurse && <span style={{ marginLeft: 8, fontSize: 10, fontWeight: "bold", background: "#16a34a", color: "#fff", borderRadius: 999, padding: "2px 8px" }}>OVERALL</span>}</button>
+          {profile?.role === "doctor" ? (
+            <button className="gnav-link" onClick={() => go("/nurses-report/analytics")}><span className="gnav-icon">&#128200;</span>Analytics</button>
+          ) : (
+            <button className="gnav-link" onClick={() => go("/nurses-report/role-select")}><span className="gnav-icon">&#128203;</span>Nurses Report{isOverallNurse && <span style={{ marginLeft: 8, fontSize: 10, fontWeight: "bold", background: "#16a34a", color: "#fff", borderRadius: 999, padding: "2px 8px" }}>OVERALL</span>}</button>
+          )}
           <button className="gnav-link" onClick={() => go(patientId ? "/charts/calculators?patient=" + encodeURIComponent(patientId) : "/charts/calculators")}><span className="gnav-icon">&#129518;</span>Calculators</button>
           <button className="gnav-link" onClick={() => go("/charts/lab-reference")}><span className="gnav-icon">&#128300;</span>Lab Reference</button>
           {profile?.role === "admin" && (
