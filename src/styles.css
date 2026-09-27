@@ -796,13 +796,13 @@ table.chart td input { width:100%; border:none; background:transparent; text-ali
 .ward-heading { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px; font-size:22px; }
 .ward-heading-title { font-size:1em; }
 .ward-heading-link { font-size:12px; font-weight:normal; }
-.ward-heading-link--attn { animation: ward-link-blink 1.1s ease-in-out infinite; border-radius:6px; }
+.ward-heading-link--attn { animation: ward-link-blink 1.1s ease-in-out infinite; border-radius:6px; font-weight:700; }
 @keyframes ward-link-blink {
-  0%, 100% { opacity:1; }
-  50% { opacity:0.35; }
+  0%, 100% { color: var(--success, #16A34A); }
+  50% { color: var(--danger, #DC2626); }
 }
 @media (prefers-reduced-motion: reduce) {
-  .ward-heading-link--attn { animation:none; text-decoration:underline; }
+  .ward-heading-link--attn { animation:none; text-decoration:underline; color:var(--danger, #DC2626); }
 }
 .ward-heading .ward-count-badge { min-width:32px; height:32px; font-size:17px; padding:0 9px; margin-left:10px; }
 @media (min-width: 900px) {
