@@ -1470,31 +1470,6 @@ function MergedWardReportPanel({ group, isAdmin, profile, user, navigate }) {
   // effectively just hA's list there; for Paed, Bed and Cot are both real
   // wards with their own patients, tagged here by member label so a nurse
   // can tell which is which.
-  const [quickLookupId, setQuickLookupId] = useState('');
-  const quickLookupOptions = [
-    ...(hA.wardPatientOptions || []).map((o) => ({ ...o, location: hA.w?.label })),
-    ...(hB.wardPatientOptions || []).map((o) => ({ ...o, location: hB.w?.label }))
-  ].sort((a, b) => (a.name || '').localeCompare(b.name || ''));
-  // Two-column split by member ward for every merged group (both PAED and
-  // Maternity), not just wherever patientLocationOptions is set — that flag
-  // only controls the "Located" dropdown on write-up cards, which is a
-  // separate concern from how this read-only lookup is laid out. For
-  // Maternity, the right (COTS) column will just always read "No
-  // patients", since newborns aren't charted (see wardNameMatch.js) — that
-  // empty state is accurate, not a bug.
-  const quickLookupColumns = [
-    { label: hA.w?.label, options: quickLookupOptions.filter((o) => o.location === hA.w?.label) },
-    { label: hB.w?.label, options: quickLookupOptions.filter((o) => o.location === hB.w?.label) }
-  ];
-  const quickLookupRecord = quickLookupOptions.find((o) => o.id === quickLookupId);
-  let quickLookupTag = null;
-  if (quickLookupRecord) {
-    quickLookupTag = quickLookupRecord.dischargeStatus
-      ? (quickLookupRecord.dischargeStatus === 'TRANS OUT' ? 'TRANS OUT' : quickLookupRecord.dischargeStatus === 'DEATH' ? 'Death' : quickLookupRecord.dischargeStatus === 'DAMA' ? 'DAMA' : quickLookupRecord.dischargeStatus === 'ABSC' ? 'Absconded' : 'Discharged')
-      : quickLookupRecord.admissionTag
-        ? (ADMISSION_TAG_LABEL[quickLookupRecord.admissionTag] || quickLookupRecord.admissionTag)
-        : 'Active \u2014 no status tag';
-  }
 
   async function saveBoth() { await Promise.all([hA.saveReport(), hB.saveReport()]); }
   async function submitBoth() { await Promise.all([hA.submitReport(), hB.submitReport()]); }
@@ -1503,29 +1478,14 @@ function MergedWardReportPanel({ group, isAdmin, profile, user, navigate }) {
     <>
       {bothLoaded && (
         <div className="card-box">
-          <h2 style={{ margin: 0 }}>{group.label} — Shift Statistics</h2>
-          <div className="patient-field" style={{ marginTop: 12, marginBottom: 12 }}>
-            {quickLookupOptions.length > 0 && (
-              <label>Check a patient's status:</label>
-            )}
-            <div style={{ display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap' }}>
-              {quickLookupOptions.length > 0 && (
-                <div style={{ flex: '1 1 180px', minWidth: 180 }}>
-                  <WardPatientPicker value={quickLookupId} options={quickLookupOptions} columns={quickLookupColumns} onSelect={setQuickLookupId} />
-                  {quickLookupTag && (
-                    <div style={{ fontSize: 12, marginTop: 4, fontWeight: 'bold', color: quickLookupRecord.dischargeStatus ? '#dc2626' : quickLookupRecord.admissionTag ? '#2563eb' : '#6b7280' }}>
-                      {quickLookupTag}{quickLookupRecord.location ? ' \u2014 ' + quickLookupRecord.location : ''}
-                    </div>
-                  )}
-                </div>
-              )}
-              <button className="btn btn-secondary" style={{ padding: '6px 12px' }} type="button"
-                onClick={() => navigate('/nurses-report/archive-list?type=ward&ward=' + encodeURIComponent(hA.w.key) + '&label=' + encodeURIComponent(group.label))}>
-                {'\uD83D\uDCC1 Archive'}
-              </button>
-            </div>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 10 }}>
+            <button className="btn btn-secondary" style={{ padding: '6px 12px' }} type="button"
+              onClick={() => navigate('/nurses-report/archive-list?type=ward&ward=' + encodeURIComponent(hA.w.key) + '&label=' + encodeURIComponent(group.label))}>
+              {'\uD83D\uDCC1 Archive'}
+            </button>
           </div>
           <div className="table-wrap">
+            <div className="ward-report-title">{group.label} \u2014 24 HOURS WARD REPORT WEF 0900HRS OF 26/09/26 TO 0900HRS OF 27/09/26</div>
             <MergedShiftTable panels={hooks.map((h) => ({
               w: h.w, wardDoc: h.wardDoc, census: h.census, movementTotals: h.movementTotals,
               editable: h.editable, updateBeds: h.updateBeds, updateShiftField: h.updateShiftField, updateDuty: h.updateDuty
