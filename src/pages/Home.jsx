@@ -844,8 +844,8 @@ export default function Home() {
             <span className="ward-heading-title">Patients on {myWard ? titleCase(myWard) : 'All Wards'} <span className="ward-count-badge">{wardPatientCount}</span></span>
             <a
               className={'ward-heading-link' + (myWard ? '' : ' ward-heading-link--attn')}
-              href="/profile"
-              onClick={(e) => { e.preventDefault(); navigate('/profile'); }}
+              href="/select-ward"
+              onClick={(e) => { e.preventDefault(); navigate('/select-ward'); }}
             >
               {myWard ? 'Switch ward' : 'Set your ward'}
             </a>

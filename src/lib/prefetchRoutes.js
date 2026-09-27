@@ -16,6 +16,7 @@ const routeImporters = [
   () => import("../pages/Patient.jsx"),
   () => import("../pages/MyPatients.jsx"),
   () => import("../pages/Profile.jsx"),
+  () => import("../pages/SelectWard.jsx"),
   () => import("../pages/Admin.jsx"),
   () => import("../pages/Overview.jsx"),
   () => import("../pages/Admission.jsx"),
