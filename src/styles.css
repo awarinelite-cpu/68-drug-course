@@ -626,7 +626,15 @@ td.flag-deficit input, td.flag-deficit select { color: #b45309 !important; font-
 .gnav-topbar-left { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; min-width: 0; }
 .gnav-topbar-left-row { display: flex; align-items: center; gap: 10px; min-width: 0; }
 /* Lines up under the brand text, clear of the hamburger icon (36px) + its gap (10px). */
-.topbar-identity { margin-left: 46px; }
+/* Default (portrait/mobile): identity tag stays inline in the button row,
+   same spot it's always been. Landscape and desktop get the roomier
+   below-brand layout instead — see the media query further down. */
+.topbar-identity--below { margin-left: 46px; display: none; }
+.topbar-identity--inline { display: inline-flex; }
+@media (min-width: 900px), (orientation: landscape) {
+  .topbar-identity--below { display: block; }
+  .topbar-identity--inline { display: none; }
+}
 .gnav-overlay {
   position: fixed; inset: 0; background: rgba(0,0,0,.45);
   z-index: 4998; opacity: 0; pointer-events: none; transition: opacity .18s ease;

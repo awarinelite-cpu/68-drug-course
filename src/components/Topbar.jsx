@@ -11,7 +11,7 @@ export default function Topbar({ brand, identity, children }) {
           <button className="gnav-toggle" aria-label="Open menu" onClick={openDrawer}>&#9776;</button>
           <div className="brand">{brand}</div>
         </div>
-        {identity && <div className="topbar-identity">{identity}</div>}
+        {identity && <div className="topbar-identity topbar-identity--below no-print">{identity}</div>}
       </div>
       <div className="right">
         {themeCtx && (
@@ -24,6 +24,7 @@ export default function Topbar({ brand, identity, children }) {
             {themeCtx.theme === "dark" ? "🌙 Night" : "☀️ Day"}
           </button>
         )}
+        {identity && <div className="topbar-identity topbar-identity--inline no-print">{identity}</div>}
         {children}
       </div>
     </div>
