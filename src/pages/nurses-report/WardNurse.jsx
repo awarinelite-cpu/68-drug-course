@@ -1485,7 +1485,7 @@ function MergedWardReportPanel({ group, isAdmin, profile, user, navigate }) {
             </button>
           </div>
           <div className="table-wrap">
-            <div className="ward-report-title">{group.label} \u2014 24 HOURS WARD REPORT WEF 0900HRS OF 26/09/26 TO 0900HRS OF 27/09/26</div>
+            <div className="ward-report-title">{group.label} {'\u2014'} 24 HOURS WARD REPORT WEF 0900HRS OF 26/09/26 TO 0900HRS OF 27/09/26</div>
             <MergedShiftTable panels={hooks.map((h) => ({
               w: h.w, wardDoc: h.wardDoc, census: h.census, movementTotals: h.movementTotals,
               editable: h.editable, updateBeds: h.updateBeds, updateShiftField: h.updateShiftField, updateDuty: h.updateDuty
