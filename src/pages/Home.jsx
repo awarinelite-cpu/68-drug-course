@@ -19,6 +19,7 @@ import { activeAdmissionTag, ADMISSION_TAG_LABEL, clearAdmissionTag, readmitLate
 import { bumpShiftStatForPatientWard, bumpDemographicStatForPatientWard } from "../lib/shiftStatsSync.js";
 import { WARD_OPTIONS } from "../lib/drugChartHelpers.js";
 import { classifyAffiliation } from "../lib/patientAffiliation.js";
+import { formatShortNameTag } from "../lib/roles.js";
 
 function normEmr(emr) { return (emr || '').trim().toLowerCase(); }
 
@@ -685,7 +686,7 @@ export default function Home() {
       <Topbar brand="68 NARHY Ward Charts">
         <a className="whoami-link" onClick={(e) => { e.preventDefault(); navigate('/profile'); }} href="/profile">
           <span className="whoami-avatar" dangerouslySetInnerHTML={{ __html: profile ? avatarMarkup(profile, 32) : '' }} />
-          <span className="whoami-name">{profile ? profile.name + ' (' + profile.role + ')' : ''}</span>
+          <span className="whoami-name">{profile ? formatShortNameTag(profile.name, profile.role) : ''}</span>
         </a>
         {profile?.role === 'admin' && (
           <a href="/admin" className="btn btn-purple" style={{ padding: '6px 12px' }} onClick={(e) => { e.preventDefault(); navigate('/admin'); }}>Admin</a>

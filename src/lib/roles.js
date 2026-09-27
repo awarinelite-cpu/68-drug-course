@@ -24,3 +24,16 @@ export function formatNameWithTitle(name, role) {
   if (!n) return n;
   return abbr ? abbr + ' ' + n : n;
 }
+
+// Compact "title + first name" tag for tight UI chrome (the topbar whoami
+// tag). Unlike formatNameWithTitle above, nurses get a title here too
+// ("Nr") and only the first name is shown so the tag stays short, e.g.
+// formatShortNameTag('Oiseoje Awarin', 'doctor') -> 'Dr Oiseoje'.
+const SHORT_ROLE_ABBR = { doctor: 'Dr', nurse: 'Nr' };
+export function formatShortNameTag(name, role) {
+  const n = (name || '').trim();
+  if (!n) return n;
+  const first = n.split(/\s+/)[0];
+  const abbr = SHORT_ROLE_ABBR[role];
+  return abbr ? abbr + ' ' + first : first;
+}
