@@ -623,7 +623,10 @@ td.flag-deficit input, td.flag-deficit select { color: #b45309 !important; font-
   transition: background-color .12s ease;
 }
 .gnav-toggle:hover { background: rgba(255,255,255,.26); }
-.gnav-topbar-left { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.gnav-topbar-left { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; min-width: 0; }
+.gnav-topbar-left-row { display: flex; align-items: center; gap: 10px; min-width: 0; }
+/* Lines up under the brand text, clear of the hamburger icon (36px) + its gap (10px). */
+.topbar-identity { margin-left: 46px; }
 .gnav-overlay {
   position: fixed; inset: 0; background: rgba(0,0,0,.45);
   z-index: 4998; opacity: 0; pointer-events: none; transition: opacity .18s ease;

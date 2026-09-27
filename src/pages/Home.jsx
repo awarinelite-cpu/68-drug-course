@@ -683,11 +683,15 @@ export default function Home() {
 
   return (
     <>
-      <Topbar brand="68 NARHY Ward Charts">
-        <a className="whoami-link" onClick={(e) => { e.preventDefault(); navigate('/profile'); }} href="/profile">
-          <span className="whoami-avatar" dangerouslySetInnerHTML={{ __html: profile ? avatarMarkup(profile, 32) : '' }} />
-          <span className="whoami-name">{profile ? formatShortNameTag(profile.name, profile.role) : ''}</span>
-        </a>
+      <Topbar
+        brand="68 NARHY Ward Charts"
+        identity={
+          <a className="whoami-link" onClick={(e) => { e.preventDefault(); navigate('/profile'); }} href="/profile">
+            <span className="whoami-avatar" dangerouslySetInnerHTML={{ __html: profile ? avatarMarkup(profile, 32) : '' }} />
+            <span className="whoami-name">{profile ? formatShortNameTag(profile.name, profile.role) : ''}</span>
+          </a>
+        }
+      >
         {profile?.role === 'admin' && (
           <a href="/admin" className="btn btn-purple" style={{ padding: '6px 12px' }} onClick={(e) => { e.preventDefault(); navigate('/admin'); }}>Admin</a>
         )}
