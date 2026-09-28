@@ -71,6 +71,9 @@ export default function NavDrawer() {
           {profile?.role === "admin" && (
             <button className="gnav-link" onClick={() => go("/admin")}><span className="gnav-icon">&#9881;&#65039;</span>Admin</button>
           )}
+          {profile?.role === "subadmin" && (
+            <button className="gnav-link" onClick={() => go("/admin/users")}><span className="gnav-icon">&#128101;</span>All Users</button>
+          )}
         </div>
         <div className="gnav-drawer-foot">
           <button className="gnav-link" onClick={handleLogout}><span className="gnav-icon">&#128682;</span>Log Out</button>

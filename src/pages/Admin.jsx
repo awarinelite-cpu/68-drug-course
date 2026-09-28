@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { initializeApp, deleteApp } from "firebase/app";
 import { getAuth, createUserWithEmailAndPassword, signOut } from "firebase/auth";
-import { collection, getDocs, doc, setDoc, updateDoc, deleteDoc, serverTimestamp } from "firebase/firestore";
+import { collection, getDocs, doc, setDoc, updateDoc, serverTimestamp } from "firebase/firestore";
 import { getFunctions, httpsCallable } from "firebase/functions";
 import { app, db, firebaseConfig } from "../firebase.js";
 import { useAuth } from "../contexts/AuthContext.jsx";
@@ -10,7 +10,7 @@ import { useGoBack } from "../hooks/useGoBack.js";
 import { downloadFullBackup } from "../lib/export.js";
 import { rebuildSearchIndex } from "../lib/patientDirectory.js";
 import { avatarMarkup } from "../lib/avatar.js";
-import { ROLE_OPTIONS, formatNameWithTitle } from "../lib/roles.js";
+import { ROLE_OPTIONS } from "../lib/roles.js";
 import StaffRegistrationCard from "../components/StaffRegistrationCard.jsx";
 import {
   SOUND_OPTIONS, APPEARANCE_OPTIONS, REPEAT_OPTIONS, ALL_FREQUENCIES, GLUCOSE_INTERVAL_OPTIONS,
@@ -18,13 +18,6 @@ import {
 } from "../lib/alarm-settings.js";
 import { useTimeFormat } from "../lib/time-format.js";
 import Topbar from "../components/Topbar.jsx";
-
-// Every chart type and archived-admission record a patient can accumulate.
-// Firestore doesn't cascade-delete subcollections when the parent doc is
-// removed, so each one has to be cleared out explicitly first, or the data
-// would keep sitting there orphaned (invisible in the app, but still using
-// storage and still technically recoverable — not acceptable for a real delete).
-const PATIENT_SUBCOLLECTIONS = ['admissions', 'bloodGlucose', 'drugCourseChart', 'intakeOutput', 'intakeOutputSummary', 'seizure', 'vitals'];
 
 // Normalizes typed confirmation text before comparing: trims edge whitespace,
 // collapses internal whitespace, and lowercases. Mobile keyboards (especially
@@ -88,19 +81,8 @@ export default function Admin() {
   const [approvingId, setApprovingId] = useState(null);
   const [approveMsg, setApproveMsg] = useState(null);
 
-  const [allPatients, setAllPatients] = useState([]);
-  const [patientFilter, setPatientFilter] = useState('');
-  const [patientStatus, setPatientStatus] = useState('');
-  // Bulk delete: ids ticked in the All Patients table, plus the confirm modal.
-  const [selectedPatientIds, setSelectedPatientIds] = useState(() => new Set());
-  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
-  const [bulkDeleteInput, setBulkDeleteInput] = useState('');
-  const [bulkDeleteError, setBulkDeleteError] = useState('');
-  const [bulkDeleting, setBulkDeleting] = useState(false);
-
-  // Delete modal is shared between patients and users — deleteTarget.type
-  // says which one confirmDelete() below should act on.
-  const [deleteTarget, setDeleteTarget] = useState(null); // { type: 'patient'|'user', record }
+  // Delete modal — used to reject a pending application.
+  const [deleteTarget, setDeleteTarget] = useState(null); // { type: 'user', record }
   const [deleteInput, setDeleteInput] = useState('');
   const [deleteError, setDeleteError] = useState('');
   const [userDeletingId, setUserDeletingId] = useState(null);
@@ -120,7 +102,6 @@ export default function Admin() {
 
   useEffect(() => {
     loadUsers();
-    loadPatients();
     (async () => {
       const settings = await loadAlarmSettings(db);
       setAlarm(settings);
@@ -135,14 +116,6 @@ export default function Admin() {
     const list = [];
     snap.forEach(d => list.push({ id: d.id, ...d.data() }));
     setUsers(list);
-  }
-
-  async function loadPatients() {
-    const snap = await getDocs(collection(db, 'patients'));
-    const list = [];
-    snap.forEach(d => list.push({ id: d.id, ...d.data() }));
-    list.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
-    setAllPatients(list);
   }
 
   async function handleLogout() {
@@ -216,21 +189,6 @@ export default function Admin() {
   const pendingUsers = users.filter(u => u.status === 'pending');
   const approvedUsers = users.filter(u => u.status !== 'pending');
 
-  const filteredPatients = (() => {
-    const q = patientFilter.trim().toLowerCase();
-    return !q ? allPatients : allPatients.filter(p =>
-      (p.name || '').toLowerCase().includes(q) || (p.emr || '').toLowerCase().includes(q) || (p.ward || '').toLowerCase().includes(q)
-    );
-  })();
-
-  function openPatient(p) { navigate('/charts/overview?patient=' + p.id); }
-
-  function openDeletePatientModal(p) {
-    setDeleteTarget({ type: 'patient', record: p });
-    setDeleteInput('');
-    setDeleteError('');
-  }
-
   function openDeleteUserModal(u) {
     if (u.id === user.uid) { alert("You can't delete your own account."); return; }
     setDeleteTarget({ type: 'user', record: u });
@@ -242,96 +200,14 @@ export default function Admin() {
 
   async function confirmDelete() {
     if (!deleteTarget) return;
-    const { type, record } = deleteTarget;
-    const expected = type === 'patient' ? ((record.emr || '').trim() || 'DELETE') : ((record.email || '').trim() || 'DELETE');
+    const { record } = deleteTarget;
+    const expected = (record.email || '').trim() || 'DELETE';
     if (normalizeConfirmText(deleteInput) !== normalizeConfirmText(expected)) {
       setDeleteError('That didn\u2019t match — nothing was deleted. Please re-type it exactly.');
       return;
     }
     setDeleteTarget(null);
-    if (type === 'patient') await runDeletePatient(record);
-    else await runDeleteUser(record);
-  }
-
-  // Deletes one patient's subcollections and then the patient doc itself.
-  // Throws on failure — callers decide how to report it.
-  async function deletePatientRecords(p) {
-    async function deleteAllInSubcollection(sub) {
-      const snap = await getDocs(collection(db, 'patients', p.id, sub));
-      await Promise.all(snap.docs.map(d => deleteDoc(doc(db, 'patients', p.id, sub, d.id))));
-    }
-    await Promise.all(PATIENT_SUBCOLLECTIONS.map(deleteAllInSubcollection));
-    await deleteDoc(doc(db, 'patients', p.id));
-  }
-
-  async function runDeletePatient(p) {
-    setPatientStatus('Deleting ' + (p.name || 'patient') + '…');
-    try {
-      await deletePatientRecords(p);
-    } catch (e) {
-      alert('Delete failed: ' + (e.code || e.message || 'unknown error'));
-      setPatientStatus('');
-      return;
-    }
-    setAllPatients((list) => list.filter(x => x.id !== p.id));
-    setSelectedPatientIds((prev) => { const n = new Set(prev); n.delete(p.id); return n; });
-    setPatientStatus('');
-  }
-
-  // Select all applies to whatever the filter currently shows, so an admin
-  // can filter by ward/name first and tick just that group.
-  const allFilteredSelected = filteredPatients.length > 0 && filteredPatients.every(p => selectedPatientIds.has(p.id));
-  const selectedPatients = allPatients.filter(p => selectedPatientIds.has(p.id));
-
-  function togglePatientSelected(id) {
-    setSelectedPatientIds((prev) => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; });
-  }
-  function toggleSelectAllFiltered() {
-    setSelectedPatientIds((prev) => {
-      const n = new Set(prev);
-      if (allFilteredSelected) filteredPatients.forEach(p => n.delete(p.id));
-      else filteredPatients.forEach(p => n.add(p.id));
-      return n;
-    });
-  }
-
-  function openBulkDeleteModal() {
-    if (!selectedPatients.length) return;
-    setBulkDeleteInput('');
-    setBulkDeleteError('');
-    setBulkDeleteOpen(true);
-  }
-  function closeBulkDeleteModal() { if (!bulkDeleting) setBulkDeleteOpen(false); }
-
-  async function confirmBulkDelete() {
-    if (bulkDeleting) return;
-    if (normalizeConfirmText(bulkDeleteInput) !== 'delete') {
-      setBulkDeleteError('That didn\u2019t match — nothing was deleted. Please type DELETE exactly.');
-      return;
-    }
-    const targets = selectedPatients;
-    setBulkDeleting(true);
-    setBulkDeleteError('');
-    const deletedIds = [];
-    const failed = [];
-    for (let i = 0; i < targets.length; i++) {
-      const p = targets[i];
-      setPatientStatus('Deleting patient ' + (i + 1) + ' of ' + targets.length + '…');
-      try {
-        await deletePatientRecords(p);
-        deletedIds.push(p.id);
-      } catch (e) {
-        failed.push((p.name || 'Unnamed') + ' (' + (e.code || e.message || 'unknown error') + ')');
-      }
-    }
-    const gone = new Set(deletedIds);
-    setAllPatients((list) => list.filter(x => !gone.has(x.id)));
-    setSelectedPatientIds((prev) => { const n = new Set(prev); deletedIds.forEach(id => n.delete(id)); return n; });
-    setPatientStatus(failed.length
-      ? 'Deleted ' + deletedIds.length + ' patient(s); ' + failed.length + ' failed: ' + failed.join(', ')
-      : 'Deleted ' + deletedIds.length + ' patient(s).');
-    setBulkDeleting(false);
-    setBulkDeleteOpen(false);
+    await runDeleteUser(record);
   }
 
   async function runDeleteUser(u) {
@@ -362,15 +238,6 @@ export default function Admin() {
     loadUsers();
   }
 
-  async function setUserRole(u, newRole) {
-    try {
-      await updateDoc(doc(db, 'users', u.id), { role: newRole });
-    } catch (e) {
-      alert("Couldn't update role: " + (e.code || e.message || 'unknown error'));
-    }
-    loadUsers();
-  }
-
   function toggleFreq(f) { setFreqChecked((c) => ({ ...c, [f]: !c[f] })); }
 
   async function saveAlarmSettings() {
@@ -394,12 +261,10 @@ export default function Admin() {
 
   if (!profile) return null;
 
-  const deleteLabel = deleteTarget?.type === 'patient'
-    ? (deleteTarget.record.name || 'Unnamed') + ' (EMR: ' + (deleteTarget.record.emr || 'N/A') + ')'
-    : deleteTarget ? (deleteTarget.record.name || 'Unnamed') + ' (' + (deleteTarget.record.email || 'no email on file') + ')' : '';
-  const deletePromptLabel = deleteTarget?.type === 'patient'
-    ? ((deleteTarget.record.emr || '').trim() ? ('Type the patient\u2019s EMR number to confirm: ' + deleteTarget.record.emr) : 'No EMR on file — type DELETE to confirm')
-    : deleteTarget ? ((deleteTarget.record.email || '').trim() ? ('Type the user\u2019s email to confirm: ' + deleteTarget.record.email) : 'No email on file — type DELETE to confirm') : '';
+  const deleteLabel = deleteTarget ? (deleteTarget.record.name || 'Unnamed') + ' (' + (deleteTarget.record.email || 'no email on file') + ')' : '';
+  const deletePromptLabel = deleteTarget
+    ? ((deleteTarget.record.email || '').trim() ? ('Type the user\u2019s email to confirm: ' + deleteTarget.record.email) : 'No email on file — type DELETE to confirm')
+    : '';
 
   return (
     <>
@@ -483,84 +348,19 @@ export default function Admin() {
         </div>
 
         <div className="card-box">
-          <h3 style={{ marginTop: 0 }}>All Patients</h3>
-          <div className="search-row">
-            <input type="text" placeholder="Filter by name, EMR, or ward" value={patientFilter} onChange={(e) => setPatientFilter(e.target.value)} />
-          </div>
-          <div style={{ fontSize: 12, color: '#666', marginTop: 6 }}>
-            {patientStatus || (filteredPatients.length + ' of ' + allPatients.length + ' patient(s)' + (patientFilter.trim() ? ' matching "' + patientFilter.trim() + '"' : ''))}
-          </div>
-          {selectedPatients.length > 0 && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 8, flexWrap: 'wrap' }}>
-              <button className="btn" style={{ background: '#dc2626', color: '#fff' }} disabled={bulkDeleting} onClick={openBulkDeleteModal}>
-                Delete selected ({selectedPatients.length})
-              </button>
-              <button className="btn btn-secondary" disabled={bulkDeleting} onClick={() => setSelectedPatientIds(new Set())}>Clear selection</button>
-            </div>
-          )}
-          <div className="table-wrap">
-            <table className="entries">
-              <thead><tr>
-                <th style={{ width: 36 }}>
-                  <input type="checkbox" style={{ width: 'auto' }} aria-label="Select all patients shown"
-                    title={allFilteredSelected ? 'Unselect all shown' : 'Select all shown'}
-                    checked={allFilteredSelected} disabled={!filteredPatients.length || bulkDeleting} onChange={toggleSelectAllFiltered} />
-                </th>
-                <th>Name</th><th>EMR</th><th>Ward</th><th>Diagnosis</th><th>Admission Date</th><th></th>
-              </tr></thead>
-              <tbody>
-                {!filteredPatients.length && <tr><td colSpan={7} style={{ color: '#666' }}>No patients found.</td></tr>}
-                {filteredPatients.map((p) => (
-                  <tr key={p.id}>
-                    <td>
-                      <input type="checkbox" style={{ width: 'auto' }} aria-label={'Select ' + (p.name || 'patient')}
-                        checked={selectedPatientIds.has(p.id)} disabled={bulkDeleting} onChange={() => togglePatientSelected(p.id)} />
-                    </td>
-                    <td style={{ textAlign: 'left', cursor: 'pointer' }} title={'Open ' + (p.name || 'this patient') + '\u2019s overview'} onClick={() => openPatient(p)}>{p.name || 'Unnamed'}</td>
-                    <td style={{ cursor: 'pointer' }} onClick={() => openPatient(p)}>{p.emr || '-'}</td>
-                    <td style={{ cursor: 'pointer' }} onClick={() => openPatient(p)}>{p.ward || '-'}</td>
-                    <td style={{ textAlign: 'left', cursor: 'pointer' }} onClick={() => openPatient(p)}>{p.diagnosis || 'Not specified'}</td>
-                    <td style={{ cursor: 'pointer' }} onClick={() => openPatient(p)}>{p.admissionDate || '-'}</td>
-                    <td>
-                      <button className="btn btn-secondary" style={{ padding: '4px 10px', fontSize: 11, background: '#dc2626', color: '#fff', border: 'none' }}
-                        onClick={(e) => { e.stopPropagation(); openDeletePatientModal(p); }}>Delete</button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <button className="btn btn-primary" style={{ width: '100%', fontSize: 16, fontWeight: 'bold', padding: '12px 16px' }}
+            onClick={() => navigate('/admin/patients')}>
+            All Patients &rarr;
+          </button>
+          <p style={{ fontSize: 12, color: '#666', margin: '8px 0 0' }}>Browse, filter and manage every patient record.</p>
         </div>
 
         <div className="card-box">
-          <h3 style={{ marginTop: 0 }}>All Users</h3>
-          <div className="table-wrap">
-            <table className="entries">
-              <thead><tr><th></th><th>Name</th><th>Email</th><th>Phone</th><th>Role</th><th></th></tr></thead>
-              <tbody>
-                {approvedUsers.map((u) => (
-                  <tr key={u.id}>
-                    <td dangerouslySetInnerHTML={{ __html: avatarMarkup(u, 32) }} />
-                    <td>{formatNameWithTitle(u.name, u.role)}</td><td>{u.email || ''}</td><td>{u.phone || ''}</td><td>{u.role || ''}</td>
-                    <td>
-                      {u.id !== user.uid && (u.role === 'nurse' || u.role === 'subadmin') && (
-                        <button className="btn btn-secondary" style={{ padding: '4px 10px', fontSize: 11, marginRight: 6 }}
-                          onClick={() => setUserRole(u, u.role === 'subadmin' ? 'nurse' : 'subadmin')}>
-                          {u.role === 'subadmin' ? 'Remove Subadmin' : 'Make Subadmin'}
-                        </button>
-                      )}
-                      {u.id !== user.uid && (
-                        <button className="btn btn-secondary" style={{ padding: '4px 10px', fontSize: 11, background: '#dc2626', color: '#fff', border: 'none' }}
-                          disabled={userDeletingId === u.id} onClick={() => openDeleteUserModal(u)}>
-                          {userDeletingId === u.id ? 'Deleting…' : 'Delete'}
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <button className="btn btn-primary" style={{ width: '100%', fontSize: 16, fontWeight: 'bold', padding: '12px 16px' }}
+            onClick={() => navigate('/admin/users')}>
+            All Users &rarr;
+          </button>
+          <p style={{ fontSize: 12, color: '#666', margin: '8px 0 0' }}>Manage accounts and appoint this week's Overall Nurse.</p>
         </div>
 
         <div className="card-box">
@@ -673,41 +473,12 @@ export default function Admin() {
         </div>
       </div>
 
-      {bulkDeleteOpen && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
-          <div className="card-box" style={{ maxWidth: 420, width: '100%', margin: 0 }}>
-            <h3 style={{ marginTop: 0, color: '#dc2626' }}>Delete {selectedPatients.length} Patient{selectedPatients.length === 1 ? '' : 's'}</h3>
-            <p style={{ fontSize: 14, color: '#374151' }}>
-              This permanently deletes {selectedPatients.length === allPatients.length ? 'ALL ' : ''}{selectedPatients.length} selected patient{selectedPatients.length === 1 ? '' : 's'} and every
-              chart, drug list, and closed-admission record for them. This cannot be undone. Consider downloading a
-              full backup (further down this page) first.
-            </p>
-            <div className="field">
-              <label>Type DELETE to confirm</label>
-              <input type="text" autoComplete="off" autoCapitalize="off" autoCorrect="off" spellCheck="false"
-                value={bulkDeleteInput} onChange={(e) => setBulkDeleteInput(e.target.value)} disabled={bulkDeleting}
-                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); confirmBulkDelete(); } else if (e.key === 'Escape') closeBulkDeleteModal(); }}
-                autoFocus />
-            </div>
-            {bulkDeleteError && <div className="error-msg">{bulkDeleteError}</div>}
-            <div style={{ display: 'flex', gap: 10, marginTop: 6 }}>
-              <button className="btn btn-secondary" style={{ flex: 1 }} disabled={bulkDeleting} onClick={closeBulkDeleteModal}>Cancel</button>
-              <button className="btn" style={{ flex: 1, background: '#dc2626', color: '#fff' }} disabled={bulkDeleting} onClick={confirmBulkDelete}>
-                {bulkDeleting ? 'Deleting…' : 'Delete'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
       {deleteTarget && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
           <div className="card-box" style={{ maxWidth: 420, width: '100%', margin: 0 }}>
-            <h3 style={{ marginTop: 0, color: '#dc2626' }}>{deleteTarget.type === 'patient' ? 'Delete Patient' : 'Delete User'}</h3>
+            <h3 style={{ marginTop: 0, color: '#dc2626' }}>Delete User</h3>
             <p style={{ fontSize: 14, color: '#374151' }}>
-              {deleteTarget.type === 'patient'
-                ? 'This permanently deletes ' + deleteLabel + ' and every chart, drug list, and closed-admission record for this patient. This cannot be undone.'
-                : 'This permanently removes ' + deleteLabel + '\u2019s account and sign-in access. This cannot be undone.'}
+              {'This permanently removes ' + deleteLabel + '\u2019s account and sign-in access. This cannot be undone.'}
             </p>
             <div className="field">
               <label>{deletePromptLabel}</label>
