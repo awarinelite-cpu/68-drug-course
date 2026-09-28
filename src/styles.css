@@ -245,14 +245,14 @@ h1, h2, h3, h4 { font-weight: 700; letter-spacing: -.01em; }
    theme — which is why typed-in values look dim/washed-out here even
    though the labels around them are fine. Pin both explicitly to the
    theme's own colors so entered text is always legible. */
-input[type=text], input[type=email], input[type=password], input[type=number],
+input[type=text], input[type=email], input[type=tel], input[type=password], input[type=number],
 input[type=date], input[type=datetime-local], input[type=time], input[type=month],
 input[type=week], textarea, select {
   width: 100%; padding: 11px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 16px; font-family: inherit;
   color: var(--text-primary); background-color: var(--surface-bg);
   transition: border-color .12s ease, box-shadow .12s ease;
 }
-input[type=text]:focus, input[type=email]:focus, input[type=password]:focus, input[type=number]:focus,
+input[type=text]:focus, input[type=email]:focus, input[type=tel]:focus, input[type=password]:focus, input[type=number]:focus,
 input[type=date]:focus, input[type=datetime-local]:focus, input[type=time]:focus, input[type=month]:focus,
 input[type=week]:focus, textarea:focus, select:focus {
   outline: none; border-color: var(--primary-blue); box-shadow: 0 0 0 3px rgba(46,103,196,.15);
