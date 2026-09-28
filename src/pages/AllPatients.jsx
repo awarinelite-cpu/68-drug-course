@@ -57,7 +57,7 @@ export default function AllPatients() {
   const filteredPatients = (() => {
     const q = patientFilter.trim().toLowerCase();
     return !q ? allPatients : allPatients.filter(p =>
-      (p.name || '').toLowerCase().includes(q) || (p.emr || '').toLowerCase().includes(q) || (p.ward || '').toLowerCase().includes(q)
+      (p.name || '').toLowerCase().includes(q) || (p.emr || '').toLowerCase().includes(q) || (p.ward || '').toLowerCase().includes(q) || (p.diagnosis || '').toLowerCase().includes(q)
     );
   })();
 
@@ -172,7 +172,7 @@ export default function AllPatients() {
         <div className="card-box">
           <h3 style={{ marginTop: 0 }}>All Patients</h3>
           <div className="search-row">
-            <input type="text" placeholder="Filter by name, EMR, or ward" value={patientFilter} onChange={(e) => setPatientFilter(e.target.value)} />
+            <input type="text" placeholder="Search by name, EMR, ward, or diagnosis" value={patientFilter} onChange={(e) => setPatientFilter(e.target.value)} />
           </div>
           <div style={{ fontSize: 12, color: '#666', marginTop: 6 }}>
             {patientStatus || (loading ? 'Loading patients…' : (filteredPatients.length + ' of ' + allPatients.length + ' patient(s)' + (patientFilter.trim() ? ' matching "' + patientFilter.trim() + '"' : '')))}

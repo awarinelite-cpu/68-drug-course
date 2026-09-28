@@ -24,6 +24,7 @@ export default function AllUsers() {
 
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [userFilter, setUserFilter] = useState('');
   const [overall, setOverall] = useState(null); // { uid, name } for the current week
   const [busyUid, setBusyUid] = useState(null);
   const [status, setStatus] = useState(null); // { text, error }
@@ -131,6 +132,14 @@ export default function AllUsers() {
     .filter(u => u.status !== 'pending')
     .sort((a, b) => (a.name || '').localeCompare(b.name || ''));
 
+  const filteredUsers = (() => {
+    const q = userFilter.trim().toLowerCase();
+    return !q ? approvedUsers : approvedUsers.filter(u =>
+      (u.name || '').toLowerCase().includes(q) || (u.email || '').toLowerCase().includes(q) ||
+      (u.phone || '').toLowerCase().includes(q) || (u.role || '').toLowerCase().includes(q)
+    );
+  })();
+
   const deletePromptLabel = deleteTarget
     ? ((deleteTarget.email || '').trim() ? ('Type the user\u2019s email to confirm: ' + deleteTarget.email) : 'No email on file — type DELETE to confirm')
     : '';
@@ -159,14 +168,18 @@ export default function AllUsers() {
 
         <div className="card-box">
           <h3 style={{ marginTop: 0 }}>All Users</h3>
-          <div style={{ fontSize: 12, color: '#666', marginBottom: 6 }}>
-            {loading ? 'Loading users…' : approvedUsers.length + ' user(s)'}
+          <div className="search-row">
+            <input type="text" placeholder="Search by name, email, phone, or role" value={userFilter} onChange={(e) => setUserFilter(e.target.value)} />
+          </div>
+          <div style={{ fontSize: 12, color: '#666', margin: '6px 0' }}>
+            {loading ? 'Loading users…' : filteredUsers.length + ' of ' + approvedUsers.length + ' user(s)' + (userFilter.trim() ? ' matching "' + userFilter.trim() + '"' : '')}
           </div>
           <div className="table-wrap">
             <table className="entries">
               <thead><tr><th></th><th>Name</th><th>Email</th><th>Phone</th><th>Role</th><th>Overall Nurse</th>{isAdmin && <th></th>}</tr></thead>
               <tbody>
-                {approvedUsers.map((u) => {
+                {!loading && !filteredUsers.length && <tr><td colSpan={isAdmin ? 7 : 6} style={{ color: '#666' }}>No users found.</td></tr>}
+                {filteredUsers.map((u) => {
                   const isOverall = !!(overall && overall.uid === u.id);
                   const canBeOverall = u.role === 'nurse';
                   return (
