@@ -20,6 +20,7 @@ const routeImporters = [
   () => import("../pages/Admin.jsx"),
   () => import("../pages/AllPatients.jsx"),
   () => import("../pages/AllUsers.jsx"),
+  () => import("../pages/AlarmSettings.jsx"),
   () => import("../pages/Overview.jsx"),
   () => import("../pages/Admission.jsx"),
   () => import("../pages/DrugCourseChart.jsx"),
