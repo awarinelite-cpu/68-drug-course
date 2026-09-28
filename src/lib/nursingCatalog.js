@@ -170,7 +170,10 @@ export function ensureCatalogLoaded(db) {
   return catalogPromise;
 }
 
-const bullets = (arr) => arr.map(x => '- ' + x).join('\n');
+const bullets = (arr) => arr.map(x => '\u2022 ' + x).join('\n');
+// One bullet per line; lines the admin already bulleted or numbered are kept as they are.
+const bulletize = (text) => String(text || '').split('\n').map(l => l.trim()).filter(Boolean)
+  .map(l => (/^([-\u2022*]|\d+[.)])\s/.test(l) ? l : '\u2022 ' + l)).join('\n');
 
 // Starter Planning / Implementation / Evaluation text for one NANDA-I entry.
 // Text the admin typed into the NANDA file's own planning / implementation /
@@ -182,8 +185,8 @@ export function buildStarterText(dx, catalog) {
   const nics = (dx.nicCodes || []).map(c => byCode(catalog.nic).get(normCode(c))).filter(Boolean);
 
   const planning = dx.planning || (nocs.length ? 'Expected outcomes:\n' + bullets(nocs.map(o => o.name)) : '');
-  const implementation = dx.implementation || (nics.length
-    ? nics.map(n => ((n.activities || []).length ? n.name + ':\n' + bullets(n.activities.slice(0, 6)) : '- ' + n.name)).join('\n\n')
+  const implementation = bulletize(dx.implementation) || (nics.length
+    ? nics.map(n => ((n.activities || []).length ? n.name + ':\n' + bullets(n.activities.slice(0, 6)) : '\u2022 ' + n.name)).join('\n\n')
     : '');
   const evaluation = dx.evaluation || (nocs.length
     ? 'Evaluate progress towards:\n' + bullets(nocs.map(o => o.name + ((o.indicators || []).length ? ' (' + o.indicators.slice(0, 4).join('; ') + ')' : '')))
