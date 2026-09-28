@@ -25,7 +25,7 @@ export default function NursingDiagnosisPicker({ onPick }) {
       const hay = (d.name + ' ' + d.code + ' ' + d.domain + ' ' + d.cls).toLowerCase();
       return words.every(w => hay.includes(w));
     };
-    return catalog.nanda.filter(hit).slice(0, 40);
+    return catalog.nanda.filter(hit);
   }, [catalog, q]);
 
   if (!catalog || !catalog.nanda.length) return null;
@@ -42,6 +42,7 @@ export default function NursingDiagnosisPicker({ onPick }) {
       {open && (
         <div className="nanda-results">
           {results.length === 0 && <div className="nanda-empty">No matching diagnosis.</div>}
+          {results.length > 0 && <div className="nanda-empty">Showing {results.length} of {catalog.nanda.length} diagnoses. Type to narrow the list.</div>}
           {results.map((d, i) => (
             <button type="button" key={(d.code || d.name) + i} className="nanda-result" onClick={() => pick(d)}>
               <span>{d.name}</span>
