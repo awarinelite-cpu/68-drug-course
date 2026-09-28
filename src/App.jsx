@@ -36,6 +36,7 @@ const Admin = lazy(() => import("./pages/Admin.jsx"));
 const AllPatients = lazy(() => import("./pages/AllPatients.jsx"));
 const AlarmSettings = lazy(() => import("./pages/AlarmSettings.jsx"));
 const WardBeds = lazy(() => import("./pages/WardBeds.jsx"));
+const NursingCatalog = lazy(() => import("./pages/NursingCatalog.jsx"));
 const AllUsers = lazy(() => import("./pages/AllUsers.jsx"));
 const Overview = lazy(() => import("./pages/Overview.jsx"));
 const Admission = lazy(() => import("./pages/Admission.jsx"));
@@ -126,6 +127,7 @@ export default function App() {
           <Route path="/admin/patients" element={<AuthedShell><AllPatients /></AuthedShell>} />
           <Route path="/admin/alarm-settings" element={<AuthedShell><AlarmSettings /></AuthedShell>} />
           <Route path="/admin/ward-beds" element={<AuthedShell><WardBeds /></AuthedShell>} />
+          <Route path="/admin/nursing-catalog" element={<AuthedShell><NursingCatalog /></AuthedShell>} />
           <Route path="/admin/users" element={<AuthedShell><AllUsers /></AuthedShell>} />
           <Route path="/charts/overview" element={<AuthedShell><Overview /></AuthedShell>} />
           <Route path="/charts/admission" element={<AuthedShell><Admission /></AuthedShell>} />

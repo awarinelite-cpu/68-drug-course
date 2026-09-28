@@ -18,6 +18,8 @@ import { applyPatientStatus, closeOutDischargedPatient, activeAdmissionTag, clea
 import Topbar from "../../components/Topbar.jsx";
 import { splitDiagnosisNote, withPatientDiagnosis } from "../../lib/diagnosisNote.js";
 import DiagnosisNoteEditor, { DiagnosisHeadline } from "../../components/DiagnosisNoteEditor.jsx";
+import NursingDiagnosisPicker from "../../components/NursingDiagnosisPicker.jsx";
+import { buildStarterText } from "../../lib/nursingCatalog.js";
 import wardSelectBg from "../../assets/ward-select-bg.svg";
 
 // Row-label overrides for MergedDemographicsTable only — Maternity's
@@ -595,6 +597,36 @@ function useWardReport(wardKey, isAdmin, profile, user) {
   function updatePatientField(id, key, value) { setWardDoc((d) => ({ ...d, patients: d.patients.map(p => p.id === id ? { ...p, [key]: value } : p) })); }
   function updatePatientStatus(id, value) { setWardDoc((d) => ({ ...d, patients: d.patients.map(p => p.id === id ? { ...p, status: value } : p) })); }
 
+  // A NANDA-I diagnosis was picked from the searchable list: fills the
+  // Nursing Diagnosis box plus Planning / Implementation / Evaluation with
+  // starter text (see buildStarterText). Empty boxes are always filled;
+  // boxes that already have text are only replaced if the nurse confirms,
+  // so nothing she typed is ever lost silently. Every box stays editable.
+  function applyNursingDiagnosis(id, dx, catalog) {
+    const p = wardDoc.patients.find((x) => x.id === id);
+    if (!p) return;
+    const starter = buildStarterText(dx, catalog);
+    const next = { npNursingDiagnosis: dx.name, npPlanning: starter.planning, npImplementation: starter.implementation, npEvaluation: starter.evaluation };
+    const labels = { npNursingDiagnosis: 'Nursing Diagnosis', npPlanning: 'Planning', npImplementation: 'Implementation', npEvaluation: 'Evaluation' };
+    const filled = Object.keys(next).filter((k) => (p[k] || '').trim() && next[k] && (p[k] || '').trim() !== next[k].trim());
+    let replace = false;
+    if (filled.length) {
+      replace = window.confirm('These boxes already have text: ' + filled.map((k) => labels[k]).join(', ') + '.\n\nOK = replace them with "' + dx.name + '" starter text.\nCancel = keep what is there and only fill the empty boxes.');
+    }
+    setWardDoc((d) => ({
+      ...d,
+      patients: d.patients.map((q) => {
+        if (q.id !== id) return q;
+        const out = { ...q };
+        Object.keys(next).forEach((k) => {
+          if (!next[k]) return;
+          if (!(q[k] || '').trim() || replace) out[k] = next[k];
+        });
+        return out;
+      })
+    }));
+  }
+
   // Diagnosis/Notes edits go through here instead of updatePatientField so
   // a trailing "VITAL SIGNS:" / "Vitals:" line (see VITALS_TRIGGER_RE) can
   // auto-pull that patient's latest Vitals Chart reading right underneath
@@ -972,7 +1004,7 @@ function useWardReport(wardKey, isAdmin, profile, user) {
     census, movementTotals, editable,
     updateWardDoc, updateShiftField, updateDuty, updateBeds, updateStartOcc,
     addPatient, removePatient, updatePatientField, updateDiagnosisField, updateVitalsSnapshotField,
-    updatePatientStatus, lookupPatientByEmr, selectPatientFromWard, refreshPlan,
+    updatePatientStatus, lookupPatientByEmr, selectPatientFromWard, refreshPlan, applyNursingDiagnosis,
     openNightUpdate, saveReport, submitReport, pillClass, pillText,
     touchedDemographicFieldsRef
   };
@@ -1113,7 +1145,7 @@ function WardPanelRest({ h, showLabel, isAdmin, navigate, includeShiftTable = tr
     census, movementTotals, emrLookup, wardPatientOptions,
     updateWardDoc, updateShiftField, updateDuty, updateBeds, updateStartOcc,
     addPatient, removePatient, updatePatientField, updateDiagnosisField, updateVitalsSnapshotField,
-    updatePatientStatus, lookupPatientByEmr, selectPatientFromWard, refreshPlan,
+    updatePatientStatus, lookupPatientByEmr, selectPatientFromWard, refreshPlan, applyNursingDiagnosis,
     nightUpdateOpen, openNightUpdate, saveReport, submitReport, pillClass, pillText
   } = h;
 
@@ -1237,6 +1269,7 @@ function WardPanelRest({ h, showLabel, isAdmin, navigate, includeShiftTable = tr
                       {PATIENT_FIELDS.map((f) => (
                         <div className="patient-field" key={f.key} style={f.type === 'textarea' ? { gridColumn: '1 / -1' } : undefined}>
                           <label>{f.label}:</label>
+                          {f.key === 'npNursingDiagnosis' && <NursingDiagnosisPicker onPick={(dx, cat) => applyNursingDiagnosis(p.id, dx, cat)} />}
                           {f.type === 'textarea'
                             ? (f.key === 'diagnosis'
                                 ? <DiagnosisNoteEditor value={p.diagnosis || ''} onChange={(v) => updateDiagnosisField(p.id, v)} />

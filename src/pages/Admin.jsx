@@ -304,6 +304,14 @@ export default function Admin() {
 
         <div className="card-box">
           <button className="btn btn-primary" style={{ width: '100%', fontSize: 16, fontWeight: 'bold', padding: '12px 16px' }}
+            onClick={() => navigate('/admin/nursing-catalog')}>
+            Nursing Catalog (NANDA-I / NIC / NOC) &rarr;
+          </button>
+          <p style={{ fontSize: 12, color: '#666', margin: '8px 0 0' }}>Upload the diagnosis, intervention and outcome lists as CSV; download the templates.</p>
+        </div>
+
+        <div className="card-box">
+          <button className="btn btn-primary" style={{ width: '100%', fontSize: 16, fontWeight: 'bold', padding: '12px 16px' }}
             onClick={() => navigate('/admin/alarm-settings')}>
             Drug-Due Alarm Settings &rarr;
           </button>
