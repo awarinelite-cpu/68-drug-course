@@ -1,6 +1,6 @@
 import { doc, runTransaction, serverTimestamp, collection, getDocs } from "firebase/firestore";
 import { db } from "../firebase.js";
-import { WARDS, reportDateId, defaultWardDoc, DEMOGRAPHIC_SEXES } from "./nurses-report-common.js";
+import { WARDS, reportDateId, defaultWardDoc, DEMOGRAPHIC_SEXES, ensureWardBedsLoaded } from "./nurses-report-common.js";
 import { reportWardKeysForPatientWard, patientWardAndBedTypeForReportKey } from "./wardNameMatch.js";
 import { wardHeadcount } from "./wardCensus.js";
 
@@ -82,6 +82,7 @@ export async function bumpShiftStat(wardKey, statKey, delta = 1, { dateId, shift
   // a brand-new day's doc, if we end up creating one below, seeds Occ from
   // the real patient census rather than 0. Only actually used if the doc
   // turns out not to exist yet once the transaction runs.
+  await ensureWardBedsLoaded(db);
   const seedHeadcount = await liveHeadcountForWardKey(wardKey);
   try {
     await runTransaction(db, async (tx) => {
@@ -195,6 +196,7 @@ export async function bumpDemographicStat(wardKey, category, affiliation, sex, d
   const useDateId = dateId || reportDateId();
   const fieldKey = category + '_' + affiliation + sex;
   const ref = doc(db, 'nurseReports', useDateId, 'wards', wardKey);
+  await ensureWardBedsLoaded(db);
   const seedHeadcount = await liveHeadcountForWardKey(wardKey);
   try {
     await runTransaction(db, async (tx) => {

@@ -21,6 +21,7 @@ const routeImporters = [
   () => import("../pages/AllPatients.jsx"),
   () => import("../pages/AllUsers.jsx"),
   () => import("../pages/AlarmSettings.jsx"),
+  () => import("../pages/WardBeds.jsx"),
   () => import("../pages/Overview.jsx"),
   () => import("../pages/Admission.jsx"),
   () => import("../pages/DrugCourseChart.jsx"),

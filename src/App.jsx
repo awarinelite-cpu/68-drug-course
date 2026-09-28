@@ -14,6 +14,8 @@ import { useForegroundAlerts } from "./hooks/useForegroundAlerts.js";
 import { useHardwareBackButton } from "./hooks/useHardwareBackButton.js";
 import { prefetchRoutes } from "./lib/prefetchRoutes.js";
 import { prefetchReportData } from "./lib/prefetchData.js";
+import { ensureWardBedsLoaded } from "./lib/nurses-report-common.js";
+import { db } from "./firebase.js";
 
 // Login stays eager: it's the first thing an unauthenticated user sees,
 // so there's no benefit to splitting it out and it avoids a loading
@@ -33,6 +35,7 @@ const SelectWard = lazy(() => import("./pages/SelectWard.jsx"));
 const Admin = lazy(() => import("./pages/Admin.jsx"));
 const AllPatients = lazy(() => import("./pages/AllPatients.jsx"));
 const AlarmSettings = lazy(() => import("./pages/AlarmSettings.jsx"));
+const WardBeds = lazy(() => import("./pages/WardBeds.jsx"));
 const AllUsers = lazy(() => import("./pages/AllUsers.jsx"));
 const Overview = lazy(() => import("./pages/Overview.jsx"));
 const Admission = lazy(() => import("./pages/Admission.jsx"));
@@ -85,7 +88,7 @@ function AuthedShell({ children }) {
 function DataPrefetch() {
   const { status, profile } = useAuth();
   useEffect(() => {
-    if (status === "ready") prefetchReportData(profile);
+    if (status === "ready") { prefetchReportData(profile); ensureWardBedsLoaded(db); }
   }, [status, profile]);
   return null;
 }
@@ -122,6 +125,7 @@ export default function App() {
           <Route path="/admin" element={<AuthedShell><Admin /></AuthedShell>} />
           <Route path="/admin/patients" element={<AuthedShell><AllPatients /></AuthedShell>} />
           <Route path="/admin/alarm-settings" element={<AuthedShell><AlarmSettings /></AuthedShell>} />
+          <Route path="/admin/ward-beds" element={<AuthedShell><WardBeds /></AuthedShell>} />
           <Route path="/admin/users" element={<AuthedShell><AllUsers /></AuthedShell>} />
           <Route path="/charts/overview" element={<AuthedShell><Overview /></AuthedShell>} />
           <Route path="/charts/admission" element={<AuthedShell><Admission /></AuthedShell>} />

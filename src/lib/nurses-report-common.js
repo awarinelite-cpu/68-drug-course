@@ -34,7 +34,7 @@ export const WARDS = [
 // reverted, and WARDS is mutated in place — every module that imports
 // WARDS shares this one array instance, so applying an override here
 // updates the label everywhere it's used without any extra plumbing.
-WARDS.forEach(w => { w.defaultLabel = w.label; });
+WARDS.forEach(w => { w.defaultLabel = w.label; w.defaultBeds = w.beds; });
 
 // The Ward Nurse role covers PAED BED and PAED COT together (one nurse,
 // `mergedTable: true` changes the Overall Nurse's "Ward Reports"
@@ -123,6 +123,51 @@ export async function saveWardNameOverride(db, wardKey, newLabel) {
   const valueToStore = trimmed && w && trimmed !== w.defaultLabel ? trimmed : null;
   await setDoc(doc(db, WARD_NAMES_COLLECTION, WARD_NAMES_DOC), { [wardKey]: valueToStore }, { merge: true });
   if (w) w.label = trimmed || w.defaultLabel;
+}
+
+// Admin-editable bed counts. WARDS[].beds is the capacity every new day's
+// ward report is seeded with (see defaultWardDoc) — an admin can change it
+// from Admin > Ward Bed Numbers. Overrides live in nurseReportConfig/wardBeds
+// as {wardKey: number}; a missing entry falls back to the built-in default.
+export const WARD_BEDS_DOC = 'wardBeds';
+
+export function applyWardBedOverrides(overrides) {
+  const map = overrides || {};
+  WARDS.forEach(w => {
+    const v = map[w.key];
+    w.beds = (typeof v === 'number' && isFinite(v) && v >= 0) ? v : w.defaultBeds;
+  });
+}
+
+export async function loadWardBedOverrides(db) {
+  try {
+    const snap = await getDoc(doc(db, WARD_NAMES_COLLECTION, WARD_BEDS_DOC));
+    applyWardBedOverrides(snap.exists() ? snap.data() : {});
+  } catch (e) {
+    // Non-fatal — keeps whatever bed counts are already applied.
+  }
+}
+
+// Loads the overrides once per page session (later calls reuse the same
+// promise) so code that seeds a new ward doc can cheaply await it first.
+let wardBedsLoadPromise = null;
+export function ensureWardBedsLoaded(db) {
+  if (!wardBedsLoadPromise) wardBedsLoadPromise = loadWardBedOverrides(db);
+  return wardBedsLoadPromise;
+}
+
+// Saves the full {wardKey: beds} map (admin only, per firestore.rules) and
+// applies it locally. A ward set back to its built-in default is stored as
+// null so the doc only carries real overrides.
+export async function saveWardBeds(db, bedsByKey) {
+  const payload = {};
+  WARDS.forEach(w => {
+    const n = bedsByKey[w.key];
+    payload[w.key] = (typeof n === 'number' && n !== w.defaultBeds) ? n : null;
+  });
+  await setDoc(doc(db, WARD_NAMES_COLLECTION, WARD_BEDS_DOC), payload, { merge: true });
+  applyWardBedOverrides(payload);
+  wardBedsLoadPromise = Promise.resolve();
 }
 
 // Numeric columns, in display order, matching the ward-level "24Hrs Ward

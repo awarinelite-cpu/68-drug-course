@@ -9,7 +9,7 @@ import {
   WARDS, SHIFT_STAT_FIELDS, SHIFTS, PATIENT_FIELDS, PATIENT_STATUS_OPTIONS,
   PATIENT_STATUS_ARCHIVE_REASON,
   DEMOGRAPHIC_FIELDS, DEMOGRAPHIC_CATEGORIES, DEMOGRAPHIC_AFFILIATIONS, movementColorClass,
-  reportDateId, occDelta, blankShift, defaultWardDoc, wardSelectorOptions,
+  reportDateId, occDelta, blankShift, defaultWardDoc, wardSelectorOptions, ensureWardBedsLoaded,
   isWardDocUntouched
 } from "../../lib/nurses-report-common.js";
 import { patientWardAndBedTypeForReportKey, wardSelectorKeyForPatientWard } from "../../lib/wardNameMatch.js";
@@ -439,6 +439,7 @@ function useWardReport(wardKey, isAdmin, profile, user) {
         if (!cancelled) setTopStatus({ text: "Couldn't load this ward's report: " + (e.code || e.message || 'unknown error'), error: true });
         return;
       }
+      await ensureWardBedsLoaded(db);
       let next = snap.exists() ? Object.assign(defaultWardDoc(w), snap.data()) : defaultWardDoc(w);
       next.shifts = next.shifts || {};
       SHIFTS.forEach(s => { next.shifts[s.key] = Object.assign(blankShift(), next.shifts[s.key] || {}); });

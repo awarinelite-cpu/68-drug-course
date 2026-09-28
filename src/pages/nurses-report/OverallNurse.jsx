@@ -12,7 +12,7 @@ import {
   DEMOGRAPHIC_FIELDS, DEMOGRAPHIC_CATEGORIES, DEMOGRAPHIC_AFFILIATIONS,
   reportDateId, reportPeriodLabel,
   wardReportPeriodLabel, weekId, occDelta, defaultWardDoc, movementColorClass,
-  loadWardNameOverrides, saveWardNameOverride,
+  loadWardNameOverrides, saveWardNameOverride, loadWardBedOverrides,
   loadHeaderLabelOverrides, saveHeaderLabelOverride, headerLabel, GROUP_LABEL_IDS,
   CUSTOM_TEXT_COLUMNS, loadCustomColumns, addCustomColumn, renameCustomColumn, removeCustomColumn,
   isWardDocUntouched
@@ -319,7 +319,7 @@ export default function OverallNurse() {
       // another cuts several sequential network round trips down to
       // whichever one is slowest.
       const [, usersSnap, wardsSnap] = await Promise.all([
-        Promise.all([loadWardNameOverrides(db), loadHeaderLabelOverrides(db), loadCustomColumns(db)]),
+        Promise.all([loadWardNameOverrides(db), loadWardBedOverrides(db), loadHeaderLabelOverrides(db), loadCustomColumns(db)]),
         getDocsSafe(collection(db, 'users')).catch(() => null),
         getDocsSafe(wardsCol).catch(() => null)
       ]);
