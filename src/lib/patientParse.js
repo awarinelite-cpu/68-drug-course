@@ -162,6 +162,64 @@ function titleCaseName(s) {
   )).join(' ');
 }
 
+
+// --- EMR page-menu words that get copied along with the patient's name -------
+// On the EMR patient page the name is drawn with the page's tab bar between
+// the given name and the surname ("Ojomona | View All  Vital Signs  Tx Plan
+// Prescription  Invest.  Lab  Others | Jiebrin"), so a whole-page copy glues the
+// menu labels into the middle of the name. These are never part of a name.
+const EMR_MENU_PHRASES = [
+  'View\\s+All', 'Vital\\s+Signs', 'Tx\\s+Plan', 'Prescriptions?', 'Investigations?',
+  'Invest\\.?', 'Lab(?:s|oratory)?', 'Others?', 'Encounters?', 'Radiology', 'Notes'
+];
+const EMR_MENU_RE = new RegExp('(?:^|[\\s|/])(?:' + EMR_MENU_PHRASES.join('|') + ')(?=$|[\\s|/])', 'gi');
+const NAME_STOP_WORD_RE = /^(?:male|female|age|sex|gender|ward|pid|emr|born|dob|hospital|bed|phone)$/i;
+
+// Removes menu words from an already-extracted name and tidies spacing.
+export function cleanEmrName(raw) {
+  if (!raw) return '';
+  return String(raw)
+    .replace(EMR_MENU_RE, ' ')
+    .replace(EMR_MENU_RE, ' ') // twice: adjacent matches share a separator
+    .replace(/[|]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+// Finds "<given name(s)> <menu bar> <surname>" in the pasted text and returns
+// just the name words either side of the menu bar ('' if there is no menu bar).
+function nameAroundMenuBar(norm) {
+  const barRe = /\bView\s+All\s+Vital\s+Signs\s+Tx\s+Plan\s+Prescription\s+Invest\.?\s+Lab\s+Others\b/i;
+  const bm = barRe.exec(norm);
+  if (!bm) return '';
+  // Text on the same line before/after the bar; if the bar sits on its own
+  // line (name pieces on the lines above/below it), use the nearest
+  // non-empty line instead.
+  const headText = norm.slice(0, bm.index);
+  const tailText = norm.slice(bm.index + bm[0].length);
+  const headLines = headText.split('\n');
+  let beforeLine = headLines[headLines.length - 1].trim();
+  if (!beforeLine) beforeLine = (headLines.slice(0, -1).reverse().find((l) => l.trim()) || '').trim();
+  const tailLines = tailText.split('\n');
+  let afterLine = tailLines[0].trim();
+  if (!afterLine) afterLine = (tailLines.slice(1).find((l) => l.trim()) || '').trim();
+  const bar = [null, beforeLine, afterLine];
+  const wordRe = /^[A-Za-z][A-Za-z'.-]*$/;
+  const before = bar[1].trim().split(/\s+/).filter(Boolean);
+  const givenWords = [];
+  for (let i = before.length - 1; i >= 0 && givenWords.length < 3; i--) {
+    if (!wordRe.test(before[i]) || NAME_STOP_WORD_RE.test(before[i])) break;
+    givenWords.unshift(before[i]);
+  }
+  const after = bar[2].trim().split(/\s+/).filter(Boolean);
+  const surnameWords = [];
+  for (let i = 0; i < after.length && surnameWords.length < 2; i++) {
+    if (!wordRe.test(after[i]) || NAME_STOP_WORD_RE.test(after[i])) break;
+    surnameWords.push(after[i]);
+  }
+  return cleanEmrName(givenWords.concat(surnameWords).join(' '));
+}
+
 export function parsePatientFields(text) {
   const norm = (text || '').replace(/\r\n/g, '\n');
   const out = { name: '', emr: '', diagnosis: '', ward: '', age: '', hospNo: '', admissionDate: '', allergies: '', insurance: '', gender: '' };
@@ -169,7 +227,9 @@ export function parsePatientFields(text) {
   // --- Name ----------------------------------------------------------------
   // 1) A name line immediately followed by a lone ID-number line — the
   //    pattern doctor's notes tend to open with ("Ernest Ukolio\n139680").
-  let m = norm.match(/^([A-Z][A-Za-z'.-]+(?:\s+[A-Z][A-Za-z'.-]+){1,3})\n(\d{4,8})\s*$/m);
+  // 0) Name split around the EMR page's menu bar (see nameAroundMenuBar).
+  out.name = nameAroundMenuBar(norm);
+  let m = out.name ? null : norm.match(/^([A-Z][A-Za-z'.-]+(?:\s+[A-Z][A-Za-z'.-]+){1,3})\n(\d{4,8})\s*$/m);
   if (m) { out.name = m[1].trim(); out.emr = m[2]; }
   // 2) Explicit "Name:" field on a structured assessment form.
   if (!out.name) out.name = grabLabel(norm, ['Name']);
@@ -189,6 +249,9 @@ export function parsePatientFields(text) {
       out.gender = hm[3][0].toUpperCase(); // 'Male'/'Female' -> 'M'/'F'
     }
   }
+
+  // Whichever pattern matched, never let page-menu words stay in the name.
+  out.name = cleanEmrName(out.name);
 
   // --- Gender ----------------------------------------------------------------
   // Falls back to an explicit "Gender:"/"Sex:" label when the header-line
