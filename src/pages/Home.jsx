@@ -10,6 +10,7 @@ import Topbar from "../components/Topbar.jsx";
 import PatientForm from "../components/PatientForm.jsx";
 import NewPatientTransfersModal from "../components/NewPatientTransfersModal.jsx";
 import { parsePatientFields } from "../lib/patientParse.js";
+import { takePendingEmrImport, stashEmrText } from "../lib/emrBridge.js";
 import { generateCsvTemplate, parsePatientCsv } from "../lib/patientCsv.js";
 import { wardHeadcount } from "../lib/wardCensus.js";
 import { reportWardKeysForPatientWard, patientWardAndBedTypeForReportKey } from "../lib/wardNameMatch.js";
@@ -181,6 +182,37 @@ export default function Home() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // One-click EMR import (see lib/emrBridge.js + public/emr-bookmarklet.html):
+  // text sent from the EMR tab lands here. A patient already in the system
+  // is opened instead of re-registered; a new one gets the Register form
+  // pre-filled for review. The raw text is stashed for the tab's lifetime so
+  // the Drug Course Chart's Bulk Upload can prefill the drug orders.
+  useEffect(() => {
+    async function consumeEmrImport() {
+      const text = takePendingEmrImport();
+      if (!text) return;
+      stashEmrText(text);
+      const fields = parsePatientFields(text);
+      let existing = null;
+      if (fields.emr) {
+        try { existing = await findPatientByEmrExact(fields.emr); } catch (e) { /* treat as new */ }
+      }
+      if (existing) {
+        navigate('/patient?patient=' + existing.id);
+        return;
+      }
+      setNewForm((f) => ({ ...f, ward: f.ward || (profile?.ward || '') }));
+      setShowNewForm(true);
+      setShowEmrPaste(true);
+      setEmrPasteText(text);
+      runEmrParse(text);
+    }
+    consumeEmrImport();
+    window.addEventListener('emr-import-pending', consumeEmrImport);
+    return () => window.removeEventListener('emr-import-pending', consumeEmrImport);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Ward-to-ward transfers, new admissions, etc. are written by other
   // devices, so a plain load-on-mount only shows what existed when this
   // page opened. Poll quietly in the background so an incoming transfer
@@ -280,10 +312,11 @@ export default function Home() {
   }
 
   // --- Paste from EMR (bulk fill on patient registration) -------------------
-  function parseEmrPaste() {
+  function parseEmrPaste() { runEmrParse(emrPasteText); }
+  function runEmrParse(text) {
     setEmrParseMsg('');
-    if (!emrPasteText.trim()) { setEmrParseMsg('Paste the patient\u2019s EMR text first.'); return; }
-    const fields = parsePatientFields(emrPasteText);
+    if (!text.trim()) { setEmrParseMsg('Paste the patient\u2019s EMR text first.'); return; }
+    const fields = parsePatientFields(text);
     // Ward is deliberately never taken from the paste, even though
     // parsePatientFields extracts one: a "Ward:" line in a hospital
     // EMR page reflects that outside system's own on-file ward (often

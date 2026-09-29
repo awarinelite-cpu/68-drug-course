@@ -20,6 +20,8 @@ import {
 import { ROSTER_TAG_FOR_REASON, clearAllocationsForPatient, EXIT_STAT_KEY, EXIT_DEMOGRAPHIC_CATEGORY } from "../lib/patientAdmissionStatus.js";
 import { bumpShiftStatForPatientWard, bumpDemographicStatForPatientWard } from "../lib/shiftStatsSync.js";
 import { classifyAffiliation } from "../lib/patientAffiliation.js";
+import { parsePatientFields, extractDrugSection } from "../lib/patientParse.js";
+import { readEmrStash } from "../lib/emrBridge.js";
 import { useTimeFormat, formatTime, formatDateTime } from "../lib/time-format.js";
 
 const FIELD_IDS = ['f_admission', 'f_discharge', 'f_diagnosis'];
@@ -215,6 +217,7 @@ export default function DrugCourseChart() {
   const [bulkStep, setBulkStep] = useState(1);
   const [bulkText, setBulkText] = useState('');
   const [bulkParseMsg, setBulkParseMsg] = useState('');
+  const [bulkPrefillNote, setBulkPrefillNote] = useState('');
   const [bulkParsed, setBulkParsed] = useState([]);
 
   const [freqModalOpen, setFreqModalOpen] = useState(false);
@@ -893,7 +896,24 @@ export default function DrugCourseChart() {
   }
 
   // --- Bulk upload ------------------------------------------------------
-  function openBulkModal() { setBulkText(''); setBulkParseMsg(''); setBulkParsed([]); setBulkStep(1); setBulkModalOpen(true); }
+  function openBulkModal() {
+    // If the nurse just sent this patient's EMR page over with the
+    // one-click bookmarklet, prefill the box with the drug orders found in it
+    // (still shown for review in step 2 before anything is added).
+    let pre = '';
+    let note = '';
+    const stash = readEmrStash();
+    if (stash && patient?.emr) {
+      const emrKey = String(patient.emr).trim().toLowerCase();
+      const sameEmr = String(parsePatientFields(stash.text).emr || '').trim().toLowerCase() === emrKey
+        || stash.text.toLowerCase().includes(emrKey);
+      if (sameEmr) {
+        pre = extractDrugSection(stash.text);
+        note = pre ? 'Drug orders filled in from the EMR page you sent. Check them before importing.' : 'No drug orders were found in the EMR page you sent.';
+      }
+    }
+    setBulkText(pre); setBulkPrefillNote(note); setBulkParseMsg(''); setBulkParsed([]); setBulkStep(1); setBulkModalOpen(true);
+  }
   function closeBulkModal() { setBulkModalOpen(false); }
   function parseBulk() {
     const parsed = parseBulkText(bulkText);
@@ -1590,6 +1610,7 @@ export default function DrugCourseChart() {
                   <textarea rows={10} style={{ width: '100%', fontFamily: 'inherit', fontSize: 13, boxSizing: 'border-box', padding: 8 }}
                     placeholder={"Tabs Omeprazole 20mg bd x2/52\nIV Ceftriaxone 1g 12hrly\nTab Doxycycline 100mg bd"}
                     value={bulkText} onChange={(e) => setBulkText(e.target.value)} />
+                  {bulkPrefillNote && <div style={{ fontSize: 12, color: '#555', marginTop: 6 }}>{bulkPrefillNote}</div>}
                   {bulkParseMsg && <div style={{ fontSize: 12, color: '#dc2626', marginTop: 6 }}>{bulkParseMsg}</div>}
                 </div>
               ) : (

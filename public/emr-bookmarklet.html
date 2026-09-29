@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Send EMR page to Drug Course Chart</title>
+<style>
+  body{font-family:system-ui,sans-serif;max-width:560px;margin:24px auto;padding:0 16px;line-height:1.5;color:#1f2937}
+  .btn{display:inline-block;padding:12px 18px;background:#0f766e;color:#fff;border-radius:8px;text-decoration:none;font-weight:600;cursor:grab}
+  code{background:#f3f4f6;padding:2px 5px;border-radius:4px}
+  .note{background:#fef9c3;border:1px solid #fde68a;border-radius:8px;padding:10px;font-size:14px}
+</style>
+</head>
+<body>
+<h2>Send EMR page to the app</h2>
+<p><strong>1.</strong> Show your browser's bookmarks bar, then drag this button onto it:</p>
+<p><a id="bm" class="btn" href="#">Send to Drug Chart</a></p>
+<p><strong>2.</strong> Open a patient in the hospital EMR (the page with the header and notes).</p>
+<p><strong>3.</strong> Click the bookmark. The app opens with the patient's details filled in (or opens the patient if already registered). Then in the drug chart, <em>Bulk Upload Drugs</em> is prefilled with the orders. Always review before saving.</p>
+<div class="note">
+  <p>If nothing happens: allow pop-ups for the EMR site. If the page still can't be read, the EMR may show its content inside a frame from another address. Tell the developer.</p>
+  <p>The text goes directly from the EMR tab to this app in your browser. It is not sent to any other server.</p>
+</div>
+<p>You can copy the code manually if dragging isn't possible:</p>
+<textarea id="code" rows="6" style="width:100%;font-size:12px" readonly></textarea>
+<script>
+(function(){
+  var APP = location.origin;
+  var code = "(function(){var APP='" + APP + "';" +
+    "function grab(w){var t='';try{t=(w.document.body&&w.document.body.innerText)||''}catch(e){}" +
+    "for(var i=0;i<w.frames.length;i++){try{t+='\\n'+grab(w.frames[i])}catch(e){}}return t}" +
+    "var text=grab(window);" +
+    "if(!text.trim()){alert('No text found on this page.');return}" +
+    "var win=window.open(APP+'/?emrimport=1','eliteEmrApp');" +
+    "if(!win){alert('Please allow pop-ups for this site, then click again.');return}" +
+    "var n=0,iv=setInterval(function(){try{win.postMessage({type:'emr-import-text',text:text},APP)}catch(e){}" +
+    "if(++n>120)clearInterval(iv)},500);" +
+    "window.addEventListener('message',function(e){if(e.origin===APP&&e.data&&e.data.type==='emr-import-ack'){clearInterval(iv)}})})();";
+  var href = "javascript:" + encodeURIComponent(code);
+  document.getElementById('bm').setAttribute('href', href);
+  document.getElementById('code').value = "javascript:" + code;
+})();
+</script>
+</body>
+</html>
