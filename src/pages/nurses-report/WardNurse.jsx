@@ -37,8 +37,6 @@ const TRANSFER_PAIR = [byKey('transferIn'), byKey('transferOut')];
 const EXT_PAIR = [byKey('ext'), byKey('extOut')];
 const ORDERED_MOVEMENT = [...SOLO_BEFORE, ...TRANSFER_PAIR, ...EXT_PAIR, ...SOLO_AFTER];
 
-const dateId = reportDateId();
-
 function prevDateId(id) {
   const [y, m, d] = id.split('-').map(Number);
   const dt = new Date(Date.UTC(y, m - 1, d - 1));
@@ -349,6 +347,22 @@ function DemographicsTable({ wardDoc, editable, onField, onRemarks }) {
 // Patients, Save/Submit) still saves to that ward's own Firestore doc
 // completely independently, same as before this split existed.
 function useWardReport(wardKey, isAdmin, profile, user) {
+  // The report day rolls over at 9 AM (see reportDateId). This used to be a
+  // module-level constant, computed once when the page's JS loaded — so a
+  // tab or installed app opened the evening before (or before 9 AM) kept
+  // saving and submitting to the PREVIOUS day's report after the rollover,
+  // while the Overall Nurse page (which recomputes the date) was reading
+  // today's, and the submitted ward report never showed up there. It is now
+  // state that follows the clock, so everything below (load, save, submit)
+  // always targets the current report day.
+  const [dateId, setDateId] = useState(() => reportDateId());
+  useEffect(() => {
+    const sync = () => setDateId((cur) => { const now = reportDateId(); return now === cur ? cur : now; });
+    const timer = setInterval(sync, 30 * 1000);
+    document.addEventListener('visibilitychange', sync);
+    window.addEventListener('focus', sync);
+    return () => { clearInterval(timer); document.removeEventListener('visibilitychange', sync); window.removeEventListener('focus', sync); };
+  }, []);
   const [wardDoc, setWardDoc] = useState(null);
   const [adminEditOverride, setAdminEditOverride] = useState(false);
   const [nightUpdateOpen, setNightUpdateOpen] = useState(false);
@@ -526,7 +540,7 @@ function useWardReport(wardKey, isAdmin, profile, user) {
     })();
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [wardKey]);
+  }, [wardKey, dateId]);
 
   function updateWardDoc(patch) { setWardDoc((d) => ({ ...d, ...patch })); }
   function updateShiftField(shiftKey, fieldKey, raw) {
