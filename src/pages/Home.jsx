@@ -365,7 +365,8 @@ export default function Home() {
       admissionDate: fields.admissionDate || f.admissionDate,
       allergies: fields.allergies || f.allergies,
       insurance: fields.insurance || f.insurance,
-      gender: fields.gender || f.gender
+      gender: fields.gender || f.gender,
+      armyNumber: fields.armyNumber || f.armyNumber
     }));
     const { ward: _unusedWard, ...countedFields } = fields;
     const foundCount = Object.values(countedFields).filter(Boolean).length;

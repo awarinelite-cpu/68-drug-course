@@ -1,3 +1,5 @@
+import { looksLikeArmyNumber } from './patientAffiliation.js';
+
 // Parses a raw block of text copied straight off a hospital EMR page (patient
 // header + doctor's/physio notes) into the fields on the "Register New
 // Patient" form, plus pulls out every "Currently on:" / "Prescription"
@@ -139,6 +141,25 @@ export function extractLatestDiagnosis(text) {
 // these labels are present. Values are read independently so a paste
 // missing the HMO/NHIS-No lines (or using only one of them) still yields
 // whatever was actually found instead of failing closed.
+// Army Number — filled whenever the page carries one. Two places it shows up:
+//  1) an explicit "Army No" / "Service No" / "Force No" style line, and
+//  2) the NHIS No. of the DHML military scheme, which *is* the army number
+//     (same 06NA/59/5240 or N/764521 shape — see patientAffiliation.js).
+// A value is only accepted if it has one of the confirmed army-number shapes,
+// so a civilian NHIS number or a stray label never lands in the field.
+export function extractArmyNumber(text) {
+  const norm = (text || '').replace(/\r\n/g, '\n');
+  const candidates = [
+    grabLabel(norm, ['Army\\s*(?:No|Number)\\.?', 'Service\\s*(?:No|Number)\\.?', 'Svc\\s*No\\.?', 'Force\\s*(?:No|Number)\\.?', 'Personal\\s*(?:No|Number)\\.?']),
+    grabLabel(norm, ['NHIS\\s*NO\\.?'])
+  ];
+  for (const raw of candidates) {
+    const v = (raw || '').replace(/\s+/g, '').toUpperCase();
+    if (v && looksLikeArmyNumber(v)) return v;
+  }
+  return '';
+}
+
 export function extractInsurance(text) {
   const norm = (text || '').replace(/\r\n/g, '\n');
   const regType = grabLabel(norm, ['REG\\.?\\s*TYPE']);
@@ -222,7 +243,7 @@ function nameAroundMenuBar(norm) {
 
 export function parsePatientFields(text) {
   const norm = (text || '').replace(/\r\n/g, '\n');
-  const out = { name: '', emr: '', diagnosis: '', ward: '', age: '', hospNo: '', admissionDate: '', allergies: '', insurance: '', gender: '' };
+  const out = { name: '', emr: '', diagnosis: '', ward: '', age: '', hospNo: '', admissionDate: '', allergies: '', insurance: '', gender: '', armyNumber: '' };
 
   // --- Name ----------------------------------------------------------------
   // 1) A name line immediately followed by a lone ID-number line — the
@@ -300,6 +321,7 @@ export function parsePatientFields(text) {
 
   // --- Insurance / NHIS ------------------------------------------------------
   out.insurance = extractInsurance(norm);
+  out.armyNumber = extractArmyNumber(norm);
 
   // --- Date of Admission -----------------------------------------------------
   const admLabel = grabLabel(norm, ['Date of Admission']);
