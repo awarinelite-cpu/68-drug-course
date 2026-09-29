@@ -894,11 +894,11 @@ export default function Home() {
                     {g.patients.length === 0 && <div style={{ fontSize: 12, color: '#888' }}>No patients yet.</div>}
                     {g.patients.map(p => (
                       <div key={p.id} className="search-result-item" onClick={() => openPatient(p)}>
-                        <span className="patient-row-main"><PatientAvatar patient={p} /><span className="patient-row-text"><b>{p.name || 'Unnamed'}</b>{'. '}EMR: {p.emr || 'N/A'}<AdmissionTagBadge patient={p} /><PendingDischargeBadge patient={p} busy={readmitBusyId === p.id} message={readmitMsgs[p.id]} onReadmit={handleReadmit} /></span></span>
+                        <span className="patient-row-main"><PatientAvatar patient={p} /><span className="patient-row-text"><b>{p.name || 'Unnamed'}</b>{'. '}EMR: {p.emr || 'N/A'}<AdmissionTagBadge patient={p} /><PendingDischargeBadge patient={p} busy={readmitBusyId === p.id} message={readmitMsgs[p.id]} onReadmit={handleReadmit} />
                         <span className="patient-diagnosis-col">
                           <span>{p.diagnosis || ''}</span>
                           <BedTag patient={p} />
-                        </span>
+                        </span></span></span>
                       </div>
                     ))}
                   </div>
@@ -910,11 +910,11 @@ export default function Home() {
                     </div>
                     {pedGroups.unassigned.map(p => (
                       <div key={p.id} className="search-result-item" onClick={() => openPatient(p)}>
-                        <span className="patient-row-main"><PatientAvatar patient={p} /><span className="patient-row-text"><b>{p.name || 'Unnamed'}</b>{'. '}EMR: {p.emr || 'N/A'}<AdmissionTagBadge patient={p} /><PendingDischargeBadge patient={p} busy={readmitBusyId === p.id} message={readmitMsgs[p.id]} onReadmit={handleReadmit} /></span></span>
+                        <span className="patient-row-main"><PatientAvatar patient={p} /><span className="patient-row-text"><b>{p.name || 'Unnamed'}</b>{'. '}EMR: {p.emr || 'N/A'}<AdmissionTagBadge patient={p} /><PendingDischargeBadge patient={p} busy={readmitBusyId === p.id} message={readmitMsgs[p.id]} onReadmit={handleReadmit} />
                         <span className="patient-diagnosis-col">
                           <span>{p.diagnosis || ''}</span>
                           <BedTag patient={p} />
-                        </span>
+                        </span></span></span>
                       </div>
                     ))}
                   </div>
@@ -923,11 +923,11 @@ export default function Home() {
             )}
             {patientsLoaded && visiblePatients.length > 0 && !pedGroups && visiblePatients.map(p => (
               <div key={p.id} className="search-result-item" onClick={() => openPatient(p)}>
-                <span className="patient-row-main"><PatientAvatar patient={p} /><span className="patient-row-text"><b>{p.name || 'Unnamed'}</b>{'. '}EMR: {p.emr || 'N/A'}{q && p.ward ? '. Ward: ' + p.ward : ''}<AdmissionTagBadge patient={p} /><PendingDischargeBadge patient={p} busy={readmitBusyId === p.id} message={readmitMsgs[p.id]} onReadmit={handleReadmit} /></span></span>
+                <span className="patient-row-main"><PatientAvatar patient={p} /><span className="patient-row-text"><b>{p.name || 'Unnamed'}</b>{'. '}EMR: {p.emr || 'N/A'}{q && p.ward ? '. Ward: ' + p.ward : ''}<AdmissionTagBadge patient={p} /><PendingDischargeBadge patient={p} busy={readmitBusyId === p.id} message={readmitMsgs[p.id]} onReadmit={handleReadmit} />
                 <span className="patient-diagnosis-col">
                   <span>{p.diagnosis || ''}</span>
                   <BedTag patient={p} />
-                </span>
+                </span></span></span>
               </div>
             ))}
           </div>
