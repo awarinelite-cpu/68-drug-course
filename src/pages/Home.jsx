@@ -5,7 +5,7 @@ import { db } from "../firebase.js";
 import { useAuth } from "../contexts/AuthContext.jsx";
 import { useExitOnDoubleBack } from "../hooks/useExitOnDoubleBack.js";
 import { useOverallNurseThisWeek } from "../hooks/useOverallNurseThisWeek.js";
-import { avatarMarkup } from "../lib/avatar.js";
+import { avatarMarkup, avatarSVG } from "../lib/avatar.js";
 import Topbar from "../components/Topbar.jsx";
 import PatientForm from "../components/PatientForm.jsx";
 import NewPatientTransfersModal from "../components/NewPatientTransfersModal.jsx";
@@ -79,6 +79,16 @@ function PendingDischargeBadge({ patient, busy, message, onReadmit }) {
 // transfer has no equivalent follow-up action to wait for, so requiring
 // one before it can go away would just leave it blinking for no reason.
 const ADMISSION_TAG_BADGE_CLASS = { AE_TRANSFER: 'badge-active', WARD_TRANSFER: 'badge-active', NEW_PATIENT: 'badge-active', TRANSFER_REJECTED: 'badge-transferred', READMITTED: 'badge-active' };
+// Round avatar on each ward-list patient card: the male / female icon from the
+// registered gender (M / F), or the patient's first initial when none is on file.
+function PatientAvatar({ patient }) {
+  const g = String((patient && patient.gender) || '').trim().toUpperCase();
+  const svg = g === 'M' || g === 'MALE' ? avatarSVG('male', 44) : g === 'F' || g === 'FEMALE' ? avatarSVG('female', 44) : null;
+  if (svg) return <span className="patient-avatar" aria-hidden="true" dangerouslySetInnerHTML={{ __html: svg }} />;
+  const initial = String((patient && patient.name) || '?').trim().charAt(0).toUpperCase() || '?';
+  return <span className="patient-avatar patient-avatar--initial" aria-hidden="true">{initial}</span>;
+}
+
 function AdmissionTagBadge({ patient }) {
   const tag = activeAdmissionTag(patient);
   if (!tag) return null;
@@ -884,7 +894,7 @@ export default function Home() {
                     {g.patients.length === 0 && <div style={{ fontSize: 12, color: '#888' }}>No patients yet.</div>}
                     {g.patients.map(p => (
                       <div key={p.id} className="search-result-item" onClick={() => openPatient(p)}>
-                        <span><b>{p.name || 'Unnamed'}</b>{'. '}EMR: {p.emr || 'N/A'}<AdmissionTagBadge patient={p} /><PendingDischargeBadge patient={p} busy={readmitBusyId === p.id} message={readmitMsgs[p.id]} onReadmit={handleReadmit} /></span>
+                        <span className="patient-row-main"><PatientAvatar patient={p} /><span className="patient-row-text"><b>{p.name || 'Unnamed'}</b>{'. '}EMR: {p.emr || 'N/A'}<AdmissionTagBadge patient={p} /><PendingDischargeBadge patient={p} busy={readmitBusyId === p.id} message={readmitMsgs[p.id]} onReadmit={handleReadmit} /></span></span>
                         <span className="patient-diagnosis-col">
                           <span>{p.diagnosis || ''}</span>
                           <BedTag patient={p} />
@@ -900,7 +910,7 @@ export default function Home() {
                     </div>
                     {pedGroups.unassigned.map(p => (
                       <div key={p.id} className="search-result-item" onClick={() => openPatient(p)}>
-                        <span><b>{p.name || 'Unnamed'}</b>{'. '}EMR: {p.emr || 'N/A'}<AdmissionTagBadge patient={p} /><PendingDischargeBadge patient={p} busy={readmitBusyId === p.id} message={readmitMsgs[p.id]} onReadmit={handleReadmit} /></span>
+                        <span className="patient-row-main"><PatientAvatar patient={p} /><span className="patient-row-text"><b>{p.name || 'Unnamed'}</b>{'. '}EMR: {p.emr || 'N/A'}<AdmissionTagBadge patient={p} /><PendingDischargeBadge patient={p} busy={readmitBusyId === p.id} message={readmitMsgs[p.id]} onReadmit={handleReadmit} /></span></span>
                         <span className="patient-diagnosis-col">
                           <span>{p.diagnosis || ''}</span>
                           <BedTag patient={p} />
@@ -913,7 +923,7 @@ export default function Home() {
             )}
             {patientsLoaded && visiblePatients.length > 0 && !pedGroups && visiblePatients.map(p => (
               <div key={p.id} className="search-result-item" onClick={() => openPatient(p)}>
-                <span><b>{p.name || 'Unnamed'}</b>{'. '}EMR: {p.emr || 'N/A'}{q && p.ward ? '. Ward: ' + p.ward : ''}<AdmissionTagBadge patient={p} /><PendingDischargeBadge patient={p} busy={readmitBusyId === p.id} message={readmitMsgs[p.id]} onReadmit={handleReadmit} /></span>
+                <span className="patient-row-main"><PatientAvatar patient={p} /><span className="patient-row-text"><b>{p.name || 'Unnamed'}</b>{'. '}EMR: {p.emr || 'N/A'}{q && p.ward ? '. Ward: ' + p.ward : ''}<AdmissionTagBadge patient={p} /><PendingDischargeBadge patient={p} busy={readmitBusyId === p.id} message={readmitMsgs[p.id]} onReadmit={handleReadmit} /></span></span>
                 <span className="patient-diagnosis-col">
                   <span>{p.diagnosis || ''}</span>
                   <BedTag patient={p} />
