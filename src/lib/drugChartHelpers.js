@@ -704,8 +704,36 @@ const STATUS_ANNOTATION_MAP = {
 // frequency word should be split out.
 const ALT_RE = /\balt(?:ernating)?\b/i;
 
+// Doctors' notes often write the course length as "bd * 3/7" (asterisk as the
+// "times" sign) instead of "bd x3/7", and a stray trailing backslash from a
+// typo ("...bd * 5/7\\") is common in pasted EMR text. Rewrite both to the
+// "x" form the rest of the parser already understands. Only an asterisk
+// with a space before it and a digit after it is touched.
+export function normalizeDrugLineSymbols(line) {
+  return String(line || '')
+    .replace(/[\\]+\s*$/, '')
+    .replace(/\s+\*\s*(?=\d)/g, ' x');
+}
+
+// Shorthand a doctor types for the drug itself, written out in full so the
+// chart shows a proper drug name. Only the first word of the name is
+// matched, and only exact abbreviations.
+const DRUG_NAME_ABBREVIATIONS = {
+  act: 'Artemether/Lumefantrine',
+  pcm: 'Paracetamol'
+};
+function normalizeDrugName(name) {
+  const t = String(name || '').trim();
+  if (!t) return t;
+  const parts = t.split(/\s+/);
+  const full = DRUG_NAME_ABBREVIATIONS[parts[0].toLowerCase().replace(/[.,]$/, '')];
+  if (full) parts[0] = full;
+  else if (/^[a-z]/.test(parts[0])) parts[0] = parts[0][0].toUpperCase() + parts[0].slice(1);
+  return parts.join(' ');
+}
+
 export function parseDrugLine(line) {
-  const raw = line.trim();
+  const raw = normalizeDrugLineSymbols(line).trim();
   if (!raw) return null;
   if (NON_DRUG_LINE_RE.test(raw)) return null;
   let tokens = raw.split(/\s+/);
@@ -926,7 +954,7 @@ export function parseDrugLine(line) {
 
   duration = autoDurationForFrequency(frequency) || duration;
 
-  const fullName = (name + (dosage ? ' ' + dosage : '') + (mealTime ? ' ' + mealTime : '') + (additive ? ' ' + additive : '')).trim();
+  const fullName = (normalizeDrugName(name) + (dosage ? ' ' + dosage : '') + (mealTime ? ' ' + mealTime : '') + (additive ? ' ' + additive : '')).trim();
   return { name: fullName, route, frequency, action, duration, createdAt: new Date().toISOString() };
 }
 
@@ -1254,7 +1282,7 @@ export function parseBulkText(text) {
   const rows = [];
   text.split('\n').forEach(rawLine => {
     // Word / phone keyboards turn "x" into a real multiplication sign.
-    const line = rawLine.replace(/[\u00D7\u2715\u2716]/g, 'x').replace(BULLET_PREFIX_RE, '').trim();
+    const line = normalizeDrugLineSymbols(rawLine.replace(/[\u00D7\u2715\u2716]/g, 'x')).replace(BULLET_PREFIX_RE, '').trim();
     if (!line) return;
     if (isHeaderLine(line)) return;
 
