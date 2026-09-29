@@ -162,6 +162,7 @@ export default function Home() {
   const [showEmrPaste, setShowEmrPaste] = useState(false);
   const [emrPasteText, setEmrPasteText] = useState('');
   const [emrParseMsg, setEmrParseMsg] = useState('');
+  const [clipMsg, setClipMsg] = useState('');
 
   const [showTransfers, setShowTransfers] = useState(false);
 
@@ -182,30 +183,53 @@ export default function Home() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Shared by the bookmarklet import and the "from clipboard" buttons: a
+  // patient already in the system is opened instead of re-registered; a new
+  // one gets the Register form pre-filled for review. The raw text is stashed
+  // for the tab's lifetime so the Drug Course Chart's Bulk Upload can prefill
+  // the drug orders.
+  async function processEmrText(text) {
+    stashEmrText(text);
+    const fields = parsePatientFields(text);
+    let existing = null;
+    if (fields.emr) {
+      try { existing = await findPatientByEmrExact(fields.emr); } catch (e) { /* treat as new */ }
+    }
+    if (existing) {
+      navigate('/patient?patient=' + existing.id);
+      return;
+    }
+    setNewForm((f) => ({ ...f, ward: f.ward || (profile?.ward || '') }));
+    setShowNewForm(true);
+    setShowEmrPaste(true);
+    setEmrPasteText(text);
+    runEmrParse(text);
+  }
+
+  // One tap: read what the nurse just copied from the EMR page and run it
+  // through the same import as the bookmarklet.
+  async function newFromClipboard() {
+    setClipMsg('');
+    let text = '';
+    try {
+      text = await navigator.clipboard.readText();
+    } catch (e) {
+      setClipMsg('Could not read the clipboard. Allow clipboard access when asked, or use + New Patient \u2192 Paste from EMR and paste manually.');
+      return;
+    }
+    if (!text || !text.trim()) { setClipMsg('Clipboard is empty. Copy the patient\u2019s EMR page first.'); return; }
+    processEmrText(text);
+  }
+
   // One-click EMR import (see lib/emrBridge.js + public/emr-bookmarklet.html):
   // text sent from the EMR tab lands here. A patient already in the system
   // is opened instead of re-registered; a new one gets the Register form
   // pre-filled for review. The raw text is stashed for the tab's lifetime so
   // the Drug Course Chart's Bulk Upload can prefill the drug orders.
   useEffect(() => {
-    async function consumeEmrImport() {
+    function consumeEmrImport() {
       const text = takePendingEmrImport();
-      if (!text) return;
-      stashEmrText(text);
-      const fields = parsePatientFields(text);
-      let existing = null;
-      if (fields.emr) {
-        try { existing = await findPatientByEmrExact(fields.emr); } catch (e) { /* treat as new */ }
-      }
-      if (existing) {
-        navigate('/patient?patient=' + existing.id);
-        return;
-      }
-      setNewForm((f) => ({ ...f, ward: f.ward || (profile?.ward || '') }));
-      setShowNewForm(true);
-      setShowEmrPaste(true);
-      setEmrPasteText(text);
-      runEmrParse(text);
+      if (text) processEmrText(text);
     }
     consumeEmrImport();
     window.addEventListener('emr-import-pending', consumeEmrImport);
@@ -775,10 +799,12 @@ export default function Home() {
           </div>
           <div className="search-row search-row-actions">
             <button className="btn btn-success" onClick={() => { setNewForm((f) => ({ ...f, ward: f.ward || myWard })); setShowNewForm(true); }}>+ New Patient</button>
+            <button className="btn btn-secondary" onClick={newFromClipboard}>📋 From Clipboard</button>
             {profile?.role === 'admin' && (
               <button className="btn btn-secondary" onClick={() => setShowBulkUpload(true)}>📁 Bulk Upload</button>
             )}
           </div>
+          {clipMsg && <div className="error-msg">{clipMsg}</div>}
         </div>
 
         {showBulkUpload && profile?.role === 'admin' && (
@@ -859,6 +885,7 @@ export default function Home() {
           <div className="card-box">
             <h3 style={{ marginTop: 0 }}>Register New Patient</h3>
 
+            <button className="btn btn-primary" style={{ marginBottom: 10, marginRight: 8 }} onClick={newFromClipboard}>📋 Paste from clipboard</button>
             <button className="btn btn-secondary" style={{ marginBottom: 10 }} onClick={() => setShowEmrPaste((v) => !v)}>
               {showEmrPaste ? 'Hide Paste from EMR' : '📋 Paste from EMR'}
             </button>

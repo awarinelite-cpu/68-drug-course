@@ -915,6 +915,21 @@ export default function DrugCourseChart() {
     setBulkText(pre); setBulkPrefillNote(note); setBulkParseMsg(''); setBulkParsed([]); setBulkStep(1); setBulkModalOpen(true);
   }
   function closeBulkModal() { setBulkModalOpen(false); }
+  // One tap: take whatever was just copied from the EMR (whole page or just
+  // the drug lines). If it contains drug orders, keep only those; otherwise
+  // use the text as-is. Still shown for review in step 2.
+  async function pasteBulkFromClipboard() {
+    let text = '';
+    try { text = await navigator.clipboard.readText(); } catch (e) {
+      setBulkParseMsg('Could not read the clipboard. Allow clipboard access, or long-press the box and tap Paste.');
+      return;
+    }
+    if (!text.trim()) { setBulkParseMsg('Clipboard is empty. Copy the drug orders from the EMR first.'); return; }
+    const drugs = extractDrugSection(text);
+    setBulkText(drugs || text);
+    setBulkPrefillNote(drugs ? 'Drug orders taken from the pasted EMR text. Check them before importing.' : 'Pasted as-is. Check the lines before importing.');
+    setBulkParseMsg('');
+  }
   function parseBulk() {
     const parsed = parseBulkText(bulkText);
     if (!parsed.length) { setBulkParseMsg('Paste at least one drug line first.'); return; }
@@ -1607,6 +1622,7 @@ export default function DrugCourseChart() {
             <div className="modal-body">
               {bulkStep === 1 ? (
                 <div>
+                  <button className="btn btn-primary" style={{ marginBottom: 8 }} onClick={pasteBulkFromClipboard}>📋 Paste from clipboard</button>
                   <textarea rows={10} style={{ width: '100%', fontFamily: 'inherit', fontSize: 13, boxSizing: 'border-box', padding: 8 }}
                     placeholder={"Tabs Omeprazole 20mg bd x2/52\nIV Ceftriaxone 1g 12hrly\nTab Doxycycline 100mg bd"}
                     value={bulkText} onChange={(e) => setBulkText(e.target.value)} />
