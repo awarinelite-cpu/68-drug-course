@@ -1298,7 +1298,7 @@ function WardPanelRest({ h, showLabel, isAdmin, navigate, includeShiftTable = tr
 
           {paroleView && (paroleHasAny(paroleView.parole) || paroleHasAny(paroleView.dParole)) && (
             <div className="card-box ward-nurse-box">
-              <h2>Parole / D/Parole</h2>
+              <h2>{paroleHasAny(paroleView.parole) && paroleHasAny(paroleView.dParole) ? 'Parole / D/Parole' : paroleHasAny(paroleView.parole) ? 'Parole' : 'D/Parole'}</h2>
               <ParoleTables paroleList={paroleView.parole} dParoleList={paroleView.dParole} />
             </div>
           )}
