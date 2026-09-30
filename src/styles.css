@@ -1087,6 +1087,13 @@ td.stat-occ, td.stat-occ input { color: #0284c7; font-weight: 800; }
 td.stat-vac, td.stat-vac input { color: #dc2626; font-weight: 800; }
 .patient-card { border: 1px solid var(--border); border-radius: 10px; padding: 14px; margin-top: 12px; position: relative; }
 .patient-card .remove-btn { position: absolute; top: 10px; right: 10px; background: var(--danger-bg); color: var(--danger-text); border: none; border-radius: 6px; padding: 4px 9px; font-size: 16px; font-weight: bold; cursor: pointer; }
+.patient-card.collapsed { padding: 0; }
+.patient-card-header { display: flex; align-items: center; gap: 8px; width: 100%; background: transparent; border: none; padding: 14px; text-align: left; font: inherit; font-weight: 700; color: inherit; cursor: pointer; }
+.patient-card.open .patient-card-header { padding: 0 90px 10px 0; }
+.patient-card-header .pc-num { opacity: .6; }
+.patient-card-header .pc-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.patient-card-header .pc-status { font-size: 12px; font-weight: 600; background: var(--danger-bg); color: var(--danger-text); border-radius: 999px; padding: 2px 8px; white-space: nowrap; }
+.patient-card-header .pc-chevron { font-size: 12px; opacity: .7; }
 .patient-field { margin-top: 8px; }
 .patient-field label { display: block; font-size: 16px; color: #555; margin-bottom: 3px; font-weight: bold; }
 .patient-field input, .patient-field textarea { width: 100%; padding: 7px; border: 1px solid var(--border); border-radius: 6px; font-size: 16px; box-sizing: border-box; font-family: inherit; }

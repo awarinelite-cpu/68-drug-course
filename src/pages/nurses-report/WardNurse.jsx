@@ -383,6 +383,8 @@ function useWardReport(wardKey, isAdmin, profile, user) {
   // details in manually (or via the EMR lookup on blur).
   const [wardPatientOptions, setWardPatientOptions] = useState([]);
   const patientCounter = useRef(0);
+  // Which write-up card is expanded (accordion: one at a time). null = all collapsed.
+  const [openPatientId, setOpenPatientId] = useState(null);
   const w = WARDS.find(x => x.key === wardKey);
   // Movement figures (Adm/Disch/Dama/Transfer In-Out/Ext In-Out/Absc/
   // Death/S-C/VS-C/BID) can now also change in the background while this
@@ -606,8 +608,9 @@ function useWardReport(wardKey, isAdmin, profile, user) {
     const blank = { id, status: '' };
     PATIENT_FIELDS.forEach(f => { blank[f.key] = ''; });
     setWardDoc((d) => ({ ...d, patients: [...d.patients, blank] }));
+    setOpenPatientId(id);
   }
-  function removePatient(id) { setWardDoc((d) => ({ ...d, patients: d.patients.filter(p => p.id !== id) })); }
+  function removePatient(id) { setWardDoc((d) => ({ ...d, patients: d.patients.filter(p => p.id !== id) })); setOpenPatientId((cur) => (cur === id ? null : cur)); }
   function updatePatientField(id, key, value) { setWardDoc((d) => ({ ...d, patients: d.patients.map(p => p.id === id ? { ...p, [key]: value } : p) })); }
   function updatePatientStatus(id, value) { setWardDoc((d) => ({ ...d, patients: d.patients.map(p => p.id === id ? { ...p, status: value } : p) })); }
 
@@ -1253,8 +1256,19 @@ function WardPanelRest({ h, showLabel, isAdmin, navigate, includeShiftTable = tr
             <p style={{ fontSize: 12, color: '#6b7280', marginTop: -6, marginBottom: 12 }}>Click add patient to write report</p>
             {editable ? (
               <>
-                {wardDoc.patients.map((p, i) => (
-                  <div className="patient-card" key={p.id}>
+                {wardDoc.patients.map((p, i) => {
+                  const isOpen = openPatientId === p.id;
+                  const cardName = (p.name || '').trim() || 'New patient';
+                  return (
+                  <div className={"patient-card" + (isOpen ? ' open' : ' collapsed')} key={p.id}>
+                    <button type="button" className="patient-card-header" aria-expanded={isOpen}
+                      onClick={() => setOpenPatientId(isOpen ? null : p.id)}>
+                      <span className="pc-num">{i + 1}.</span>
+                      <span className="pc-name">{cardName}{p.emr ? ' (' + p.emr + ')' : ''}</span>
+                      {p.status && <span className="pc-status">{p.status}</span>}
+                      <span className="pc-chevron">{isOpen ? '\u25B2' : '\u25BC'}</span>
+                    </button>
+                    {isOpen && (<>
                     <button type="button" className="remove-btn" onClick={() => removePatient(p.id)}>Remove</button>
                     {wardPatientOptions && wardPatientOptions.length > 0 && (
                       <div className="patient-field">
@@ -1306,7 +1320,11 @@ function WardPanelRest({ h, showLabel, isAdmin, navigate, includeShiftTable = tr
                         </div>
                       ))}
                     </div>
-                    {editable && i === wardDoc.patients.length - 1 && (
+                    </>)}
+                  </div>
+                  );
+                })}
+                {editable && wardDoc.patients.length > 0 && (
                       <>
                         <h2 className="night-update-heading">Night Update</h2>
                         <button className="btn btn-secondary" type="button" onClick={openNightUpdate}>{'\uD83C\uDF19 Night Update'}</button>
@@ -1320,8 +1338,6 @@ function WardPanelRest({ h, showLabel, isAdmin, navigate, includeShiftTable = tr
                         <div className="night-update-meta">{wardDoc.nightUpdateBy ? 'Added by ' + wardDoc.nightUpdateBy : ''}</div>
                       </>
                     )}
-                  </div>
-                ))}
               </>
             ) : wardDoc.patients.length === 0 ? (
               <div className="no-patients">No patient write-ups on this report.</div>
