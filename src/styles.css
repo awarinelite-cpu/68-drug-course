@@ -1615,3 +1615,7 @@ table.drugs-table tr.drop-after > td { box-shadow: inset 0 -3px 0 0 #7c3aed; }
 @media (max-width: 700px) {
   .patient-page-box { padding: 14px 8px; margin-left: -12px; margin-right: -12px; border-radius: 10px; }
 }
+
+/* Patient banner: justify the EMR / Diagnosis text block */
+.patient-banner .pmeta { text-align: justify; text-justify: inter-word; hyphens: auto; -webkit-hyphens: auto; overflow-wrap: anywhere; }
+.patient-banner-row1 > div { flex: 1 1 100%; min-width: 0; }
