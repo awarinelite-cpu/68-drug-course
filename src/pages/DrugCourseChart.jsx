@@ -17,7 +17,8 @@ import {
   autoDurationForFrequency, buildSnoSegments, buildSnoText, abbreviateReason,
   parseWeeklyFrequency, weeklyDosesGivenThisWeek, formatHHMM12
 } from "../lib/drugChartHelpers.js";
-import { ROSTER_TAG_FOR_REASON, clearAllocationsForPatient, EXIT_STAT_KEY, EXIT_DEMOGRAPHIC_CATEGORY } from "../lib/patientAdmissionStatus.js";
+import { ROSTER_TAG_FOR_REASON, clearAllocationsForPatient, EXIT_STAT_KEY, EXIT_DEMOGRAPHIC_CATEGORY, setPatientParoleStatus } from "../lib/patientAdmissionStatus.js";
+import { PAROLE_PATIENT_WARD_LABEL } from "../lib/nurses-report-common.js";
 import { bumpShiftStatForPatientWard, bumpDemographicStatForPatientWard } from "../lib/shiftStatsSync.js";
 import { classifyAffiliation } from "../lib/patientAffiliation.js";
 import { parsePatientFields, extractDrugSection } from "../lib/patientParse.js";
@@ -137,7 +138,10 @@ export default function DrugCourseChart() {
 
   useBackLock(chartBackTarget(patientId, admissionId, from));
   const goBack = useChartBack(patientId, admissionId, from);
-  const { patient } = usePatientHeader(patientId);
+  const { patient: loadedPatient } = usePatientHeader(patientId);
+  // Local copy so a Parole / D/Parole change shows in the Status menu immediately.
+  const [paroleOverride, setParoleOverride] = useState(null);
+  const patient = loadedPatient ? (paroleOverride === null ? loadedPatient : { ...loadedPatient, paroleStatus: paroleOverride }) : loadedPatient;
   const currentNurseName = profile?.name || '';
 
   const [loaded, setLoaded] = useState(false);
@@ -960,6 +964,24 @@ export default function DrugCourseChart() {
     const reason = statusAction;
     if (!reason) { setStatusMsg({ color: '#dc2626', text: 'Please select an action first.' }); return; }
 
+    // Parole / D/Parole: a tag only — no archiving, patient stays admitted
+    // on A Ward (see setPatientParoleStatus).
+    if (reason === 'parole' || reason === 'dparole' || reason === 'paroleClear') {
+      if (reason !== 'paroleClear' && patient?.ward !== PAROLE_PATIENT_WARD_LABEL) {
+        setStatusMsg({ color: '#dc2626', text: 'Parole is only tracked for A Ward patients.' });
+        return;
+      }
+      setStatusApplying(true);
+      setStatusMsg({ color: '#555', text: 'Saving…' });
+      const result = await setPatientParoleStatus({ patientId, kind: reason === 'paroleClear' ? 'clear' : reason });
+      setStatusApplying(false);
+      if (!result.ok) { setStatusMsg({ color: '#dc2626', text: result.message }); return; }
+      setParoleOverride(result.value);
+      setStatusMsg({ color: '#16a34a', text: result.value ? ('Patient placed on ' + (result.value === 'PAROLE' ? 'Parole' : 'D/Parole') + '.') : 'Parole tag cleared.' });
+      setStatusAction('');
+      return;
+    }
+
     // Discharging or referring reads across five collections (vitals,
     // glycemic, intake & output, seizure, plus this chart) and then DELETES
     // the live entries once archived. Getting that sequence right needs the
@@ -993,6 +1015,7 @@ export default function DrugCourseChart() {
       // control. See src/lib/wardTransfer.js.
       try {
         await updateDoc(doc(db, 'patients', patientId), {
+          paroleStatus: '', paroleAt: null,
           pendingTransfer: {
             toWard: wardChosen,
             fromWard: patient?.ward || '',
@@ -1135,6 +1158,7 @@ export default function DrugCourseChart() {
         // for them (see closeOutDischargedPatient in patientAdmissionStatus.js).
         updateDoc(doc(db, 'patients', patientId), {
           dischargeStatus: ROSTER_TAG_FOR_REASON[reason] || '', dischargeStatusAt: serverTimestamp(),
+          paroleStatus: '', paroleAt: null,
           dischargeStatShiftRef: exitStatRef
         })
       ]);
@@ -1414,6 +1438,9 @@ export default function DrugCourseChart() {
                 <option value="died">Death</option>
                 <option value="dama">Discharged Against Medical Advice (DAMA)</option>
                 <option value="absconded">Absconded</option>
+                <option value="parole">Parole</option>
+                <option value="dparole">D/Parole</option>
+                {patient?.paroleStatus && <option value="paroleClear">Clear Parole / D/Parole tag</option>}
               </select>
               {statusAction === 'transferred' && (
                 <select style={{ width: 'auto', minWidth: 220 }} value={transferWard} onChange={(e) => setTransferWard(e.target.value)}>
