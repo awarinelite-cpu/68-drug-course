@@ -39,6 +39,7 @@ export default function DiagnosisNoteEditor({ value, onChange }) {
           onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); bodyRef.current?.focus(); } }} />
       </div>
       <textarea ref={bodyRef} className="diagnosis-note-body" value={rest}
+        placeholder="Write your report on this patient here…"
         onChange={(e) => onChange(joinDiagnosisNote(diagnosis, e.target.value))} />
     </div>
   );

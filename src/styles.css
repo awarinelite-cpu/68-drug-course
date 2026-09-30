@@ -1533,6 +1533,11 @@ h1.period-label { margin: 0; display: flex; align-items: center; flex-wrap: wrap
 .diagnosis-note-box:focus-within { border-color: var(--textarea-focus); box-shadow: 0 0 0 3px rgba(37,99,235,.25); }
 .diagnosis-note-box .diagnosis-note-input, .diagnosis-note-box .diagnosis-note-body { min-height: 0; box-shadow: none; }
 .diagnosis-note-box .diagnosis-note-body { min-height: 110px; }
+/* Always-visible divider under the Diagnosis line, so nurses can see the
+   report area below it is where they write (not part of the diagnosis). */
+.diagnosis-note-box .diagnosis-note-head { padding-bottom: 8px; border-bottom: 2px solid var(--textarea-border); }
+.diagnosis-note-box .diagnosis-note-body { padding-top: 10px; background-image: repeating-linear-gradient(to bottom, transparent 0, transparent 27px, rgba(100,116,139,.22) 27px, rgba(100,116,139,.22) 28px); background-origin: content-box; line-height: 28px; }
+.diagnosis-note-box .diagnosis-note-body::placeholder { color: var(--text-muted); font-style: italic; opacity: 1; }
 
 
 /* Drag-to-reorder drugs (Edit mode) */
