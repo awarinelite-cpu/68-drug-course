@@ -6,6 +6,14 @@
 // feed the Parole / D/Parole columns of the ward and overall statistics
 // tables — they are never added to the ward's total.
 
+// YYYY-MM-DD -> DD/MM/YY; falls back to `ms` (tag time) for the start date
+// on entries tagged before dates were recorded.
+function fmtDate(iso, ms) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso || '');
+  if (m) return m[3] + '/' + m[2] + '/' + m[1].slice(2);
+  return ms ? fmtSince(ms) : '\u2014';
+}
+
 function fmtSince(ms) {
   if (!ms) return '\u2014';
   const d = new Date(ms);
@@ -21,11 +29,11 @@ function ParoleTable({ title, rows }) {
       <div className="table-wrap">
         <table className="shift parole-table">
           <thead>
-            <tr><th>S/N</th><th>Name</th><th>EMR</th><th>Age</th><th>Sex</th><th>Since</th></tr>
+            <tr><th>S/N</th><th>Name</th><th>EMR</th><th>Age</th><th>Sex</th><th>Commenced</th><th>Return Date</th></tr>
           </thead>
           <tbody>
             {list.length === 0 ? (
-              <tr><td colSpan={6} style={{ textAlign: 'center', color: '#9ca3af' }}>No patients</td></tr>
+              <tr><td colSpan={7} style={{ textAlign: 'center', color: '#9ca3af' }}>No patients</td></tr>
             ) : list.map((p, i) => (
               <tr key={p.id || i}>
                 <td>{i + 1}</td>
@@ -33,7 +41,8 @@ function ParoleTable({ title, rows }) {
                 <td>{p.emr || '\u2014'}</td>
                 <td>{p.age || '\u2014'}</td>
                 <td>{p.sex || '\u2014'}</td>
-                <td>{fmtSince(p.since)}</td>
+                <td>{fmtDate(p.startDate, p.since)}</td>
+                <td>{fmtDate(p.returnDate)}</td>
               </tr>
             ))}
           </tbody>

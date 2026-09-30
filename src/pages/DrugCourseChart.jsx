@@ -18,7 +18,7 @@ import {
   parseWeeklyFrequency, weeklyDosesGivenThisWeek, formatHHMM12
 } from "../lib/drugChartHelpers.js";
 import { ROSTER_TAG_FOR_REASON, clearAllocationsForPatient, EXIT_STAT_KEY, EXIT_DEMOGRAPHIC_CATEGORY, setPatientParoleStatus } from "../lib/patientAdmissionStatus.js";
-import { PAROLE_PATIENT_WARD_LABEL } from "../lib/nurses-report-common.js";
+import { PAROLE_PATIENT_WARD_LABEL, todayISO } from "../lib/nurses-report-common.js";
 import { bumpShiftStatForPatientWard, bumpDemographicStatForPatientWard } from "../lib/shiftStatsSync.js";
 import { classifyAffiliation } from "../lib/patientAffiliation.js";
 import { parsePatientFields, extractDrugSection } from "../lib/patientParse.js";
@@ -141,6 +141,8 @@ export default function DrugCourseChart() {
   const { patient: loadedPatient } = usePatientHeader(patientId);
   // Local copy so a Parole / D/Parole change shows in the Status menu immediately.
   const [paroleOverride, setParoleOverride] = useState(null);
+  const [paroleStart, setParoleStart] = useState(todayISO());
+  const [paroleReturn, setParoleReturn] = useState('');
   const patient = loadedPatient ? (paroleOverride === null ? loadedPatient : { ...loadedPatient, paroleStatus: paroleOverride }) : loadedPatient;
   const currentNurseName = profile?.name || '';
 
@@ -973,7 +975,12 @@ export default function DrugCourseChart() {
       }
       setStatusApplying(true);
       setStatusMsg({ color: '#555', text: 'Saving…' });
-      const result = await setPatientParoleStatus({ patientId, kind: reason === 'paroleClear' ? 'clear' : reason });
+      if (reason !== 'paroleClear' && paroleReturn && paroleStart && paroleReturn < paroleStart) {
+        setStatusApplying(false);
+        setStatusMsg({ color: '#dc2626', text: 'Return date can\u2019t be before the commencement date.' });
+        return;
+      }
+      const result = await setPatientParoleStatus({ patientId, kind: reason === 'paroleClear' ? 'clear' : reason, startDate: paroleStart, returnDate: paroleReturn });
       setStatusApplying(false);
       if (!result.ok) { setStatusMsg({ color: '#dc2626', text: result.message }); return; }
       setParoleOverride(result.value);
@@ -1015,7 +1022,7 @@ export default function DrugCourseChart() {
       // control. See src/lib/wardTransfer.js.
       try {
         await updateDoc(doc(db, 'patients', patientId), {
-          paroleStatus: '', paroleAt: null,
+          paroleStatus: '', paroleAt: null, paroleStart: '', paroleReturn: '',
           pendingTransfer: {
             toWard: wardChosen,
             fromWard: patient?.ward || '',
@@ -1158,7 +1165,7 @@ export default function DrugCourseChart() {
         // for them (see closeOutDischargedPatient in patientAdmissionStatus.js).
         updateDoc(doc(db, 'patients', patientId), {
           dischargeStatus: ROSTER_TAG_FOR_REASON[reason] || '', dischargeStatusAt: serverTimestamp(),
-          paroleStatus: '', paroleAt: null,
+          paroleStatus: '', paroleAt: null, paroleStart: '', paroleReturn: '',
           dischargeStatShiftRef: exitStatRef
         })
       ]);
@@ -1447,6 +1454,16 @@ export default function DrugCourseChart() {
                   <option value="">Select ward…</option>
                   {WARD_OPTIONS.map(w => <option key={w} value={w}>{w}</option>)}
                 </select>
+              )}
+              {(statusAction === 'parole' || statusAction === 'dparole') && (
+                <>
+                  <label style={{ fontSize: 12 }}>Commencement date
+                    <input type="date" value={paroleStart} onChange={(e) => setParoleStart(e.target.value)} />
+                  </label>
+                  <label style={{ fontSize: 12 }}>Return date
+                    <input type="date" value={paroleReturn} min={paroleStart || undefined} onChange={(e) => setParoleReturn(e.target.value)} />
+                  </label>
+                </>
               )}
               <button className="btn btn-primary" style={{ padding: '8px 14px', fontSize: 13 }} disabled={statusApplying} onClick={applyStatusAction}>Apply</button>
             </div>

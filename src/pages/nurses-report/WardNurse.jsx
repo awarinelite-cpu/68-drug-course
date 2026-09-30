@@ -465,7 +465,7 @@ function useWardReport(wardKey, isAdmin, profile, user) {
           // ADMISSION_TAG_LABEL/activeAdmissionTag in
           // patientAdmissionStatus.js and WardPatientPicker below for how
           // it's shown (blue, vs dischargeStatus's red).
-          list.push({ id: d.id, name: data.name || '', emr: data.emr || '', age: data.age || '', admissionDate: data.admissionDate || '', diagnosis: data.diagnosis || '', gender: data.gender || '', dischargeStatus: data.dischargeStatus || '', admissionTag: activeAdmissionTag(data), paroleStatus: data.paroleStatus || '', paroleAt: (data.paroleAt && typeof data.paroleAt.toMillis === 'function') ? data.paroleAt.toMillis() : 0 });
+          list.push({ id: d.id, name: data.name || '', emr: data.emr || '', age: data.age || '', admissionDate: data.admissionDate || '', diagnosis: data.diagnosis || '', gender: data.gender || '', dischargeStatus: data.dischargeStatus || '', admissionTag: activeAdmissionTag(data), paroleStatus: data.paroleStatus || '', paroleStart: data.paroleStart || '', paroleReturn: data.paroleReturn || '', paroleAt: (data.paroleAt && typeof data.paroleAt.toMillis === 'function') ? data.paroleAt.toMillis() : 0 });
         });
         list.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
         if (!cancelled) { setWardPatientOptions(list); setOptionsLoaded(true); }
@@ -921,7 +921,7 @@ function useWardReport(wardKey, isAdmin, profile, user) {
   const liveParole = useMemo(() => {
     const pick = (status) => wardPatientOptions
       .filter((o) => !o.dischargeStatus && o.paroleStatus === status)
-      .map((o) => ({ id: o.id, name: o.name, emr: o.emr, age: o.age, sex: o.gender, since: o.paroleAt || 0 }));
+      .map((o) => ({ id: o.id, name: o.name, emr: o.emr, age: o.age, sex: o.gender, since: o.paroleAt || 0, startDate: o.paroleStart || '', returnDate: o.paroleReturn || '' }));
     return { parole: pick(PAROLE_STATUS.parole), dParole: pick(PAROLE_STATUS.dParole) };
   }, [wardPatientOptions]);
   useEffect(() => {

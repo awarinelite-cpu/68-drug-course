@@ -207,6 +207,11 @@ export const PAROLE_STAT_KEYS = ['parole', 'dParole'];
 export const PAROLE_WARD_KEY = 'award';
 export const PAROLE_PATIENT_WARD_LABEL = '"A" WARD';
 // Values stored on the patient doc as `paroleStatus`.
+// Today as YYYY-MM-DD in the device's local time — default Commencement date.
+export function todayISO() {
+  const d = new Date();
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+}
 export const PAROLE_STATUS = { parole: 'PAROLE', dParole: 'D/PAROLE' };
 
 // Column headers can be corrected/renamed by an admin without touching the

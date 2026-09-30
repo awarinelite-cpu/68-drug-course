@@ -176,7 +176,7 @@ export async function applyPatientStatus({ patientId, reason, transferWard, from
     // `ward` over with everything else left untouched.
     try {
       await updateDoc(doc(db, 'patients', patientId), {
-        paroleStatus: '', paroleAt: null,
+        paroleStatus: '', paroleAt: null, paroleStart: '', paroleReturn: '',
         pendingTransfer: {
           toWard: wardChosen,
           fromWard: fromWard || '',
@@ -343,7 +343,7 @@ export async function applyPatientStatus({ patientId, reason, transferWard, from
       // closing report is submitted for them — see closeOutDischargedPatient.
       updateDoc(doc(db, 'patients', patientId), {
         dischargeStatus: ROSTER_TAG_FOR_REASON[reason] || '', dischargeStatusAt: serverTimestamp(),
-        paroleStatus: '', paroleAt: null,
+        paroleStatus: '', paroleAt: null, paroleStart: '', paroleReturn: '',
         dischargeStatShiftRef: exitStatRef, dischargeStatDemographicRef: demographicStatRef
       })
     ]);
@@ -628,15 +628,19 @@ export async function readmitLatestAdmission({ patientId, nurseName }) {
 // patient from one table to the other. `kind` is 'parole' | 'dparole' |
 // 'clear'. Offline-tolerant like other single-doc edits: the write queues
 // locally, so it isn't awaited past a failure.
-export async function setPatientParoleStatus({ patientId, kind }) {
+export async function setPatientParoleStatus({ patientId, kind, startDate, returnDate }) {
   const value = kind === 'parole' ? PAROLE_STATUS.parole : kind === 'dparole' ? PAROLE_STATUS.dParole : '';
   try {
     await updateDoc(doc(db, 'patients', patientId), {
       paroleStatus: value,
       paroleAt: value ? serverTimestamp() : null,
+      // Commencement and return dates as YYYY-MM-DD strings (return is
+      // optional — blank until the patient's return date is known).
+      paroleStart: value ? (startDate || '') : '',
+      paroleReturn: value ? (returnDate || '') : '',
       updatedAt: serverTimestamp()
     });
-    return { ok: true, value };
+    return { ok: true, value, startDate: value ? (startDate || '') : '', returnDate: value ? (returnDate || '') : '' };
   } catch (e) {
     return { ok: false, message: 'Could not update parole status: ' + (e.code || e.message || 'unknown error') };
   }

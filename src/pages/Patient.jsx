@@ -8,7 +8,7 @@ import { useBackLock } from "../hooks/useBackLock.js";
 import { usePatientHeader } from "../hooks/usePatientHeader.js";
 import { getDocSafe } from "../lib/firestoreOffline.js";
 import { applyPatientStatus, admitExistingPatientToWard, setPatientParoleStatus } from "../lib/patientAdmissionStatus.js";
-import { PAROLE_PATIENT_WARD_LABEL } from "../lib/nurses-report-common.js";
+import { PAROLE_PATIENT_WARD_LABEL, todayISO } from "../lib/nurses-report-common.js";
 import { nameSearchTokens } from "../lib/patientDirectory.js";
 import { classifyAffiliation } from "../lib/patientAffiliation.js";
 import { STATUS_LABELS, WARD_OPTIONS } from "../lib/drugChartHelpers.js";
@@ -45,6 +45,8 @@ export default function Patient() {
   const [showStatusForm, setShowStatusForm] = useState(false);
   const [statusAction, setStatusAction] = useState('');
   const [transferWard, setTransferWard] = useState('');
+  const [paroleStart, setParoleStart] = useState(todayISO());
+  const [paroleReturn, setParoleReturn] = useState('');
   const [statusApplying, setStatusApplying] = useState(false);
   const [statusMsg, setStatusMsg] = useState({ color: '', text: '' });
 
@@ -222,10 +224,15 @@ export default function Patient() {
       setStatusApplying(true);
       setStatusMsg({ color: '#555', text: 'Saving…' });
       const kind = reason === 'paroleClear' ? 'clear' : reason;
-      const result = await setPatientParoleStatus({ patientId: patient.id, kind });
+      if (kind !== 'clear' && paroleReturn && paroleStart && paroleReturn < paroleStart) {
+        setStatusApplying(false);
+        setStatusMsg({ color: '#dc2626', text: 'Return date can\u2019t be before the commencement date.' });
+        return;
+      }
+      const result = await setPatientParoleStatus({ patientId: patient.id, kind, startDate: paroleStart, returnDate: paroleReturn });
       setStatusApplying(false);
       if (!result.ok) { setStatusMsg({ color: '#dc2626', text: result.message }); return; }
-      setPatient((p) => ({ ...p, paroleStatus: result.value }));
+      setPatient((p) => ({ ...p, paroleStatus: result.value, paroleStart: result.startDate, paroleReturn: result.returnDate }));
       setStatusMsg({ color: '#16a34a', text: result.value ? ('Patient placed on ' + (result.value === 'PAROLE' ? 'Parole' : 'D/Parole') + '.') : 'Parole tag cleared.' });
       setStatusAction('');
       return;
@@ -359,6 +366,16 @@ export default function Patient() {
                       <option value="">Select ward…</option>
                       {WARD_OPTIONS.map(w => <option key={w} value={w}>{w}</option>)}
                     </select>
+                  )}
+                  {(statusAction === 'parole' || statusAction === 'dparole') && (
+                    <>
+                      <label style={{ fontSize: 12 }}>Commencement date
+                        <input type="date" value={paroleStart} onChange={(e) => setParoleStart(e.target.value)} />
+                      </label>
+                      <label style={{ fontSize: 12 }}>Return date
+                        <input type="date" value={paroleReturn} min={paroleStart || undefined} onChange={(e) => setParoleReturn(e.target.value)} />
+                      </label>
+                    </>
                   )}
                   <button className="btn btn-primary" style={{ padding: '8px 14px', fontSize: 13 }} disabled={statusApplying} onClick={applyStatus}>Apply</button>
                 </div>
