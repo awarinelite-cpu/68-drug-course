@@ -244,6 +244,12 @@ function PatientBlock({ p }) {
           <NoteLines text={p[f.key]} withDiagnosis={f.key === 'diagnosis'} />
         </div>
       ) : null)}
+      {p.nightUpdate && (
+        <div className="night-update-block">
+          <h3 className="patient-note-label">{'Night Update' + (p.nightUpdateBy ? ' \u2014 ' + p.nightUpdateBy : '') + ':'}</h3>
+          <p className="patient-note-text">{p.nightUpdate}</p>
+        </div>
+      )}
     </div>
   );
 }

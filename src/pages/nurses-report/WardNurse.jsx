@@ -226,6 +226,12 @@ function PatientBlockView({ p }) {
           <NoteLines text={p[f.key]} withDiagnosis={f.key === 'diagnosis'} />
         </div>
       ) : null)}
+      {p.nightUpdate && (
+        <div className="night-update-block">
+          <h3 className="patient-note-label">{'Night Update' + (p.nightUpdateBy ? ' \u2014 ' + p.nightUpdateBy : '') + ':'}</h3>
+          <p className="patient-note-text">{p.nightUpdate}</p>
+        </div>
+      )}
     </div>
   );
 }
@@ -365,7 +371,10 @@ function useWardReport(wardKey, isAdmin, profile, user) {
   }, []);
   const [wardDoc, setWardDoc] = useState(null);
   const [adminEditOverride, setAdminEditOverride] = useState(false);
-  const [nightUpdateOpen, setNightUpdateOpen] = useState(false);
+  // Night Update is now written per patient, inside each patient's card.
+  // ids of cards whose Night Update box the nurse has opened this session
+  // (a card that already has night-update text always shows its box).
+  const [nightOpenIds, setNightOpenIds] = useState(() => new Set());
   const [topStatus, setTopStatus] = useState({ text: 'Loading…', error: false });
   const [saveStatus, setSaveStatus] = useState({ text: '', error: false });
   // Per-patient status for the EMR auto-fill lookup (see
@@ -465,6 +474,13 @@ function useWardReport(wardKey, isAdmin, profile, user) {
       next.patients.forEach(p => { if (!p.id) p.id = 'p' + Math.random().toString(36).slice(2); if (typeof p.status !== 'string') p.status = ''; });
       next.nightUpdate = typeof next.nightUpdate === 'string' ? next.nightUpdate : '';
       next.nightUpdateBy = next.nightUpdateBy || '';
+      next.patients.forEach(p => { if (typeof p.nightUpdate !== 'string') p.nightUpdate = ''; });
+      // Older reports kept ONE ward-level night update (shown under the last
+      // patient). Move it onto that patient so it lives inside a card now.
+      if (next.nightUpdate && next.patients.length) {
+        const last = next.patients[next.patients.length - 1];
+        if (!last.nightUpdate) { last.nightUpdate = next.nightUpdate; last.nightUpdateBy = next.nightUpdateBy || ''; next.nightUpdate = ''; }
+      }
 
       // On taking over — the first time this ward's report for today is
       // opened, OR any later time it's opened while still untouched (no
@@ -537,7 +553,7 @@ function useWardReport(wardKey, isAdmin, profile, user) {
 
       if (cancelled) return;
       setTopStatus({ text: '', error: false });
-      setNightUpdateOpen(!!next.nightUpdate);
+      setNightOpenIds(new Set());
       setWardDoc(next);
     })();
     return () => { cancelled = true; };
@@ -855,10 +871,10 @@ function useWardReport(wardKey, isAdmin, profile, user) {
     fillPlan(id, sourcePatientId);
   }
 
-  function openNightUpdate() {
+  function openNightUpdate(id) {
     if (!editable) return;
-    const opening = !nightUpdateOpen;
-    setNightUpdateOpen(opening);
+    const opening = !nightOpenIds.has(id);
+    setNightOpenIds((cur) => { const n = new Set(cur); if (opening) n.add(id); else n.delete(id); return n; });
     if (!opening) return;
     if (!wardDoc.shifts.pm.nurseOnDuty && profile?.name) updateDuty('pm', profile.name);
   }
@@ -897,8 +913,11 @@ function useWardReport(wardKey, isAdmin, profile, user) {
 
   async function submitReport() {
     if (!wardDoc || !editable) return;
-    const hasNightUpdate = !!(wardDoc.nightUpdate && wardDoc.nightUpdate.trim());
+    const hasNightUpdate = !!((wardDoc.nightUpdate && wardDoc.nightUpdate.trim()) || wardDoc.patients.some((p) => p.nightUpdate && p.nightUpdate.trim()));
     let doc_ = wardDoc;
+    if (hasNightUpdate && profile?.name) {
+      doc_ = { ...doc_, patients: doc_.patients.map((p) => (p.nightUpdate && p.nightUpdate.trim() && !p.nightUpdateBy) ? { ...p, nightUpdateBy: profile.name } : p) };
+    }
     if (hasNightUpdate && !doc_.shifts.pm.nurseOnDuty && profile?.name) {
       doc_ = { ...doc_, shifts: { ...doc_.shifts, pm: { ...doc_.shifts.pm, nurseOnDuty: profile.name } } };
     }
@@ -1016,7 +1035,7 @@ function useWardReport(wardKey, isAdmin, profile, user) {
   const pillText = !wardDoc ? '' : wardDoc.locked ? 'Locked' : wardDoc.submitted ? 'Submitted' : 'Draft';
 
   return {
-    w, wardDoc, adminEditOverride, setAdminEditOverride, nightUpdateOpen, topStatus, saveStatus, emrLookup,
+    w, wardDoc, adminEditOverride, setAdminEditOverride, nightOpenIds, topStatus, saveStatus, emrLookup,
     wardPatientOptions,
     census, movementTotals, editable,
     updateWardDoc, updateShiftField, updateDuty, updateBeds, updateStartOcc,
@@ -1163,7 +1182,7 @@ function WardPanelRest({ h, showLabel, isAdmin, navigate, includeShiftTable = tr
     updateWardDoc, updateShiftField, updateDuty, updateBeds, updateStartOcc,
     addPatient, removePatient, openPatientId, setOpenPatientId, updatePatientField, updateDiagnosisField, updateVitalsSnapshotField,
     updatePatientStatus, lookupPatientByEmr, selectPatientFromWard, refreshPlan, applyNursingDiagnosis,
-    nightUpdateOpen, openNightUpdate, saveReport, submitReport, pillClass, pillText
+    nightOpenIds, openNightUpdate, saveReport, submitReport, pillClass, pillText
   } = h;
 
   // Quick lookup only, not tied to any write-up — lets the nurse glance at
@@ -1320,24 +1339,21 @@ function WardPanelRest({ h, showLabel, isAdmin, navigate, includeShiftTable = tr
                         </div>
                       ))}
                     </div>
+                    <div className="patient-night-update">
+                      <button className="btn btn-secondary" type="button" onClick={() => openNightUpdate(p.id)}>{'\uD83C\uDF19 Night Update'}</button>
+                      {(nightOpenIds.has(p.id) || p.nightUpdate) && (
+                        <div className="patient-field" style={{ marginTop: 10 }}>
+                          <label className="patient-note-label" style={{ marginTop: 0 }}>Night update:</label>
+                          <textarea placeholder="Type the night update for this patient here…" style={{ minHeight: 140 }}
+                            value={p.nightUpdate || ''} onChange={(e) => updatePatientField(p.id, 'nightUpdate', e.target.value)} />
+                        </div>
+                      )}
+                      <div className="night-update-meta">{p.nightUpdateBy ? 'Added by ' + p.nightUpdateBy : ''}</div>
+                    </div>
                     </>)}
                   </div>
                   );
                 })}
-                {editable && wardDoc.patients.length > 0 && (
-                      <>
-                        <h2 className="night-update-heading">Night Update</h2>
-                        <button className="btn btn-secondary" type="button" onClick={openNightUpdate}>{'\uD83C\uDF19 Night Update'}</button>
-                        {nightUpdateOpen && (
-                          <div className="patient-field" style={{ marginTop: 10 }}>
-                            <label className="patient-note-label" style={{ marginTop: 0 }}>Night update:</label>
-                            <textarea id="nightUpdateInput" placeholder="Type the night update here…" style={{ minHeight: 140 }}
-                              value={wardDoc.nightUpdate} onChange={(e) => updateWardDoc({ nightUpdate: e.target.value })} />
-                          </div>
-                        )}
-                        <div className="night-update-meta">{wardDoc.nightUpdateBy ? 'Added by ' + wardDoc.nightUpdateBy : ''}</div>
-                      </>
-                    )}
               </>
             ) : wardDoc.patients.length === 0 ? (
               <div className="no-patients">No patient write-ups on this report.</div>

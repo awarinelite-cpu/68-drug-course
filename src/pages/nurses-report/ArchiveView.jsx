@@ -68,6 +68,12 @@ function PatientBlockView({ p }) {
           <NoteLines text={p[f.key]} withDiagnosis={f.key === 'diagnosis'} />
         </div>
       ) : null)}
+      {p.nightUpdate && (
+        <div className="night-update-block">
+          <h3 className="patient-note-label">{'Night Update' + (p.nightUpdateBy ? ' \u2014 ' + p.nightUpdateBy : '') + ':'}</h3>
+          <p className="patient-note-text">{p.nightUpdate}</p>
+        </div>
+      )}
     </div>
   );
 }
@@ -263,6 +269,10 @@ function PatientCardEdit({ p, onChange, onRemove }) {
           </div>
         ))}
       </div>
+      <div className="patient-field" style={{ marginTop: 10 }}>
+        <label>Night Update:</label>
+        <textarea value={p.nightUpdate || ''} onChange={(e) => onChange({ ...p, nightUpdate: e.target.value })} />
+      </div>
     </div>
   );
 }
@@ -318,10 +328,12 @@ function WardReportBlockEdit({ w, data, onChange }) {
         <PatientCardEdit key={p.id || i} p={p} onChange={(next) => updatePatient(i, next)} onRemove={() => removePatient(i)} />
       ))}
       <button type="button" className="add-patient-btn" onClick={addPatient}>+ Add Patient</button>
-      <div className="patient-field" style={{ marginTop: 14 }}>
-        <label>Night Update:</label>
-        <textarea value={data.nightUpdate || ''} onChange={(e) => onChange({ ...data, nightUpdate: e.target.value })} />
-      </div>
+      {data.nightUpdate && (
+        <div className="patient-field" style={{ marginTop: 14 }}>
+          <label>Night Update (older report, whole ward):</label>
+          <textarea value={data.nightUpdate || ''} onChange={(e) => onChange({ ...data, nightUpdate: e.target.value })} />
+        </div>
+      )}
     </div>
   );
 }
