@@ -371,8 +371,8 @@ export default function EntryChart({ title, collectionName, columns, deriveRows,
 
         {summary && summaryTotals && (
           <div className="card-box">
-            <h3 style={{ marginTop: 0 }}>{isArchived && summary.archivedLabel ? summary.archivedLabel : summary.label}</h3>
-            <div style={{ display: 'flex', gap: 18, flexWrap: 'wrap', fontSize: 14 }}>
+            <h3 style={{ marginTop: 0, fontSize: 24, fontWeight: 800, lineHeight: 1.25 }}>{isArchived && summary.archivedLabel ? summary.archivedLabel : summary.label}</h3>
+            <div style={{ display: 'flex', gap: 10, flexDirection: 'column', fontSize: 22 }}>
               <div><b>Total Intake:</b> {summaryTotals.intake} ml</div>
               <div><b>Total Output:</b> {summaryTotals.output} ml</div>
               <div className={summaryTotals.balance < 0 ? 'flag-deficit' : ''} style={{ padding: '2px 8px', borderRadius: 4 }}>
