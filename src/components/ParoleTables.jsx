@@ -1,0 +1,53 @@
+// Parole / D/Parole name tables for the A Ward report. Read-only: patients
+// get onto these lists from the Patient page's Status control (Parole /
+// D/Parole), and the ward report just displays them. Each entry is
+// { id, name, emr, age, sex, since } where `since` is the millisecond
+// timestamp the tag was set (0 when unknown). The counts of these two lists
+// feed the Parole / D/Parole columns of the ward and overall statistics
+// tables — they are never added to the ward's total.
+
+function fmtSince(ms) {
+  if (!ms) return '\u2014';
+  const d = new Date(ms);
+  if (isNaN(d.getTime())) return '\u2014';
+  return d.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: '2-digit' });
+}
+
+function ParoleTable({ title, rows }) {
+  const list = Array.isArray(rows) ? rows : [];
+  return (
+    <div className="parole-block">
+      <h3 className="parole-heading">{title} <span className="parole-count">({list.length})</span></h3>
+      <div className="table-wrap">
+        <table className="shift parole-table">
+          <thead>
+            <tr><th>S/N</th><th>Name</th><th>EMR</th><th>Age</th><th>Sex</th><th>Since</th></tr>
+          </thead>
+          <tbody>
+            {list.length === 0 ? (
+              <tr><td colSpan={6} style={{ textAlign: 'center', color: '#9ca3af' }}>No patients</td></tr>
+            ) : list.map((p, i) => (
+              <tr key={p.id || i}>
+                <td>{i + 1}</td>
+                <td style={{ textAlign: 'left' }}>{p.name || '\u2014'}</td>
+                <td>{p.emr || '\u2014'}</td>
+                <td>{p.age || '\u2014'}</td>
+                <td>{p.sex || '\u2014'}</td>
+                <td>{fmtSince(p.since)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+export default function ParoleTables({ paroleList, dParoleList }) {
+  return (
+    <>
+      <ParoleTable title="Parole" rows={paroleList} />
+      <ParoleTable title="D/Parole" rows={dParoleList} />
+    </>
+  );
+}
