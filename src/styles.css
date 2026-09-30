@@ -1628,9 +1628,7 @@ table.drugs-table tr.drop-after > td { box-shadow: inset 0 -3px 0 0 #7c3aed; }
 .archive-search:focus { outline: none; border-color: var(--textarea-focus); box-shadow: 0 0 0 3px rgba(37,99,235,.25); }
 
 /* A Ward report: Parole / D/Parole name tables */
-.parole-row { display: flex; gap: 16px; align-items: flex-start; }
-.parole-block { margin-top: 10px; flex: 0 0 auto; min-width: 420px; }
-.parole-block table { width: 100%; min-width: 0; }
+.parole-block { margin-top: 10px; }
 .parole-heading { margin: 10px 0 6px; font-size: 16px; }
 .parole-count { font-weight: normal; color: #6b7280; font-size: 14px; }
 .parole-table td, .parole-table th { text-align: center; }
