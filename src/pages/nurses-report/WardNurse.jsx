@@ -1227,7 +1227,7 @@ function WardPanelRest({ h, showLabel, isAdmin, navigate, includeShiftTable = tr
           )}
 
           {includeShiftTable && (
-            <div className="card-box">
+            <div className="card-box ward-nurse-box">
               {includeHeader && w && (
                 <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 10 }}>
                   <button className="btn btn-secondary" style={{ padding: '6px 12px' }} type="button"
@@ -1245,7 +1245,7 @@ function WardPanelRest({ h, showLabel, isAdmin, navigate, includeShiftTable = tr
           )}
 
           {includeDemographics && (
-            <div className="card-box">
+            <div className="card-box ward-nurse-box">
               <h2>Patient Demographics</h2>
               <div className="table-wrap">
                 <DemographicsTable wardDoc={wardDoc} editable={editable}
@@ -1255,7 +1255,7 @@ function WardPanelRest({ h, showLabel, isAdmin, navigate, includeShiftTable = tr
             </div>
           )}
 
-          <div className="card-box">
+          <div className="card-box ward-nurse-box">
             {editable && (
               <div className="patient-field" style={{ marginTop: 0 }}>
                 <label>Select Shift:</label>
@@ -1374,7 +1374,7 @@ function WardPanelRest({ h, showLabel, isAdmin, navigate, includeShiftTable = tr
             {editable && <button className={"add-patient-btn" + (shiftMode ? '' : ' is-disabled')} type="button" aria-disabled={!shiftMode} onClick={handleAddPatient} style={{ marginTop: 12 }}>+ Add Patient</button>}
           </div>
 
-          <div className="card-box">
+          <div className="card-box ward-nurse-box">
             {editable && (
               <div className="submit-bar">
                 <button className="btn btn-secondary" style={{ flex: 1, padding: 12 }} onClick={onSave || saveReport}>Save</button>
