@@ -1020,7 +1020,7 @@ function useWardReport(wardKey, isAdmin, profile, user) {
     wardPatientOptions,
     census, movementTotals, editable,
     updateWardDoc, updateShiftField, updateDuty, updateBeds, updateStartOcc,
-    addPatient, removePatient, updatePatientField, updateDiagnosisField, updateVitalsSnapshotField,
+    addPatient, removePatient, openPatientId, setOpenPatientId, updatePatientField, updateDiagnosisField, updateVitalsSnapshotField,
     updatePatientStatus, lookupPatientByEmr, selectPatientFromWard, refreshPlan, applyNursingDiagnosis,
     openNightUpdate, saveReport, submitReport, pillClass, pillText,
     touchedDemographicFieldsRef
@@ -1161,7 +1161,7 @@ function WardPanelRest({ h, showLabel, isAdmin, navigate, includeShiftTable = tr
     w, wardDoc, topStatus, saveStatus, editable, adminEditOverride, setAdminEditOverride,
     census, movementTotals, emrLookup, wardPatientOptions,
     updateWardDoc, updateShiftField, updateDuty, updateBeds, updateStartOcc,
-    addPatient, removePatient, updatePatientField, updateDiagnosisField, updateVitalsSnapshotField,
+    addPatient, removePatient, openPatientId, setOpenPatientId, updatePatientField, updateDiagnosisField, updateVitalsSnapshotField,
     updatePatientStatus, lookupPatientByEmr, selectPatientFromWard, refreshPlan, applyNursingDiagnosis,
     nightUpdateOpen, openNightUpdate, saveReport, submitReport, pillClass, pillText
   } = h;
