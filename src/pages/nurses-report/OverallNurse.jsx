@@ -968,7 +968,7 @@ export default function OverallNurse() {
           </div>
         </div>
 
-        <div className="card-box">
+        <div className="card-box ward-reports-box">
           <h2>Ward Reports</h2>
           {reportGroups.length === 0 && <div className="ward-report-empty">No ward reports submitted yet.</div>}
           {reportGroups.map((g) => {

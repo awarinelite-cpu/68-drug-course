@@ -1588,3 +1588,13 @@ table.drugs-table tr.drop-after > td { box-shadow: inset 0 -3px 0 0 #7c3aed; }
 .ward-card-header .wc-count { font-size: 12px; font-weight: 700; background: var(--danger-bg); color: var(--danger-text); border-radius: 999px; padding: 2px 8px; white-space: nowrap; }
 .ward-card-header .wc-chevron { font-size: 12px; opacity: .7; }
 .ward-card-body { padding: 0 14px 14px; border-top: 2px solid var(--textarea-border); }
+
+/* Mobile: let the ward report cards use nearly the full screen width */
+@media (max-width: 700px) {
+  .ward-reports-box { padding: 14px 4px; margin-left: -12px; margin-right: -12px; border-radius: 10px; }
+  .ward-reports-box > h2 { padding: 0 12px; }
+  .ward-reports-box .ward-card { margin-left: 2px; margin-right: 2px; }
+  .ward-reports-box .ward-card-body { padding: 0 6px 12px; }
+  .ward-reports-box .ward-card-header { padding: 14px 12px; }
+  .ward-reports-box .patient-block { padding: 10px; }
+}
