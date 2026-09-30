@@ -1622,3 +1622,7 @@ table.drugs-table tr.drop-after > td { box-shadow: inset 0 -3px 0 0 #7c3aed; }
 
 /* Patient banner: center the action buttons (edit / Allocate / Overview / Status) */
 .patient-banner-row2 { justify-content: center; }
+
+/* Archive page search bar */
+.archive-search { width: 100%; box-sizing: border-box; padding: 12px 14px; font-size: 16px; border: 2px solid var(--textarea-border); border-radius: 10px; background: var(--textarea-bg); color: var(--text-primary); }
+.archive-search:focus { outline: none; border-color: var(--textarea-focus); box-shadow: 0 0 0 3px rgba(37,99,235,.25); }

@@ -30,6 +30,7 @@ import RequestAccount from "./pages/RequestAccount.jsx";
 const Home = lazy(() => import("./pages/Home.jsx"));
 const Patient = lazy(() => import("./pages/Patient.jsx"));
 const MyPatients = lazy(() => import("./pages/MyPatients.jsx"));
+const PatientArchive = lazy(() => import("./pages/PatientArchive.jsx"));
 const Profile = lazy(() => import("./pages/Profile.jsx"));
 const SelectWard = lazy(() => import("./pages/SelectWard.jsx"));
 const Admin = lazy(() => import("./pages/Admin.jsx"));
@@ -121,6 +122,7 @@ export default function App() {
           <Route path="/" element={<AuthedShell><Home /></AuthedShell>} />
           <Route path="/patient" element={<AuthedShell><Patient /></AuthedShell>} />
           <Route path="/my-patients" element={<AuthedShell><MyPatients /></AuthedShell>} />
+          <Route path="/archive" element={<AuthedShell><PatientArchive /></AuthedShell>} />
           <Route path="/profile" element={<AuthedShell><Profile /></AuthedShell>} />
           <Route path="/select-ward" element={<AuthedShell><SelectWard /></AuthedShell>} />
           <Route path="/admin" element={<AuthedShell><Admin /></AuthedShell>} />
