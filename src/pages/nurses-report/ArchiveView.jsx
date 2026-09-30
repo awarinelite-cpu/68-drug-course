@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { doc, getDoc, updateDoc, serverTimestamp } from "firebase/firestore";
 import { db } from "../../firebase.js";
@@ -6,10 +6,11 @@ import { useAuth } from "../../contexts/AuthContext.jsx";
 import { useGoBack } from "../../hooks/useGoBack.js";
 import {
   WARDS, STAT_FIELDS, SHIFT_STAT_FIELDS, SHIFTS, PATIENT_FIELDS, PATIENT_STATUS_OPTIONS,
-  DEMOGRAPHIC_FIELDS, DEMOGRAPHIC_CATEGORIES, DEMOGRAPHIC_AFFILIATIONS, occDelta, movementColorClass
+  DEMOGRAPHIC_FIELDS, DEMOGRAPHIC_CATEGORIES, DEMOGRAPHIC_AFFILIATIONS, occDelta, movementColorClass, PAROLE_WARD_KEY
 } from "../../lib/nurses-report-common.js";
 import { useTimeFormat, formatDateTime } from "../../lib/time-format.js";
 import Topbar from "../../components/Topbar.jsx";
+import ParoleTables from "../../components/ParoleTables.jsx";
 import { splitDiagnosisNote } from "../../lib/diagnosisNote.js";
 import DiagnosisNoteEditor, { DiagnosisHeadline } from "../../components/DiagnosisNoteEditor.jsx";
 
@@ -93,10 +94,14 @@ function computeWardCensus(w, data) {
   return { beds, perShiftOcc, finalOcc };
 }
 
+const PAROLE_COLS = [{ key: 'parole', label: 'Parole' }, { key: 'dParole', label: 'D/Parole' }];
+
 function WardShiftTableView({ w, data }) {
   const { beds, perShiftOcc, finalOcc } = computeWardCensus(w, data);
   const shifts = data.shifts || {};
   const pmDuty = (shifts.pm || {}).nurseOnDuty;
+  const isParoleWard = w.key === PAROLE_WARD_KEY;
+  const paroleCount = (k) => (typeof data[k] === 'number' ? data[k] : 0);
   return (
     <table className="ward-shift">
       <thead>
@@ -104,7 +109,12 @@ function WardShiftTableView({ w, data }) {
           <th rowSpan={2}>Shift</th><th rowSpan={2}>Beds</th><th rowSpan={2}>Occ</th><th rowSpan={2}>Vac</th>
           {SOLO_BEFORE.map(f => <th key={f.key} rowSpan={2}>{f.label}</th>)}
           <th colSpan={2}>Int. Transfer</th><th colSpan={2}>Ext. Transfer</th>
-          {SOLO_AFTER.map(f => <th key={f.key} rowSpan={2}>{f.label}</th>)}
+          {SOLO_AFTER.map(f => (
+            <Fragment key={f.key}>
+              <th rowSpan={2}>{f.label}</th>
+              {f.key === 'bid' && isParoleWard && PAROLE_COLS.map(c => <th key={c.key} rowSpan={2}>{c.label}</th>)}
+            </Fragment>
+          ))}
           <th rowSpan={2}>Nurses on Duty</th>
         </tr>
         <tr>{['In', 'Out', 'In', 'Out'].map((l, i) => <th key={i}>{l}</th>)}</tr>
@@ -116,7 +126,12 @@ function WardShiftTableView({ w, data }) {
             <tr key={s.key}>
               <td className="shift-name">{s.label}</td>
               <td className="stat-beds">{beds}</td><td className="stat-occ">{perShiftOcc[s.key]}</td><td className="stat-vac">{beds - perShiftOcc[s.key]}</td>
-              {ORDERED_MOVEMENT.map(f => <td key={f.key} className={movementColorClass(f.key)}>{typeof sData[f.key] === 'number' ? sData[f.key] : 0}</td>)}
+              {ORDERED_MOVEMENT.map(f => (
+                <Fragment key={f.key}>
+                  <td className={movementColorClass(f.key)}>{typeof sData[f.key] === 'number' ? sData[f.key] : 0}</td>
+                  {f.key === 'bid' && isParoleWard && PAROLE_COLS.map(c => <td key={c.key}>{paroleCount(c.key)}</td>)}
+                </Fragment>
+              ))}
               <td style={{ textAlign: 'left' }}>{sData.nurseOnDuty || '\u2014'}</td>
             </tr>
           );
@@ -124,7 +139,12 @@ function WardShiftTableView({ w, data }) {
         <tr className="total-row">
           <td className="shift-name">Total</td>
           <td className="stat-beds">{beds}</td><td className="stat-occ">{finalOcc}</td><td className="stat-vac">{beds - finalOcc}</td>
-          {ORDERED_MOVEMENT.map(f => <td key={f.key} className={movementColorClass(f.key)}>{typeof data[f.key] === 'number' ? data[f.key] : 0}</td>)}
+          {ORDERED_MOVEMENT.map(f => (
+            <Fragment key={f.key}>
+              <td className={movementColorClass(f.key)}>{typeof data[f.key] === 'number' ? data[f.key] : 0}</td>
+              {f.key === 'bid' && isParoleWard && PAROLE_COLS.map(c => <td key={c.key}>{paroleCount(c.key)}</td>)}
+            </Fragment>
+          ))}
           <td style={{ textAlign: 'left' }}>{pmDuty || '\u2014'}</td>
         </tr>
       </tbody>
@@ -283,6 +303,11 @@ function WardReportBlockView({ w, data }) {
     <div className="ward-report-block">
       <h2 className="ward-report-heading">{w.label}</h2>
       <div className="table-wrap"><WardShiftTableView w={w} data={data} /></div>
+      {w.key === PAROLE_WARD_KEY && (
+        <div style={{ marginTop: 12 }}>
+          <ParoleTables paroleList={data.paroleList} dParoleList={data.dParoleList} />
+        </div>
+      )}
       <h3 className="patient-note-label" style={{ marginTop: 14 }}>Patient Demographics</h3>
       <div className="table-wrap"><DemographicsTableView data={data} w={w} /></div>
       {patients.length === 0

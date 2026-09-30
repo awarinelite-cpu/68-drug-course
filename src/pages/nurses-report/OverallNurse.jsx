@@ -15,7 +15,7 @@ import {
   loadWardNameOverrides, saveWardNameOverride, loadWardBedOverrides,
   loadHeaderLabelOverrides, saveHeaderLabelOverride, headerLabel, GROUP_LABEL_IDS,
   CUSTOM_TEXT_COLUMNS, loadCustomColumns, addCustomColumn, renameCustomColumn, removeCustomColumn,
-  isWardDocUntouched
+  isWardDocUntouched, PAROLE_WARD_KEY
 } from "../../lib/nurses-report-common.js";
 import { patientWardAndBedTypeForReportKey } from "../../lib/wardNameMatch.js";
 import { wardHeadcount } from "../../lib/wardCensus.js";
@@ -23,6 +23,7 @@ import { applyPendingStatBumps } from "../../lib/shiftStatsSync.js";
 import { loadPatientsForWardLabels } from "../../lib/patientDirectory.js";
 import { useGoBack } from "../../hooks/useGoBack.js";
 import Topbar from "../../components/Topbar.jsx";
+import ParoleTables from "../../components/ParoleTables.jsx";
 import { splitDiagnosisNote } from "../../lib/diagnosisNote.js";
 import { DiagnosisHeadline } from "../../components/DiagnosisNoteEditor.jsx";
 
@@ -61,6 +62,8 @@ function NoteLines({ text, withDiagnosis }) {
     : <p className="patient-note-text" key={i}>{b.text}</p>)}</>;
 }
 
+const PAROLE_COLS = [{ key: 'parole', label: 'Parole' }, { key: 'dParole', label: 'D/Parole' }];
+
 function WardShiftTable({ w, data }) {
   const shifts = data.shifts || {};
   const beds = typeof data.beds === 'number' ? data.beds : (w.beds || 0);
@@ -74,6 +77,10 @@ function WardShiftTable({ w, data }) {
   });
   const finalOcc = typeof data.occ === 'number' ? data.occ : runningOcc;
   const pmDuty = (shifts.pm || {}).nurseOnDuty;
+  // A Ward only: Parole / D/Parole headcounts, shown right after BID and
+  // never added to any total.
+  const isParoleWard = w.key === PAROLE_WARD_KEY;
+  const paroleCount = (k) => (typeof data[k] === 'number' ? data[k] : 0);
 
   return (
     <table className="ward-shift">
@@ -83,7 +90,12 @@ function WardShiftTable({ w, data }) {
           {SOLO_BEFORE.map(f => <th key={f.key} rowSpan={2}>{f.label}</th>)}
           <th colSpan={2}>Int. Transfer</th>
           <th colSpan={2}>Ext. Transfer</th>
-          {SOLO_AFTER.map(f => <th key={f.key} rowSpan={2}>{f.label}</th>)}
+          {SOLO_AFTER.map(f => (
+            <Fragment key={f.key}>
+              <th rowSpan={2}>{f.label}</th>
+              {f.key === 'bid' && isParoleWard && PAROLE_COLS.map(c => <th key={c.key} rowSpan={2}>{c.label}</th>)}
+            </Fragment>
+          ))}
           <th rowSpan={2}>Nurses on Duty</th>
         </tr>
         <tr>{['In', 'Out', 'In', 'Out'].map((l, i) => <th key={i}>{l}</th>)}</tr>
@@ -97,7 +109,12 @@ function WardShiftTable({ w, data }) {
               <td className="stat-beds">{beds}</td>
               <td className="stat-occ">{perShiftOcc[s.key]}</td>
               <td className="stat-vac">{beds - perShiftOcc[s.key]}</td>
-              {ORDERED_MOVEMENT.map(f => <td key={f.key} className={movementColorClass(f.key)}>{typeof sData[f.key] === 'number' ? sData[f.key] : 0}</td>)}
+              {ORDERED_MOVEMENT.map(f => (
+                <Fragment key={f.key}>
+                  <td className={movementColorClass(f.key)}>{typeof sData[f.key] === 'number' ? sData[f.key] : 0}</td>
+                  {f.key === 'bid' && isParoleWard && PAROLE_COLS.map(c => <td key={c.key}>{paroleCount(c.key)}</td>)}
+                </Fragment>
+              ))}
               <td style={{ textAlign: 'left' }}>{sData.nurseOnDuty || '\u2014'}</td>
             </tr>
           );
@@ -107,7 +124,12 @@ function WardShiftTable({ w, data }) {
           <td className="stat-beds">{beds}</td>
           <td className="stat-occ">{finalOcc}</td>
           <td className="stat-vac">{beds - finalOcc}</td>
-          {ORDERED_MOVEMENT.map(f => <td key={f.key} className={movementColorClass(f.key)}>{typeof data[f.key] === 'number' ? data[f.key] : 0}</td>)}
+          {ORDERED_MOVEMENT.map(f => (
+            <Fragment key={f.key}>
+              <td className={movementColorClass(f.key)}>{typeof data[f.key] === 'number' ? data[f.key] : 0}</td>
+              {f.key === 'bid' && isParoleWard && PAROLE_COLS.map(c => <td key={c.key}>{paroleCount(c.key)}</td>)}
+            </Fragment>
+          ))}
           <td style={{ textAlign: 'left' }}>{pmDuty || '\u2014'}</td>
         </tr>
       </tbody>
@@ -125,6 +147,11 @@ function WardStatsSection({ w, data, labeled }) {
     <div className="ward-report-sub">
       {labeled && <h3 className="ward-report-subheading">{w.label}</h3>}
       <div className="table-wrap"><WardShiftTable w={w} data={data} /></div>
+      {w.key === PAROLE_WARD_KEY && (
+        <div style={{ marginTop: 12 }}>
+          <ParoleTables paroleList={data.paroleList} dParoleList={data.dParoleList} />
+        </div>
+      )}
     </div>
   );
 }

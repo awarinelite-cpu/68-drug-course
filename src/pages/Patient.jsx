@@ -7,7 +7,8 @@ import { useGoBack } from "../hooks/useGoBack.js";
 import { useBackLock } from "../hooks/useBackLock.js";
 import { usePatientHeader } from "../hooks/usePatientHeader.js";
 import { getDocSafe } from "../lib/firestoreOffline.js";
-import { applyPatientStatus, admitExistingPatientToWard } from "../lib/patientAdmissionStatus.js";
+import { applyPatientStatus, admitExistingPatientToWard, setPatientParoleStatus } from "../lib/patientAdmissionStatus.js";
+import { PAROLE_PATIENT_WARD_LABEL } from "../lib/nurses-report-common.js";
 import { nameSearchTokens } from "../lib/patientDirectory.js";
 import { classifyAffiliation } from "../lib/patientAffiliation.js";
 import { STATUS_LABELS, WARD_OPTIONS } from "../lib/drugChartHelpers.js";
@@ -209,6 +210,27 @@ export default function Patient() {
       return;
     }
 
+    // Parole / D/Parole aren't exits either: the patient stays admitted on
+    // the ward, just tagged so the A Ward report lists them in its Parole /
+    // D/Parole tables. Nothing is archived, so no confirm-archive flow and
+    // no online requirement.
+    if (reason === 'parole' || reason === 'dparole' || reason === 'paroleClear') {
+      if (reason !== 'paroleClear' && patient.ward !== PAROLE_PATIENT_WARD_LABEL) {
+        setStatusMsg({ color: '#dc2626', text: 'Parole is only tracked for A Ward patients.' });
+        return;
+      }
+      setStatusApplying(true);
+      setStatusMsg({ color: '#555', text: 'Saving…' });
+      const kind = reason === 'paroleClear' ? 'clear' : reason;
+      const result = await setPatientParoleStatus({ patientId: patient.id, kind });
+      setStatusApplying(false);
+      if (!result.ok) { setStatusMsg({ color: '#dc2626', text: result.message }); return; }
+      setPatient((p) => ({ ...p, paroleStatus: result.value }));
+      setStatusMsg({ color: '#16a34a', text: result.value ? ('Patient placed on ' + (result.value === 'PAROLE' ? 'Parole' : 'D/Parole') + '.') : 'Parole tag cleared.' });
+      setStatusAction('');
+      return;
+    }
+
     // "Admit Patient" isn't a discharge/transfer at all — it's the
     // opposite direction: bringing an already-existing patient (found
     // via search, possibly with no ward or a stale one left from a past
@@ -328,6 +350,9 @@ export default function Patient() {
                     <option value="died">{STATUS_LABELS.died}</option>
                     <option value="dama">{STATUS_LABELS.dama}</option>
                     <option value="absconded">{STATUS_LABELS.absconded}</option>
+                    <option value="parole">{STATUS_LABELS.parole}</option>
+                    <option value="dparole">{STATUS_LABELS.dparole}</option>
+                    {patient.paroleStatus && <option value="paroleClear">{STATUS_LABELS.paroleClear}</option>}
                   </select>
                   {statusAction === 'transferred' && (
                     <select style={{ width: 'auto', minWidth: 220 }} value={transferWard} onChange={(e) => setTransferWard(e.target.value)}>

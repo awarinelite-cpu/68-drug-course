@@ -189,8 +189,25 @@ export const STAT_FIELDS = [
   { key: 'vsc',         label: 'VS/C' },
   { key: 'absc',        label: 'Absc' },
   { key: 'bid',         label: 'BID' },
+  // Parole / D/Parole sit after BID, purely as headcounts of the patients
+  // currently tagged PAROLE / D/PAROLE on A Ward (see PAROLE_WARD_KEY
+  // below). Like BID they are NOT part of the Occ maths and are never
+  // added to the ward's total — a patient on parole is still a patient of
+  // the ward. Unlike BID they are not typed or summed per shift: they're
+  // derived from the Parole / D/Parole tables, so they're excluded from
+  // SHIFT_STAT_FIELDS below.
+  { key: 'parole',      label: 'Parole' },
+  { key: 'dParole',     label: 'D/Parole' },
   { key: 'death',       label: 'Death' }
 ];
+
+export const PAROLE_STAT_KEYS = ['parole', 'dParole'];
+// Only A Ward tracks parole. `award` is the report-ward key; the patient
+// chart ward label is '"A" WARD' (see WARD_OPTIONS in drugChartHelpers.js).
+export const PAROLE_WARD_KEY = 'award';
+export const PAROLE_PATIENT_WARD_LABEL = '"A" WARD';
+// Values stored on the patient doc as `paroleStatus`.
+export const PAROLE_STATUS = { parole: 'PAROLE', dParole: 'D/PAROLE' };
 
 // Column headers can be corrected/renamed by an admin without touching the
 // underlying key or calculations (mirrors the ward-name mechanism above).
@@ -313,7 +330,7 @@ export const SHIFTS = [
 // evening has 8, not 16). Only the true movement/event columns below are
 // entered per shift and summed for the Total row.
 export const SHIFT_STAT_FIELDS = STAT_FIELDS.filter(
-  f => f.key !== 'beds' && f.key !== 'occ' && f.key !== 'vac'
+  f => f.key !== 'beds' && f.key !== 'occ' && f.key !== 'vac' && !PAROLE_STAT_KEYS.includes(f.key)
 );
 
 // Which movement columns move the Occ count, and which way. Confirmed with
@@ -394,7 +411,8 @@ export function defaultWardDoc(w, startOcc = 0) {
     label: w.label, beds: w.beds, startOcc: occ, occ: occ, vac: w.beds - occ,
     locked: false, submitted: false, pendingStatBumps: [],
     shifts: {}, patients: [], nightUpdate: '', nightUpdateBy: '', nightUpdatedAt: null,
-    demographicsRemarks: '', childMale: 0, childFemale: 0
+    demographicsRemarks: '', childMale: 0, childFemale: 0,
+    parole: 0, dParole: 0, paroleList: [], dParoleList: []
   };
   SHIFTS.forEach(s => { d.shifts[s.key] = blankShift(); });
   SHIFT_STAT_FIELDS.forEach(f => { d[f.key] = 0; });

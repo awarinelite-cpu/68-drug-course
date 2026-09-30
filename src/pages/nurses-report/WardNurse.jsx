@@ -10,7 +10,7 @@ import {
   PATIENT_STATUS_ARCHIVE_REASON,
   DEMOGRAPHIC_FIELDS, DEMOGRAPHIC_CATEGORIES, DEMOGRAPHIC_AFFILIATIONS, movementColorClass,
   reportDateId, occDelta, blankShift, defaultWardDoc, wardSelectorOptions, ensureWardBedsLoaded,
-  isWardDocUntouched
+  isWardDocUntouched, PAROLE_WARD_KEY, PAROLE_STATUS
 } from "../../lib/nurses-report-common.js";
 import { patientWardAndBedTypeForReportKey, wardSelectorKeyForPatientWard } from "../../lib/wardNameMatch.js";
 import { wardHeadcount } from "../../lib/wardCensus.js";
@@ -20,6 +20,7 @@ import { splitDiagnosisNote, withPatientDiagnosis } from "../../lib/diagnosisNot
 import DiagnosisNoteEditor, { DiagnosisHeadline } from "../../components/DiagnosisNoteEditor.jsx";
 import NursingDiagnosisPicker from "../../components/NursingDiagnosisPicker.jsx";
 import { buildStarterText } from "../../lib/nursingCatalog.js";
+import ParoleTables from "../../components/ParoleTables.jsx";
 import wardSelectBg from "../../assets/ward-select-bg.svg";
 
 // Row-label overrides for MergedDemographicsTable only — Maternity's
@@ -236,7 +237,12 @@ function PatientBlockView({ p }) {
   );
 }
 
-function ShiftTable({ wardDoc, census, movementTotals, editable, onBeds, onField, onDuty }) {
+// Parole / D/Parole columns (A Ward only — `parole` is null elsewhere): two
+// read-only headcount cells placed right after BID. They show the size of
+// the Parole / D/Parole tables and are never summed into anything.
+const PAROLE_COLS = [{ key: 'parole', label: 'Parole' }, { key: 'dParole', label: 'D/Parole' }];
+
+function ShiftTable({ wardDoc, census, movementTotals, editable, onBeds, onField, onDuty, parole }) {
   return (
     <table className="shift">
       <thead>
@@ -245,7 +251,12 @@ function ShiftTable({ wardDoc, census, movementTotals, editable, onBeds, onField
           {SOLO_BEFORE.map(f => <th key={f.key} rowSpan={2}>{f.label}</th>)}
           <th colSpan={2}>Int. Transfer</th>
           <th colSpan={2}>Ext. Transfer</th>
-          {SOLO_AFTER.map(f => <th key={f.key} rowSpan={2}>{f.label}</th>)}
+          {SOLO_AFTER.map(f => (
+            <Fragment key={f.key}>
+              <th rowSpan={2}>{f.label}</th>
+              {f.key === 'bid' && parole && PAROLE_COLS.map(c => <th key={c.key} rowSpan={2}>{c.label}</th>)}
+            </Fragment>
+          ))}
           <th rowSpan={2}>Nurses on Duty</th>
         </tr>
         <tr>{['In', 'Out', 'In', 'Out'].map((l, i) => <th key={i}>{l}</th>)}</tr>
@@ -262,10 +273,13 @@ function ShiftTable({ wardDoc, census, movementTotals, editable, onBeds, onField
             <td className="computed stat-occ">{census.perShiftOcc[s.key]}</td>
             <td className="computed stat-vac">{census.beds - census.perShiftOcc[s.key]}</td>
             {ORDERED_MOVEMENT.map((f) => (
-              <td key={f.key} className={movementColorClass(f.key)}>
-                <input type="number" inputMode="numeric" disabled={!editable}
-                  value={wardDoc.shifts[s.key][f.key]} onChange={(e) => onField(s.key, f.key, e.target.value)} />
-              </td>
+              <Fragment key={f.key}>
+                <td className={movementColorClass(f.key)}>
+                  <input type="number" inputMode="numeric" disabled={!editable}
+                    value={wardDoc.shifts[s.key][f.key]} onChange={(e) => onField(s.key, f.key, e.target.value)} />
+                </td>
+                {f.key === 'bid' && parole && PAROLE_COLS.map(c => <td key={c.key} className="computed">{parole[c.key].length}</td>)}
+              </Fragment>
             ))}
             <td>
               <input type="text" className="duty-input" placeholder="Nurse name(s)" disabled={!editable}
@@ -278,7 +292,12 @@ function ShiftTable({ wardDoc, census, movementTotals, editable, onBeds, onField
           <td className="stat-beds">{census.beds}</td>
           <td className="stat-occ">{census.occ}</td>
           <td className="stat-vac">{census.vac}</td>
-          {ORDERED_MOVEMENT.map((f) => <td key={f.key} className={movementColorClass(f.key)}>{movementTotals[f.key]}</td>)}
+          {ORDERED_MOVEMENT.map((f) => (
+            <Fragment key={f.key}>
+              <td className={movementColorClass(f.key)}>{movementTotals[f.key]}</td>
+              {f.key === 'bid' && parole && PAROLE_COLS.map(c => <td key={c.key} className="computed">{parole[c.key].length}</td>)}
+            </Fragment>
+          ))}
           <td style={{ textAlign: 'left' }}>{wardDoc.shifts.pm.nurseOnDuty || '\u2014'}</td>
         </tr>
       </tbody>
@@ -391,6 +410,10 @@ function useWardReport(wardKey, isAdmin, profile, user) {
   // the dropdown simply doesn't show and the nurse falls back to typing
   // details in manually (or via the EMR lookup on blur).
   const [wardPatientOptions, setWardPatientOptions] = useState([]);
+  // True only once the roster fetch above actually succeeded — the Parole /
+  // D/Parole counts are derived from it, so they must not be overwritten
+  // with zeros while it's still loading or after it failed.
+  const [optionsLoaded, setOptionsLoaded] = useState(false);
   const patientCounter = useRef(0);
   // Which write-up card is expanded (accordion: one at a time). null = all collapsed.
   const [openPatientId, setOpenPatientId] = useState(null);
@@ -418,6 +441,7 @@ function useWardReport(wardKey, isAdmin, profile, user) {
   useEffect(() => {
     let cancelled = false;
     (async () => {
+      setOptionsLoaded(false);
       const info = patientWardAndBedTypeForReportKey(wardKey);
       if (!info) { setWardPatientOptions([]); return; }
       try {
@@ -441,10 +465,10 @@ function useWardReport(wardKey, isAdmin, profile, user) {
           // ADMISSION_TAG_LABEL/activeAdmissionTag in
           // patientAdmissionStatus.js and WardPatientPicker below for how
           // it's shown (blue, vs dischargeStatus's red).
-          list.push({ id: d.id, name: data.name || '', emr: data.emr || '', age: data.age || '', admissionDate: data.admissionDate || '', diagnosis: data.diagnosis || '', gender: data.gender || '', dischargeStatus: data.dischargeStatus || '', admissionTag: activeAdmissionTag(data) });
+          list.push({ id: d.id, name: data.name || '', emr: data.emr || '', age: data.age || '', admissionDate: data.admissionDate || '', diagnosis: data.diagnosis || '', gender: data.gender || '', dischargeStatus: data.dischargeStatus || '', admissionTag: activeAdmissionTag(data), paroleStatus: data.paroleStatus || '', paroleAt: (data.paroleAt && typeof data.paroleAt.toMillis === 'function') ? data.paroleAt.toMillis() : 0 });
         });
         list.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
-        if (!cancelled) setWardPatientOptions(list);
+        if (!cancelled) { setWardPatientOptions(list); setOptionsLoaded(true); }
       } catch (e) {
         if (!cancelled) setWardPatientOptions([]);
       }
@@ -884,6 +908,34 @@ function useWardReport(wardKey, isAdmin, profile, user) {
 
   const editable = wardDoc ? ((isAdmin && adminEditOverride) || !wardDoc.locked) : false;
 
+  // A Ward only: Parole / D/Parole name tables + the two stat columns. The
+  // lists come from patients tagged via the Patient page's Status control
+  // (paroleStatus on the patient doc). A patient who has since been
+  // discharged/referred/etc. carries a dischargeStatus and is left out. The
+  // counts are NOT part of Occ or any total — see STAT_FIELDS. While the
+  // report is editable the lists follow the live roster and are copied into
+  // the ward doc so Save/Submit persists them (the Overall Nurse and the
+  // archive read them from there); once the report is locked/submitted it
+  // shows what was saved instead of drifting with later changes.
+  const isParoleWard = wardKey === PAROLE_WARD_KEY;
+  const liveParole = useMemo(() => {
+    const pick = (status) => wardPatientOptions
+      .filter((o) => !o.dischargeStatus && o.paroleStatus === status)
+      .map((o) => ({ id: o.id, name: o.name, emr: o.emr, age: o.age, sex: o.gender, since: o.paroleAt || 0 }));
+    return { parole: pick(PAROLE_STATUS.parole), dParole: pick(PAROLE_STATUS.dParole) };
+  }, [wardPatientOptions]);
+  useEffect(() => {
+    if (!isParoleWard || !wardDoc || !editable || !optionsLoaded) return;
+    const p = liveParole.parole, d = liveParole.dParole;
+    const same = wardDoc.parole === p.length && wardDoc.dParole === d.length
+      && JSON.stringify(wardDoc.paroleList || []) === JSON.stringify(p)
+      && JSON.stringify(wardDoc.dParoleList || []) === JSON.stringify(d);
+    if (!same) setWardDoc((dd) => dd ? { ...dd, parole: p.length, dParole: d.length, paroleList: p, dParoleList: d } : dd);
+  }, [isParoleWard, wardDoc, editable, optionsLoaded, liveParole]);
+  const paroleView = !isParoleWard || !wardDoc ? null : (editable && optionsLoaded
+    ? { parole: liveParole.parole, dParole: liveParole.dParole }
+    : { parole: wardDoc.paroleList || [], dParole: wardDoc.dParoleList || [] });
+
   async function saveReport() {
     if (!wardDoc || !editable) return;
     let doc_ = wardDoc;
@@ -1036,7 +1088,7 @@ function useWardReport(wardKey, isAdmin, profile, user) {
 
   return {
     w, wardDoc, adminEditOverride, setAdminEditOverride, nightOpenIds, topStatus, saveStatus, emrLookup,
-    wardPatientOptions,
+    wardPatientOptions, paroleView,
     census, movementTotals, editable,
     updateWardDoc, updateShiftField, updateDuty, updateBeds, updateStartOcc,
     addPatient, removePatient, openPatientId, setOpenPatientId, updatePatientField, updateDiagnosisField, updateVitalsSnapshotField,
@@ -1178,7 +1230,7 @@ function WardPatientPicker({ value, options, onSelect, usedIds, columns }) {
 function WardPanelRest({ h, showLabel, isAdmin, navigate, includeShiftTable = true, includePreviousOcc = true, includeHeader = true, includeDemographics = true, onSave, onSubmit, locationOptions }) {
   const {
     w, wardDoc, topStatus, saveStatus, editable, adminEditOverride, setAdminEditOverride,
-    census, movementTotals, emrLookup, wardPatientOptions,
+    census, movementTotals, emrLookup, wardPatientOptions, paroleView,
     updateWardDoc, updateShiftField, updateDuty, updateBeds, updateStartOcc,
     addPatient, removePatient, openPatientId, setOpenPatientId, updatePatientField, updateDiagnosisField, updateVitalsSnapshotField,
     updatePatientStatus, lookupPatientByEmr, selectPatientFromWard, refreshPlan, applyNursingDiagnosis,
@@ -1239,8 +1291,15 @@ function WardPanelRest({ h, showLabel, isAdmin, navigate, includeShiftTable = tr
               <div className="table-wrap">
                 <div className="ward-report-title">24 HOURS WARD REPORT WEF 0900HRS OF 26/09/26 TO 0900HRS OF 27/09/26</div>
                 <ShiftTable wardDoc={wardDoc} census={census} movementTotals={movementTotals} editable={editable}
-                  onBeds={updateBeds} onField={updateShiftField} onDuty={updateDuty} />
+                  onBeds={updateBeds} onField={updateShiftField} onDuty={updateDuty} parole={paroleView} />
               </div>
+            </div>
+          )}
+
+          {paroleView && (
+            <div className="card-box ward-nurse-box">
+              <h2>Parole / D/Parole</h2>
+              <ParoleTables paroleList={paroleView.parole} dParoleList={paroleView.dParole} />
             </div>
           )}
 

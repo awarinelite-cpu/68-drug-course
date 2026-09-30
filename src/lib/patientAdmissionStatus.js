@@ -4,6 +4,7 @@ import { STATUS_LABELS, WARD_OPTIONS, defaultRow } from "./drugChartHelpers.js";
 import { formatDateTime } from "./time-format.js";
 import { bumpShiftStat, bumpShiftStatForPatientWard, bumpDemographicStat, bumpDemographicStatForPatientWard } from "./shiftStatsSync.js";
 import { classifyAffiliation } from "./patientAffiliation.js";
+import { PAROLE_STATUS } from "./nurses-report-common.js";
 
 // Which Shift Statistics column each exit reason feeds — 'referred' is
 // an external hand-off to another hospital, so it counts as Ext Out, not
@@ -175,6 +176,7 @@ export async function applyPatientStatus({ patientId, reason, transferWard, from
     // `ward` over with everything else left untouched.
     try {
       await updateDoc(doc(db, 'patients', patientId), {
+        paroleStatus: '', paroleAt: null,
         pendingTransfer: {
           toWard: wardChosen,
           fromWard: fromWard || '',
@@ -341,6 +343,7 @@ export async function applyPatientStatus({ patientId, reason, transferWard, from
       // closing report is submitted for them — see closeOutDischargedPatient.
       updateDoc(doc(db, 'patients', patientId), {
         dischargeStatus: ROSTER_TAG_FOR_REASON[reason] || '', dischargeStatusAt: serverTimestamp(),
+        paroleStatus: '', paroleAt: null,
         dischargeStatShiftRef: exitStatRef, dischargeStatDemographicRef: demographicStatRef
       })
     ]);
@@ -614,5 +617,27 @@ export async function readmitLatestAdmission({ patientId, nurseName }) {
     return { ok: true, admissionId: admSnap.id };
   } catch (e) {
     return { ok: false, message: 'Readmit failed: ' + (e.code || e.message || 'unknown error') };
+  }
+}
+
+// Places a patient on Parole or D/Parole (or clears the tag). This is NOT an
+// exit: nothing is archived and the patient stays on the ward roster and in
+// the ward's Occ — it only sets `paroleStatus` on the shared /patients doc,
+// which the A Ward report reads to fill its Parole / D/Parole tables and the
+// Parole / D/Parole columns. Choosing the other status simply moves the
+// patient from one table to the other. `kind` is 'parole' | 'dparole' |
+// 'clear'. Offline-tolerant like other single-doc edits: the write queues
+// locally, so it isn't awaited past a failure.
+export async function setPatientParoleStatus({ patientId, kind }) {
+  const value = kind === 'parole' ? PAROLE_STATUS.parole : kind === 'dparole' ? PAROLE_STATUS.dParole : '';
+  try {
+    await updateDoc(doc(db, 'patients', patientId), {
+      paroleStatus: value,
+      paroleAt: value ? serverTimestamp() : null,
+      updatedAt: serverTimestamp()
+    });
+    return { ok: true, value };
+  } catch (e) {
+    return { ok: false, message: 'Could not update parole status: ' + (e.code || e.message || 'unknown error') };
   }
 }
