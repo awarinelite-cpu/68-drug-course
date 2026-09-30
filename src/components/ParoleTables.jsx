@@ -18,8 +18,7 @@ function ParoleTable({ title, rows }) {
   return (
     <div className="parole-block">
       <h3 className="parole-heading">{title} <span className="parole-count">({list.length})</span></h3>
-      <div className="table-wrap">
-        <table className="shift parole-table">
+      <table className="shift parole-table">
           <thead>
             <tr><th>S/N</th><th>Name</th><th>EMR</th><th>Age</th><th>Sex</th><th>Since</th></tr>
           </thead>
@@ -37,17 +36,18 @@ function ParoleTable({ title, rows }) {
               </tr>
             ))}
           </tbody>
-        </table>
-      </div>
+      </table>
     </div>
   );
 }
 
 export default function ParoleTables({ paroleList, dParoleList }) {
   return (
-    <>
+    // Side by side inside one scrollable strip (same .table-wrap sliding
+    // behaviour as the other report tables).
+    <div className="table-wrap parole-row">
       <ParoleTable title="Parole" rows={paroleList} />
       <ParoleTable title="D/Parole" rows={dParoleList} />
-    </>
+    </div>
   );
 }
