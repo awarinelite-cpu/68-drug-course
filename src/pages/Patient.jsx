@@ -295,7 +295,7 @@ export default function Patient() {
         {patientError && <div className="card-box error-msg">{patientError}</div>}
 
         {patient && (
-          <div className="card-box">
+          <div className="card-box patient-page-box">
             <PatientBanner
               patient={{ ...patient, diagnosis: chartDiagnosis || patient.diagnosis }}
               ward={patient.ward}

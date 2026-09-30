@@ -1606,3 +1606,12 @@ table.drugs-table tr.drop-after > td { box-shadow: inset 0 -3px 0 0 #7c3aed; }
   .ward-nurse-box .patient-card { padding-left: 10px; padding-right: 10px; }
   .ward-nurse-box .patient-card.collapsed { padding: 0; }
 }
+
+/* Patient banner: action buttons (edit / Allocate / Overview / Status) wrap onto a
+   second line instead of scrolling sideways and getting cut off. */
+.patient-banner-row2 { flex-wrap: wrap; overflow-x: visible; row-gap: 8px; }
+.patient-banner-row2 > button { margin-left: 0 !important; }
+/* Mobile: widen the patient card so the banner uses nearly the full screen */
+@media (max-width: 700px) {
+  .patient-page-box { padding: 14px 8px; margin-left: -12px; margin-right: -12px; border-radius: 10px; }
+}
