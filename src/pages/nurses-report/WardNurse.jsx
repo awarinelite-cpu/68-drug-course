@@ -20,7 +20,7 @@ import { splitDiagnosisNote, withPatientDiagnosis } from "../../lib/diagnosisNot
 import DiagnosisNoteEditor, { DiagnosisHeadline } from "../../components/DiagnosisNoteEditor.jsx";
 import NursingDiagnosisPicker from "../../components/NursingDiagnosisPicker.jsx";
 import { buildStarterText } from "../../lib/nursingCatalog.js";
-import ParoleTables from "../../components/ParoleTables.jsx";
+import ParoleTables, { hasAny as paroleHasAny } from "../../components/ParoleTables.jsx";
 import wardSelectBg from "../../assets/ward-select-bg.svg";
 
 // Row-label overrides for MergedDemographicsTable only — Maternity's
@@ -1296,7 +1296,7 @@ function WardPanelRest({ h, showLabel, isAdmin, navigate, includeShiftTable = tr
             </div>
           )}
 
-          {paroleView && (
+          {paroleView && (paroleHasAny(paroleView.parole) || paroleHasAny(paroleView.dParole)) && (
             <div className="card-box ward-nurse-box">
               <h2>Parole / D/Parole</h2>
               <ParoleTables paroleList={paroleView.parole} dParoleList={paroleView.dParole} />

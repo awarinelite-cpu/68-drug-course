@@ -10,7 +10,7 @@ import {
 } from "../../lib/nurses-report-common.js";
 import { useTimeFormat, formatDateTime } from "../../lib/time-format.js";
 import Topbar from "../../components/Topbar.jsx";
-import ParoleTables from "../../components/ParoleTables.jsx";
+import ParoleTables, { hasAny as paroleHasAny } from "../../components/ParoleTables.jsx";
 import { splitDiagnosisNote } from "../../lib/diagnosisNote.js";
 import DiagnosisNoteEditor, { DiagnosisHeadline } from "../../components/DiagnosisNoteEditor.jsx";
 
@@ -303,7 +303,7 @@ function WardReportBlockView({ w, data }) {
     <div className="ward-report-block">
       <h2 className="ward-report-heading">{w.label}</h2>
       <div className="table-wrap"><WardShiftTableView w={w} data={data} /></div>
-      {w.key === PAROLE_WARD_KEY && (
+      {w.key === PAROLE_WARD_KEY && (paroleHasAny(data.paroleList) || paroleHasAny(data.dParoleList)) && (
         <div style={{ marginTop: 12 }}>
           <ParoleTables paroleList={data.paroleList} dParoleList={data.dParoleList} />
         </div>

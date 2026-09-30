@@ -23,7 +23,7 @@ import { applyPendingStatBumps } from "../../lib/shiftStatsSync.js";
 import { loadPatientsForWardLabels } from "../../lib/patientDirectory.js";
 import { useGoBack } from "../../hooks/useGoBack.js";
 import Topbar from "../../components/Topbar.jsx";
-import ParoleTables from "../../components/ParoleTables.jsx";
+import ParoleTables, { hasAny as paroleHasAny } from "../../components/ParoleTables.jsx";
 import { splitDiagnosisNote } from "../../lib/diagnosisNote.js";
 import { DiagnosisHeadline } from "../../components/DiagnosisNoteEditor.jsx";
 
@@ -147,7 +147,7 @@ function WardStatsSection({ w, data, labeled }) {
     <div className="ward-report-sub">
       {labeled && <h3 className="ward-report-subheading">{w.label}</h3>}
       <div className="table-wrap"><WardShiftTable w={w} data={data} /></div>
-      {w.key === PAROLE_WARD_KEY && (
+      {w.key === PAROLE_WARD_KEY && (paroleHasAny(data.paroleList) || paroleHasAny(data.dParoleList)) && (
         <div style={{ marginTop: 12 }}>
           <ParoleTables paroleList={data.paroleList} dParoleList={data.dParoleList} />
         </div>

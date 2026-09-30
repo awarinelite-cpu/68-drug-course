@@ -43,11 +43,14 @@ function ParoleTable({ title, rows }) {
   );
 }
 
+// A table only appears while it has at least one patient.
+export function hasAny(list) { return Array.isArray(list) && list.length > 0; }
+
 export default function ParoleTables({ paroleList, dParoleList }) {
   return (
     <>
-      <ParoleTable title="Parole" rows={paroleList} />
-      <ParoleTable title="D/Parole" rows={dParoleList} />
+      {hasAny(paroleList) && <ParoleTable title="Parole" rows={paroleList} />}
+      {hasAny(dParoleList) && <ParoleTable title="D/Parole" rows={dParoleList} />}
     </>
   );
 }
