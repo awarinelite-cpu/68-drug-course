@@ -330,7 +330,7 @@ export default function EntryChart({ title, collectionName, columns, deriveRows,
             flex: '1 1 240px', display: 'flex', flexDirection: 'column', gap: 10, padding: 10, borderRadius: 8,
             background: styled.groupColor || undefined
           }}>
-            {styled.groupLabel && <div style={{ fontWeight: 600 }}>{styled.groupLabel}</div>}
+            {styled.groupLabel && <div style={{ fontWeight: 800, fontSize: 28, lineHeight: 1.2, marginBottom: 6 }}>{styled.groupLabel}</div>}
             {sameGroup.map((c) => (
               <FormField key={c.key} col={c} value={entryValues[c.key]} otherValue={entryOtherValues[c.key]}
                 onChange={(v) => setEntryValues((s) => ({ ...s, [c.key]: v }))}
