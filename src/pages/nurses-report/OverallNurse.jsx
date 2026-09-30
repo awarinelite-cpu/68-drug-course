@@ -265,6 +265,8 @@ export default function OverallNurse() {
   // Nurse for the week can change anything (lock/open wards, archive).
   const [canEdit, setCanEdit] = useState(false);
   const [appointUid, setAppointUid] = useState('');
+  // Ward Reports accordion: key of the ward card currently expanded (null = all collapsed)
+  const [openWardKey, setOpenWardKey] = useState(null);
   const [appointStatus, setAppointStatus] = useState({ text: '', error: false });
   const [whoLabel, setWhoLabel] = useState('');
   const [wardData, setWardData] = useState({});
@@ -971,17 +973,28 @@ export default function OverallNurse() {
           {reportGroups.length === 0 && <div className="ward-report-empty">No ward reports submitted yet.</div>}
           {reportGroups.map((g) => {
             const labeled = g.members.length > 1;
+            const isOpen = openWardKey === g.key;
+            const patientCount = g.members.reduce((n, { data }) => n + (Array.isArray(data.patients) ? data.patients.length : 0), 0);
             return (
-              <div className="ward-report-block" key={g.key}>
-                <h2 className="ward-report-heading">{g.label}</h2>
-                {g.mergedTable
-                  ? <GroupedWardShiftTable group={WARD_GROUPS.find(x => x.key === g.key)} wardData={wardData} />
-                  : g.members.map(({ w, data }) => (
-                      <WardStatsSection w={w} data={data} labeled={labeled} key={'stats-' + w.key} />
+              <div className={"ward-report-block ward-card" + (isOpen ? ' open' : ' collapsed')} key={g.key}>
+                <button type="button" className="ward-card-header" aria-expanded={isOpen}
+                  onClick={() => setOpenWardKey(isOpen ? null : g.key)}>
+                  <span className="wc-name">{g.label}</span>
+                  <span className="wc-count">{patientCount} {patientCount === 1 ? 'patient' : 'patients'}</span>
+                  <span className="wc-chevron">{isOpen ? '\u25B2' : '\u25BC'}</span>
+                </button>
+                {isOpen && (
+                  <div className="ward-card-body">
+                    {g.mergedTable
+                      ? <GroupedWardShiftTable group={WARD_GROUPS.find(x => x.key === g.key)} wardData={wardData} />
+                      : g.members.map(({ w, data }) => (
+                          <WardStatsSection w={w} data={data} labeled={labeled} key={'stats-' + w.key} />
+                        ))}
+                    {g.members.map(({ w, data }) => (
+                      <WardPatientSection w={w} data={data} labeled={labeled} key={'patients-' + w.key} />
                     ))}
-                {g.members.map(({ w, data }) => (
-                  <WardPatientSection w={w} data={data} labeled={labeled} key={'patients-' + w.key} />
-                ))}
+                  </div>
+                )}
               </div>
             );
           })}
