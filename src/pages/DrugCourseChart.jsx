@@ -17,7 +17,7 @@ import {
   autoDurationForFrequency, buildSnoSegments, buildSnoText, abbreviateReason,
   parseWeeklyFrequency, weeklyDosesGivenThisWeek, formatHHMM12
 } from "../lib/drugChartHelpers.js";
-import { ROSTER_TAG_FOR_REASON, clearAllocationsForPatient, EXIT_STAT_KEY, EXIT_DEMOGRAPHIC_CATEGORY, setPatientParoleStatus } from "../lib/patientAdmissionStatus.js";
+import { ROSTER_TAG_FOR_REASON, clearAllocationsForPatient, EXIT_STAT_KEY, EXIT_DEMOGRAPHIC_CATEGORY, setPatientParoleStatus, releaseParoleOnExit } from "../lib/patientAdmissionStatus.js";
 import { PAROLE_PATIENT_WARD_LABEL, todayISO } from "../lib/nurses-report-common.js";
 import { bumpShiftStatForPatientWard, bumpDemographicStatForPatientWard } from "../lib/shiftStatsSync.js";
 import { classifyAffiliation } from "../lib/patientAffiliation.js";
@@ -1001,6 +1001,7 @@ export default function DrugCourseChart() {
       return;
     }
 
+    await releaseParoleOnExit(patientId);
     let label = STATUS_LABELS[reason];
     let wardChosen = '';
     if (reason === 'transferred') {
@@ -1022,7 +1023,7 @@ export default function DrugCourseChart() {
       // control. See src/lib/wardTransfer.js.
       try {
         await updateDoc(doc(db, 'patients', patientId), {
-          paroleStatus: '', paroleAt: null, paroleStart: '', paroleReturn: '',
+          paroleStatus: '', paroleAt: null, paroleWard: '', paroleStart: '', paroleReturn: '',
           pendingTransfer: {
             toWard: wardChosen,
             fromWard: patient?.ward || '',
@@ -1165,7 +1166,7 @@ export default function DrugCourseChart() {
         // for them (see closeOutDischargedPatient in patientAdmissionStatus.js).
         updateDoc(doc(db, 'patients', patientId), {
           dischargeStatus: ROSTER_TAG_FOR_REASON[reason] || '', dischargeStatusAt: serverTimestamp(),
-          paroleStatus: '', paroleAt: null, paroleStart: '', paroleReturn: '',
+          paroleStatus: '', paroleAt: null, paroleWard: '', paroleStart: '', paroleReturn: '',
           dischargeStatShiftRef: exitStatRef
         })
       ]);

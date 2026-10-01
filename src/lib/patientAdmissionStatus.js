@@ -4,7 +4,7 @@ import { STATUS_LABELS, WARD_OPTIONS, defaultRow } from "./drugChartHelpers.js";
 import { formatDateTime } from "./time-format.js";
 import { bumpShiftStat, bumpShiftStatForPatientWard, bumpDemographicStat, bumpDemographicStatForPatientWard } from "./shiftStatsSync.js";
 import { classifyAffiliation } from "./patientAffiliation.js";
-import { PAROLE_STATUS } from "./nurses-report-common.js";
+import { PAROLE_STATUS, PAROLE_OUT_KEY, PAROLE_WARD_KEY, PAROLE_PATIENT_WARD_LABEL } from "./nurses-report-common.js";
 
 // Which Shift Statistics column each exit reason feeds — 'referred' is
 // an external hand-off to another hospital, so it counts as Ext Out, not
@@ -160,6 +160,9 @@ export async function clearAdmissionTag(patientId) {
 // makes that read-after-write consistent even before the server
 // round trip finishes.
 export async function applyPatientStatus({ patientId, reason, transferWard, fromWard, transferredByName }) {
+  // A patient with a pending parole who exits another way: undo the parole
+  // Occ decrease first so it isn't counted twice (see releaseParoleOnExit).
+  await releaseParoleOnExit(patientId);
   let label = STATUS_LABELS[reason];
   let wardChosen = '';
   if (reason === 'transferred') {
@@ -176,7 +179,7 @@ export async function applyPatientStatus({ patientId, reason, transferWard, from
     // `ward` over with everything else left untouched.
     try {
       await updateDoc(doc(db, 'patients', patientId), {
-        paroleStatus: '', paroleAt: null, paroleStart: '', paroleReturn: '',
+        paroleStatus: '', paroleAt: null, paroleWard: '', paroleStart: '', paroleReturn: '',
         pendingTransfer: {
           toWard: wardChosen,
           fromWard: fromWard || '',
@@ -343,7 +346,7 @@ export async function applyPatientStatus({ patientId, reason, transferWard, from
       // closing report is submitted for them — see closeOutDischargedPatient.
       updateDoc(doc(db, 'patients', patientId), {
         dischargeStatus: ROSTER_TAG_FOR_REASON[reason] || '', dischargeStatusAt: serverTimestamp(),
-        paroleStatus: '', paroleAt: null, paroleStart: '', paroleReturn: '',
+        paroleStatus: '', paroleAt: null, paroleWard: '', paroleStart: '', paroleReturn: '',
         dischargeStatShiftRef: exitStatRef, dischargeStatDemographicRef: demographicStatRef
       })
     ]);
@@ -427,6 +430,7 @@ export async function admitExistingPatientToWard({ patientId, currentWard, nurse
       // and tags this as a fresh admission for the roster picker, same
       // as a brand-new registration (see ADMISSION_TAG_LABEL above).
       dischargeStatus: '', dischargeStatusAt: null, dischargeStatShiftRef: null, dischargeStatDemographicRef: null,
+      paroleStatus: '', paroleAt: null, paroleWard: '', paroleStart: '', paroleReturn: '',
       admissionSource: 'NEW_PATIENT', admissionSourceAt: serverTimestamp(),
       updatedAt: serverTimestamp()
     });
@@ -620,28 +624,129 @@ export async function readmitLatestAdmission({ patientId, nurseName }) {
   }
 }
 
-// Places a patient on Parole or D/Parole (or clears the tag). This is NOT an
-// exit: nothing is archived and the patient stays on the ward roster and in
-// the ward's Occ — it only sets `paroleStatus` on the shared /patients doc,
-// which the A Ward report reads to fill its Parole / D/Parole tables and the
-// Parole / D/Parole columns. Choosing the other status simply moves the
-// patient from one table to the other. `kind` is 'parole' | 'dparole' |
-// 'clear'. Offline-tolerant like other single-doc edits: the write queues
-// locally, so it isn't awaited past a failure.
+// Places a patient on Parole or D/Parole (or clears the tag). Parole is a
+// temporary absence, not an exit: nothing is archived and the charts stay as
+// they are. What it does:
+//  - Tags the shared /patients doc (paroleStatus, dates, and paroleWard =
+//    the ward they left, which keeps them on that ward's Parole / D/Parole
+//    list after they're no longer on its roster).
+//  - Bumps the hidden 'paroleOut' figure so the ward's Occ drops right away
+//    (first tag only — switching Parole <-> D/Parole doesn't bump again).
+//  - The patient stays on the roster until the ward report is submitted,
+//    exactly like a discharge; submitReport then calls closeOutParolePatients
+//    which clears `ward`, so they drop off every ward list and the next
+//    day's Previous Occ.
+// `kind` is 'parole' | 'dparole' | 'clear'. Clearing is only possible while
+// the patient is still on the ward; once they've left, Readmit is the way
+// back (readmitFromParole below).
 export async function setPatientParoleStatus({ patientId, kind, startDate, returnDate }) {
   const value = kind === 'parole' ? PAROLE_STATUS.parole : kind === 'dparole' ? PAROLE_STATUS.dParole : '';
+  let before = {};
   try {
-    await updateDoc(doc(db, 'patients', patientId), {
+    const snap = await getDoc(doc(db, 'patients', patientId));
+    if (snap.exists()) before = snap.data();
+  } catch (e) {
+    return { ok: false, message: 'Could not look up the patient: ' + (e.code || e.message || 'unknown error') };
+  }
+  const wasTagged = !!before.paroleStatus;
+  const onAWard = before.ward === PAROLE_PATIENT_WARD_LABEL;
+  if (!value && wasTagged && !onAWard) {
+    return { ok: false, message: 'This patient has already left the ward on parole. Use Readmit on the Parole list to bring them back.' };
+  }
+  try {
+    await updateDoc(doc(db, 'patients', patientId), value ? {
       paroleStatus: value,
-      paroleAt: value ? serverTimestamp() : null,
+      paroleAt: wasTagged ? (before.paroleAt || serverTimestamp()) : serverTimestamp(),
+      paroleWard: before.paroleWard || before.ward || '',
       // Commencement and return dates as YYYY-MM-DD strings (return is
       // optional — blank until the patient's return date is known).
-      paroleStart: value ? (startDate || '') : '',
-      paroleReturn: value ? (returnDate || '') : '',
+      paroleStart: startDate || '',
+      paroleReturn: returnDate || '',
+      updatedAt: serverTimestamp()
+    } : {
+      paroleStatus: '', paroleAt: null, paroleWard: '', paroleStart: '', paroleReturn: '',
       updatedAt: serverTimestamp()
     });
-    return { ok: true, value, startDate: value ? (startDate || '') : '', returnDate: value ? (returnDate || '') : '' };
   } catch (e) {
     return { ok: false, message: 'Could not update parole status: ' + (e.code || e.message || 'unknown error') };
   }
+  // Occ: leaving the ward on parole is a decrease; cancelling it while they
+  // were still on the roster puts it back. Best-effort like other stat bumps.
+  if (value && !wasTagged) bumpShiftStat(PAROLE_WARD_KEY, PAROLE_OUT_KEY, 1).catch(() => {});
+  if (!value && wasTagged && onAWard) bumpShiftStat(PAROLE_WARD_KEY, PAROLE_OUT_KEY, -1).catch(() => {});
+  return { ok: true, value, startDate: value ? (startDate || '') : '', returnDate: value ? (returnDate || '') : '' };
+}
+
+// If a patient who is still on the roster has a pending parole tag and then
+// exits another way (discharge, transfer, etc.), their parole is void: undo
+// the 'paroleOut' decrease so Occ isn't reduced twice, and drop the tag so
+// they leave the Parole list. A no-op for anyone not on parole.
+export async function releaseParoleOnExit(patientId) {
+  try {
+    const snap = await getDoc(doc(db, 'patients', patientId));
+    if (!snap.exists()) return;
+    const d = snap.data();
+    if (!d.paroleStatus) return;
+    if (d.ward === PAROLE_PATIENT_WARD_LABEL) bumpShiftStat(PAROLE_WARD_KEY, PAROLE_OUT_KEY, -1).catch(() => {});
+    await updateDoc(doc(db, 'patients', patientId), { paroleStatus: '', paroleAt: null, paroleWard: '', paroleStart: '', paroleReturn: '', updatedAt: serverTimestamp() });
+  } catch (e) { /* best-effort */ }
+}
+
+// Final step of a parole, run when the ward report is submitted: takes the
+// patient off the ward (ward cleared) while keeping their parole tag and
+// paroleWard so they stay listed under Parole / D/Parole. Same idea as
+// closeOutDischargedPatient above.
+export async function closeOutParolePatients(patientIds) {
+  const errors = [];
+  await Promise.all((patientIds || []).map(async (id) => {
+    try {
+      await updateDoc(doc(db, 'patients', id), { ward: '', pedBedType: '', updatedAt: serverTimestamp() });
+    } catch (e) { errors.push(e.code || e.message || 'unknown error'); }
+  }));
+  return errors.length ? { ok: false, message: errors[0] } : { ok: true };
+}
+
+// Brings a patient back from Parole / D/Parole (relapse, brought back to
+// hospital) — the Readmit button on the Parole tables. Returns them to the
+// ward they left and clears the parole tag. Charts were never archived, so
+// care just continues. If they hadn't actually left the roster yet (report
+// not submitted since the tag), this simply cancels the parole and puts the
+// Occ decrease back; otherwise it's a fresh admission: Adm +1 and the
+// Admission demographic cell, same as admitExistingPatientToWard.
+export async function readmitFromParole({ patientId }) {
+  let data;
+  try {
+    const snap = await getDoc(doc(db, 'patients', patientId));
+    if (!snap.exists()) return { ok: false, message: 'Patient record not found.' };
+    data = snap.data();
+  } catch (e) {
+    return { ok: false, message: 'Could not look up the patient: ' + (e.code || e.message || 'unknown error') };
+  }
+  const wardLabel = data.paroleWard || PAROLE_PATIENT_WARD_LABEL;
+  const stillOnWard = data.ward === wardLabel;
+  if (!stillOnWard && data.ward && WARD_OPTIONS.includes(data.ward)) {
+    return { ok: false, message: 'Patient is already on ' + data.ward + '.' };
+  }
+  try {
+    await updateDoc(doc(db, 'patients', patientId), stillOnWard ? {
+      paroleStatus: '', paroleAt: null, paroleWard: '', paroleStart: '', paroleReturn: '',
+      updatedAt: serverTimestamp()
+    } : {
+      ward: wardLabel, pedBedType: '',
+      paroleStatus: '', paroleAt: null, paroleWard: '', paroleStart: '', paroleReturn: '',
+      admissionSource: 'READMITTED', admissionSourceAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
+    });
+  } catch (e) {
+    return { ok: false, message: 'Readmit failed: ' + (e.code || e.message || 'unknown error') };
+  }
+  if (stillOnWard) {
+    bumpShiftStat(PAROLE_WARD_KEY, PAROLE_OUT_KEY, -1).catch(() => {});
+  } else {
+    bumpShiftStatForPatientWard(wardLabel, '', 'adm', 1).catch(() => {});
+    if (data.gender === 'M' || data.gender === 'F') {
+      bumpDemographicStatForPatientWard(wardLabel, '', 'adm', classifyAffiliation(data), data.gender, 1).catch(() => {});
+    }
+  }
+  return { ok: true, stillOnWard };
 }

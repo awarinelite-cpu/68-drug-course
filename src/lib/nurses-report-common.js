@@ -212,6 +212,12 @@ export function todayISO() {
   const d = new Date();
   return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
 }
+// A parolee stays on the Parole / D/Parole list until their return date has
+// passed (no return date = stays until readmitted). `iso` is YYYY-MM-DD.
+export function isParoleActive(returnIso) {
+  if (!returnIso) return true;
+  return returnIso >= todayISO();
+}
 export const PAROLE_STATUS = { parole: 'PAROLE', dParole: 'D/PAROLE' };
 
 // Column headers can be corrected/renamed by an admin without touching the
@@ -343,7 +349,13 @@ export const SHIFT_STAT_FIELDS = STAT_FIELDS.filter(
 // census; Disch, Dama, Transfer Out, Ext Out, and Death decrease it. S/C,
 // VS/C, and BID do not change Occ.
 export const OCC_INCREASE_KEYS = ['adm', 'transferIn', 'ext'];
-export const OCC_DECREASE_KEYS = ['disch', 'dama', 'transferOut', 'extOut', 'absc', 'death'];
+// 'paroleOut' is a hidden movement figure (never shown as a column): +1 each
+// time an A Ward patient is placed on Parole / D/Parole, so Occ drops the
+// moment they leave the ward; undone (-1) if the tag is cancelled while the
+// patient is still on the ward. A parolee coming back via Readmit counts as
+// a normal admission ('adm'). See setPatientParoleStatus / readmitFromParole.
+export const PAROLE_OUT_KEY = 'paroleOut';
+export const OCC_DECREASE_KEYS = ['disch', 'dama', 'transferOut', 'extOut', 'absc', 'death', PAROLE_OUT_KEY];
 
 // CSS class for a stat-table cell, so every table (Ward Nurse's own shift
 // table, the Overall Nurse's per-ward shift table and All Wards statistics
@@ -393,6 +405,7 @@ export function isWardDocUntouched(wardDoc) {
   const shiftsUntouched = SHIFTS.every(s => {
     const shift = shifts[s.key] || {};
     if (shift.nurseOnDuty) return false;
+    if (shift[PAROLE_OUT_KEY]) return false;
     return SHIFT_STAT_FIELDS.every(f => !shift[f.key]);
   });
   // Demographics are entered directly on the ward doc (one daily total per

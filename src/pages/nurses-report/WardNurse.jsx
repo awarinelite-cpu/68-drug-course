@@ -10,11 +10,11 @@ import {
   PATIENT_STATUS_ARCHIVE_REASON,
   DEMOGRAPHIC_FIELDS, DEMOGRAPHIC_CATEGORIES, DEMOGRAPHIC_AFFILIATIONS, movementColorClass,
   reportDateId, occDelta, blankShift, defaultWardDoc, wardSelectorOptions, ensureWardBedsLoaded,
-  isWardDocUntouched, PAROLE_WARD_KEY, PAROLE_STATUS
+  isWardDocUntouched, PAROLE_WARD_KEY, PAROLE_STATUS, PAROLE_OUT_KEY, isParoleActive
 } from "../../lib/nurses-report-common.js";
 import { patientWardAndBedTypeForReportKey, wardSelectorKeyForPatientWard } from "../../lib/wardNameMatch.js";
 import { wardHeadcount } from "../../lib/wardCensus.js";
-import { applyPatientStatus, closeOutDischargedPatient, activeAdmissionTag, clearAdmissionTag, ADMISSION_TAG_LABEL, ADMISSION_TAG_STATUS_STAMP } from "../../lib/patientAdmissionStatus.js";
+import { applyPatientStatus, closeOutDischargedPatient, closeOutParolePatients, readmitFromParole, activeAdmissionTag, clearAdmissionTag, ADMISSION_TAG_LABEL, ADMISSION_TAG_STATUS_STAMP } from "../../lib/patientAdmissionStatus.js";
 import Topbar from "../../components/Topbar.jsx";
 import { splitDiagnosisNote, withPatientDiagnosis } from "../../lib/diagnosisNote.js";
 import DiagnosisNoteEditor, { DiagnosisHeadline } from "../../components/DiagnosisNoteEditor.jsx";
@@ -414,6 +414,14 @@ function useWardReport(wardKey, isAdmin, profile, user) {
   // D/Parole counts are derived from it, so they must not be overwritten
   // with zeros while it's still loading or after it failed.
   const [optionsLoaded, setOptionsLoaded] = useState(false);
+  // A Ward's parolees. They're fetched by `paroleWard` (the ward they left),
+  // not `ward`, because once the report is submitted their `ward` is cleared
+  // and they no longer appear in wardPatientOptions. `paroleReload` bumps to
+  // refetch after a Readmit.
+  const [paroleRoster, setParoleRoster] = useState([]);
+  const [paroleLoaded, setParoleLoaded] = useState(false);
+  const [paroleReload, setParoleReload] = useState(0);
+  const [readmitBusyId, setReadmitBusyId] = useState('');
   const patientCounter = useRef(0);
   // Which write-up card is expanded (accordion: one at a time). null = all collapsed.
   const [openPatientId, setOpenPatientId] = useState(null);
@@ -474,7 +482,7 @@ function useWardReport(wardKey, isAdmin, profile, user) {
       }
     })();
     return () => { cancelled = true; };
-  }, [wardKey]);
+  }, [wardKey, paroleReload]);
 
   useEffect(() => {
     let cancelled = false;
@@ -615,6 +623,11 @@ function useWardReport(wardKey, isAdmin, profile, user) {
           if (typeof liveVal === 'number') merged[s.key][f.key] = liveVal;
         }
       });
+      // Hidden Parole-out figure is only ever changed in the background (a
+      // patient put on / taken off parole elsewhere in the app) — always
+      // keep the live value.
+      const liveOut = (liveShifts[s.key] || {})[PAROLE_OUT_KEY];
+      if (typeof liveOut === 'number') merged[s.key][PAROLE_OUT_KEY] = liveOut;
     });
     return merged;
   }
@@ -918,23 +931,62 @@ function useWardReport(wardKey, isAdmin, profile, user) {
   // archive read them from there); once the report is locked/submitted it
   // shows what was saved instead of drifting with later changes.
   const isParoleWard = wardKey === PAROLE_WARD_KEY;
-  const liveParole = useMemo(() => {
-    const pick = (status) => wardPatientOptions
-      .filter((o) => !o.dischargeStatus && o.paroleStatus === status)
-      .map((o) => ({ id: o.id, name: o.name, emr: o.emr, age: o.age, sex: o.gender, since: o.paroleAt || 0, startDate: o.paroleStart || '', returnDate: o.paroleReturn || '' }));
-    return { parole: pick(PAROLE_STATUS.parole), dParole: pick(PAROLE_STATUS.dParole) };
-  }, [wardPatientOptions]);
   useEffect(() => {
-    if (!isParoleWard || !wardDoc || !editable || !optionsLoaded) return;
+    if (!isParoleWard) { setParoleRoster([]); setParoleLoaded(false); return; }
+    let cancelled = false;
+    (async () => {
+      setParoleLoaded(false);
+      const info = patientWardAndBedTypeForReportKey(wardKey);
+      if (!info) return;
+      try {
+        const snap = await getDocsSafe(query(collection(db, 'patients'), where('paroleWard', '==', info.wardLabel)));
+        const list = [];
+        snap.forEach((d) => {
+          const data = d.data();
+          if (!data.paroleStatus) return;
+          list.push({
+            id: d.id, status: data.paroleStatus, name: data.name || '', emr: data.emr || '', age: data.age || '', sex: data.gender || '',
+            since: (data.paroleAt && typeof data.paroleAt.toMillis === 'function') ? data.paroleAt.toMillis() : 0,
+            startDate: data.paroleStart || '', returnDate: data.paroleReturn || ''
+          });
+        });
+        list.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+        if (!cancelled) { setParoleRoster(list); setParoleLoaded(true); }
+      } catch (e) { /* leave lists as last saved; paroleLoaded stays false */ }
+    })();
+    return () => { cancelled = true; };
+  }, [isParoleWard, wardKey, paroleReload]);
+  // A name stays listed until its return date has passed (no return date =
+  // until readmitted); after that it simply drops off the list.
+  const liveParole = useMemo(() => {
+    const pick = (status) => paroleRoster
+      .filter((o) => o.status === status && isParoleActive(o.returnDate))
+      .map(({ status: _s, ...rest }) => rest);
+    return { parole: pick(PAROLE_STATUS.parole), dParole: pick(PAROLE_STATUS.dParole) };
+  }, [paroleRoster]);
+  useEffect(() => {
+    if (!isParoleWard || !wardDoc || !editable || !paroleLoaded) return;
     const p = liveParole.parole, d = liveParole.dParole;
     const same = wardDoc.parole === p.length && wardDoc.dParole === d.length
       && JSON.stringify(wardDoc.paroleList || []) === JSON.stringify(p)
       && JSON.stringify(wardDoc.dParoleList || []) === JSON.stringify(d);
     if (!same) setWardDoc((dd) => dd ? { ...dd, parole: p.length, dParole: d.length, paroleList: p, dParoleList: d } : dd);
-  }, [isParoleWard, wardDoc, editable, optionsLoaded, liveParole]);
-  const paroleView = !isParoleWard || !wardDoc ? null : (editable && optionsLoaded
+  }, [isParoleWard, wardDoc, editable, paroleLoaded, liveParole]);
+  const paroleView = !isParoleWard || !wardDoc ? null : (editable && paroleLoaded
     ? { parole: liveParole.parole, dParole: liveParole.dParole }
     : { parole: wardDoc.paroleList || [], dParole: wardDoc.dParoleList || [] });
+
+  // Readmit button on the Parole / D/Parole tables: the patient is back in
+  // hospital (e.g. relapsed). Returns them to this ward and takes them off
+  // the parole lists; the Occ figure comes back via an Admission.
+  async function readmitParolee(entry) {
+    if (!window.confirm('Readmit ' + (entry.name || 'this patient') + ' to this ward?')) return;
+    setReadmitBusyId(entry.id);
+    const r = await readmitFromParole({ patientId: entry.id });
+    setReadmitBusyId('');
+    if (!r.ok) { window.alert(r.message); return; }
+    setParoleReload((n) => n + 1);
+  }
 
   async function saveReport() {
     if (!wardDoc || !editable) return;
@@ -1020,6 +1072,16 @@ function useWardReport(wardKey, isAdmin, profile, user) {
     }
 
     const archiveErrors = [];
+    // A Ward: anyone placed on Parole / D/Parole is leaving the ward with
+    // this report — clear their ward so they drop off the roster (and
+    // tomorrow's Previous Occ) while staying on the Parole lists.
+    if (isParoleWard) {
+      const parolees = wardPatientOptions.filter((o) => o.paroleStatus && !o.dischargeStatus).map((o) => o.id);
+      if (parolees.length) {
+        const pc = await closeOutParolePatients(parolees);
+        if (!pc.ok) archiveErrors.push('Parole: ' + pc.message);
+      }
+    }
     if (toFinalize.length) {
       const results = await Promise.all(toFinalize.map(async (p) => {
         const name = p.name || p.emr || 'A patient';
@@ -1088,7 +1150,7 @@ function useWardReport(wardKey, isAdmin, profile, user) {
 
   return {
     w, wardDoc, adminEditOverride, setAdminEditOverride, nightOpenIds, topStatus, saveStatus, emrLookup,
-    wardPatientOptions, paroleView,
+    wardPatientOptions, paroleView, paroleLoaded, readmitParolee, readmitBusyId,
     census, movementTotals, editable,
     updateWardDoc, updateShiftField, updateDuty, updateBeds, updateStartOcc,
     addPatient, removePatient, openPatientId, setOpenPatientId, updatePatientField, updateDiagnosisField, updateVitalsSnapshotField,
@@ -1230,7 +1292,7 @@ function WardPatientPicker({ value, options, onSelect, usedIds, columns }) {
 function WardPanelRest({ h, showLabel, isAdmin, navigate, includeShiftTable = true, includePreviousOcc = true, includeHeader = true, includeDemographics = true, onSave, onSubmit, locationOptions }) {
   const {
     w, wardDoc, topStatus, saveStatus, editable, adminEditOverride, setAdminEditOverride,
-    census, movementTotals, emrLookup, wardPatientOptions, paroleView,
+    census, movementTotals, emrLookup, wardPatientOptions, paroleView, paroleLoaded, readmitParolee, readmitBusyId,
     updateWardDoc, updateShiftField, updateDuty, updateBeds, updateStartOcc,
     addPatient, removePatient, openPatientId, setOpenPatientId, updatePatientField, updateDiagnosisField, updateVitalsSnapshotField,
     updatePatientStatus, lookupPatientByEmr, selectPatientFromWard, refreshPlan, applyNursingDiagnosis,
@@ -1299,7 +1361,7 @@ function WardPanelRest({ h, showLabel, isAdmin, navigate, includeShiftTable = tr
           {paroleView && (paroleHasAny(paroleView.parole) || paroleHasAny(paroleView.dParole)) && (
             <div className="card-box ward-nurse-box">
               <h2>{paroleHasAny(paroleView.parole) && paroleHasAny(paroleView.dParole) ? 'Parole / D/Parole' : paroleHasAny(paroleView.parole) ? 'Parole' : 'D/Parole'}</h2>
-              <ParoleTables paroleList={paroleView.parole} dParoleList={paroleView.dParole} />
+              <ParoleTables paroleList={paroleView.parole} dParoleList={paroleView.dParole} onReadmit={editable && paroleLoaded ? readmitParolee : undefined} busyId={readmitBusyId} />
             </div>
           )}
 
