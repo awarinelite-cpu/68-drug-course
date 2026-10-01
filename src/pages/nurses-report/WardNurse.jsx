@@ -928,8 +928,10 @@ function useWardReport(wardKey, isAdmin, profile, user) {
   // counts are NOT part of Occ or any total — see STAT_FIELDS. While the
   // report is editable the lists follow the live roster and are copied into
   // the ward doc so Save/Submit persists them (the Overall Nurse and the
-  // archive read them from there); once the report is locked/submitted it
-  // shows what was saved instead of drifting with later changes.
+  // archive read them from there). This page always shows the live lists —
+  // even after the report is submitted — so a parolee can still be
+  // readmitted (Readmit) while their return date hasn't passed; the saved
+  // copy on the filed report stays as it was at submission.
   const isParoleWard = wardKey === PAROLE_WARD_KEY;
   useEffect(() => {
     if (!isParoleWard) { setParoleRoster([]); setParoleLoaded(false); return; }
@@ -972,7 +974,7 @@ function useWardReport(wardKey, isAdmin, profile, user) {
       && JSON.stringify(wardDoc.dParoleList || []) === JSON.stringify(d);
     if (!same) setWardDoc((dd) => dd ? { ...dd, parole: p.length, dParole: d.length, paroleList: p, dParoleList: d } : dd);
   }, [isParoleWard, wardDoc, editable, paroleLoaded, liveParole]);
-  const paroleView = !isParoleWard || !wardDoc ? null : (editable && paroleLoaded
+  const paroleView = !isParoleWard || !wardDoc ? null : (paroleLoaded
     ? { parole: liveParole.parole, dParole: liveParole.dParole }
     : { parole: wardDoc.paroleList || [], dParole: wardDoc.dParoleList || [] });
 
@@ -1361,7 +1363,7 @@ function WardPanelRest({ h, showLabel, isAdmin, navigate, includeShiftTable = tr
           {paroleView && (paroleHasAny(paroleView.parole) || paroleHasAny(paroleView.dParole)) && (
             <div className="card-box ward-nurse-box">
               <h2>{paroleHasAny(paroleView.parole) && paroleHasAny(paroleView.dParole) ? 'Parole / D/Parole' : paroleHasAny(paroleView.parole) ? 'Parole' : 'D/Parole'}</h2>
-              <ParoleTables paroleList={paroleView.parole} dParoleList={paroleView.dParole} onReadmit={editable && paroleLoaded ? readmitParolee : undefined} busyId={readmitBusyId} />
+              <ParoleTables paroleList={paroleView.parole} dParoleList={paroleView.dParole} onReadmit={paroleLoaded ? readmitParolee : undefined} busyId={readmitBusyId} />
             </div>
           )}
 

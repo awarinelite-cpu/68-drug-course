@@ -6,7 +6,7 @@ export const FREQ_OPTIONS = ['', 'OD', 'Daily', 'Mane', 'Nocte', 'AM', 'PM', 'HS
 // (see parseSequentialCourseLine) until the 1st half is Completed.
 export const ACTION_OPTIONS = ['', 'Ongoing', 'Inactive', 'Completed', 'Discontinued', 'Withheld', 'Other'];
 export const REMARK_OPTIONS = ['', 'Given', 'Not Given'];
-export const STATUS_LABELS = { admitted: 'Admit Patient', referred: 'Referred to another hospital', transferred: 'Transferred to another ward', discharged: 'Discharged', died: 'Death', dama: 'Discharged Against Medical Advice (DAMA)', absconded: 'Absconded', parole: 'Parole', dparole: 'D/Parole', paroleClear: 'Clear Parole / D/Parole tag' };
+export const STATUS_LABELS = { admitted: 'Admit Patient', referred: 'Referred to another hospital', transferred: 'Transferred to another ward', discharged: 'Discharged', died: 'Death', dama: 'Discharged Against Medical Advice (DAMA)', absconded: 'Absconded', parole: 'Parole', paroleExpired: 'Parole expired', dparole: 'D/Parole', paroleClear: 'Clear Parole / D/Parole tag' };
 export const WARD_OPTIONS = [
   '"A" WARD', 'ACCIDENT & EMERGENCY', 'GYNAE WARD', 'MATERNITY WARD', 'PEDIATRIC/NICU WARD',
   'THEATER', 'ICU', 'FEMALE MEDICAL WARD', 'FEMALE SURGICAL WARD', 'MALE MEDICAL WARD',

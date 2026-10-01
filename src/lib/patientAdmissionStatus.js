@@ -4,7 +4,7 @@ import { STATUS_LABELS, WARD_OPTIONS, defaultRow } from "./drugChartHelpers.js";
 import { formatDateTime } from "./time-format.js";
 import { bumpShiftStat, bumpShiftStatForPatientWard, bumpDemographicStat, bumpDemographicStatForPatientWard } from "./shiftStatsSync.js";
 import { classifyAffiliation } from "./patientAffiliation.js";
-import { PAROLE_STATUS, PAROLE_OUT_KEY, PAROLE_WARD_KEY, PAROLE_PATIENT_WARD_LABEL } from "./nurses-report-common.js";
+import { PAROLE_STATUS, PAROLE_OUT_KEY, PAROLE_WARD_KEY, PAROLE_PATIENT_WARD_LABEL, isParoleActive } from "./nurses-report-common.js";
 
 // Which Shift Statistics column each exit reason feeds — 'referred' is
 // an external hand-off to another hospital, so it counts as Ext Out, not
@@ -418,6 +418,32 @@ export async function admitExistingPatientToWard({ patientId, currentWard, nurse
   // somewhere" produces false "already admitted" refusals for patients
   // who aren't really on any ward.
   const onKnownWard = !!currentWard && WARD_OPTIONS.includes(currentWard);
+
+  // Patients carrying a parole tag who have left the ward:
+  //  - parole still running (return date not passed / none set): this is
+  //    really a readmit — same stay, so send it down the Readmit path.
+  //  - parole date exceeded: the old stay is over. Close it out into the
+  //    archive (no Shift Statistics counted — they already left via parole)
+  //    so the patient starts clean, then fall through to a normal new
+  //    admission below.
+  if (!onKnownWard) {
+    try {
+      const ps = await getDoc(doc(db, 'patients', patientId));
+      const pd = ps.exists() ? ps.data() : null;
+      if (pd && pd.paroleStatus) {
+        if (isParoleActive(pd.paroleReturn || '')) {
+          if (nurseWard && pd.paroleWard && pd.paroleWard !== nurseWard) {
+            return { ok: false, message: 'Patient is on parole from ' + pd.paroleWard + '. Readmit them to that ward.' };
+          }
+          return await readmitFromParole({ patientId });
+        }
+        const arch = await applyPatientStatus({ patientId, reason: 'paroleExpired', transferWard: '', fromWard: '', transferredByName: '' });
+        if (!arch.ok && !arch.archived) return { ok: false, message: 'Could not close out the expired parole: ' + arch.message };
+      }
+    } catch (e) {
+      return { ok: false, message: 'Could not check parole status: ' + (e.code || e.message || 'unknown error') };
+    }
+  }
   if (onKnownWard && await hasActiveAdmissionData(patientId)) {
     return { ok: false, message: 'Patient on admission in ' + currentWard + '. You can transfer the patient to the ward if need be.' };
   }
@@ -721,6 +747,10 @@ export async function readmitFromParole({ patientId }) {
     data = snap.data();
   } catch (e) {
     return { ok: false, message: 'Could not look up the patient: ' + (e.code || e.message || 'unknown error') };
+  }
+  if (!data.paroleStatus) return { ok: false, message: 'This patient is no longer on parole.' };
+  if (!isParoleActive(data.paroleReturn || '')) {
+    return { ok: false, message: 'The parole date has passed. Admit the patient as a new patient (Admit Patient) instead.' };
   }
   const wardLabel = data.paroleWard || PAROLE_PATIENT_WARD_LABEL;
   const stillOnWard = data.ward === wardLabel;
