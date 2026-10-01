@@ -12,6 +12,15 @@ export default function PatientBanner({ patient, extra, ward }) {
             <div className="pmeta">
               {patient ? "EMR: " + (patient.emr || "N/A") + "   |   Diagnosis: " + (patient.diagnosis || "Not specified") + (patient.insurance ? "   |   " + patient.insurance : "") : ""}
             </div>
+            {patient && (patient.phone || patient.address || patient.nextKinName) && (
+              <div className="pmeta">
+                {[
+                  patient.phone && 'Phone: ' + patient.phone,
+                  patient.address && 'Address: ' + patient.address,
+                  patient.nextKinName && 'Next of Kin: ' + patient.nextKinName
+                ].filter(Boolean).join('   |   ')}
+              </div>
+            )}
             {ward && <div className="pward">Ward: {ward}</div>}
           </div>
         </div>

@@ -65,6 +65,9 @@ export default function PatientForm({ form, setForm, lockWard }) {
       <div className="field"><label>Date of Admission</label><input type="date" value={form.admissionDate} onChange={set('admissionDate')} /></div>
       <div className="field"><label>Allergies</label><input type="text" placeholder="None known / list allergies" value={form.allergies} onChange={set('allergies')} /></div>
       <div className="field"><label>Insurance</label><input type="text" placeholder="e.g. NHIS, Private, HMO name" value={form.insurance || ''} onChange={set('insurance')} /></div>
+      <div className="field"><label>Patient Phone</label><input type="tel" placeholder="e.g. 080XXXXXXXX" value={form.phone || ''} onChange={set('phone')} /></div>
+      <div className="field"><label>Patient Address</label><input type="text" value={form.address || ''} onChange={set('address')} /></div>
+      <div className="field"><label>Next Kin Name</label><input type="text" value={form.nextKinName || ''} onChange={set('nextKinName')} /></div>
       <div className="field">
         <label>Army Number</label>
         <input type="text" placeholder="e.g. 06NA/59/5240 or N/764521" value={form.armyNumber || ''} onChange={set('armyNumber')} />

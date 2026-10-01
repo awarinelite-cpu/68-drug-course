@@ -243,7 +243,7 @@ function nameAroundMenuBar(norm) {
 
 export function parsePatientFields(text) {
   const norm = (text || '').replace(/\r\n/g, '\n');
-  const out = { name: '', emr: '', diagnosis: '', ward: '', age: '', hospNo: '', admissionDate: '', allergies: '', insurance: '', gender: '', armyNumber: '' };
+  const out = { name: '', emr: '', diagnosis: '', ward: '', age: '', hospNo: '', admissionDate: '', allergies: '', insurance: '', gender: '', armyNumber: '', phone: '', address: '', nextKinName: '' };
 
   // --- Name ----------------------------------------------------------------
   // 1) A name line immediately followed by a lone ID-number line — the
@@ -322,6 +322,15 @@ export function parsePatientFields(text) {
   // --- Insurance / NHIS ------------------------------------------------------
   out.insurance = extractInsurance(norm);
   out.armyNumber = extractArmyNumber(norm);
+
+  // --- Contact details -------------------------------------------------------
+  // Patient phone / address and the next of kin's name, as labelled lines on
+  // the EMR page ("Patient Phone: ...", "Patient Address: ...",
+  // "Next Kin Name: ..."). Labels are anchored to the start of the line, so
+  // "Name" above can't pick up "Next Kin Name".
+  out.phone = grabLabel(norm, ['Patient Phone(?: Number| No)?\\.?', 'Patient Tel(?:ephone)?', 'Phone(?: Number| No)?\\.?']);
+  out.address = grabLabel(norm, ['Patient Address', 'Address']);
+  out.nextKinName = grabLabel(norm, ['Next(?: of)? Kin Name', 'Next(?: of)? Kin', 'NOK Name', 'NOK']);
 
   // --- Date of Admission -----------------------------------------------------
   const admLabel = grabLabel(norm, ['Date of Admission']);

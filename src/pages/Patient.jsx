@@ -137,7 +137,8 @@ export default function Patient() {
       age: patient.age || '', hospNo: patient.hospNo || '',
       admissionDate: patient.admissionDate || '', allergies: patient.allergies || '',
       insurance: patient.insurance || '',
-      gender: patient.gender || '', armyNumber: patient.armyNumber || ''
+      gender: patient.gender || '', armyNumber: patient.armyNumber || '',
+      phone: patient.phone || '', address: patient.address || '', nextKinName: patient.nextKinName || ''
     });
     setEditMsg('');
     setShowEditForm(true);
@@ -188,6 +189,9 @@ export default function Patient() {
       insurance: editForm.insurance.trim(),
       gender: editForm.gender.trim(),
       armyNumber: editForm.armyNumber.trim(),
+      phone: (editForm.phone || '').trim(),
+      address: (editForm.address || '').trim(),
+      nextKinName: (editForm.nextKinName || '').trim(),
       updatedAt: serverTimestamp()
     };
     // Recomputed from Insurance/Army Number, same as on creation — see

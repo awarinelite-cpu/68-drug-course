@@ -127,7 +127,7 @@ function BedTag({ patient }) {
   );
 }
 
-const EMPTY_FORM = { name: '', emr: '', diagnosis: '', ward: '', pedBedType: '', age: '', hospNo: '', admissionDate: '', allergies: '', insurance: '', gender: '', armyNumber: '' };
+const EMPTY_FORM = { name: '', emr: '', diagnosis: '', ward: '', pedBedType: '', age: '', hospNo: '', admissionDate: '', allergies: '', insurance: '', gender: '', armyNumber: '', phone: '', address: '', nextKinName: '' };
 
 // Wards are stored/compared in ALL CAPS (matches WARD_OPTIONS); this is
 // purely for display so headings don't shout at the reader.
@@ -366,7 +366,10 @@ export default function Home() {
       allergies: fields.allergies || f.allergies,
       insurance: fields.insurance || f.insurance,
       gender: fields.gender || f.gender,
-      armyNumber: fields.armyNumber || f.armyNumber
+      armyNumber: fields.armyNumber || f.armyNumber,
+      phone: fields.phone || f.phone || '',
+      address: fields.address || f.address || '',
+      nextKinName: fields.nextKinName || f.nextKinName || ''
     }));
     const { ward: _unusedWard, ...countedFields } = fields;
     const foundCount = Object.values(countedFields).filter(Boolean).length;
@@ -451,6 +454,9 @@ export default function Home() {
       insurance: (newForm.insurance || '').trim(),
       gender: (newForm.gender || '').trim(),
       armyNumber: (newForm.armyNumber || '').trim(),
+      phone: (newForm.phone || '').trim(),
+      address: (newForm.address || '').trim(),
+      nextKinName: (newForm.nextKinName || '').trim(),
       updatedAt: serverTimestamp(),
       // Brand-new record, no transfer involved — tags this patient "NEW
       // PATIENT" (blue) on the ward's roster picker for 24h. See
