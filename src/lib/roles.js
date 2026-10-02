@@ -5,8 +5,15 @@
 // form.
 export const ROLE_OPTIONS = [
   { value: 'nurse', label: 'Nurse' },
-  { value: 'doctor', label: 'Doctor' }
+  { value: 'doctor', label: 'Doctor' },
+  { value: 'record', label: 'Records' }
 ];
+
+// Who may open the Records page (patient demographics summary). Record
+// staff only ever see this page; admin and subadmin can also open it.
+export function canAccessRecords(role) {
+  return role === 'record' || role === 'admin' || role === 'subadmin';
+}
 
 // Abbreviation shown as a title in front of a person's name (e.g. on their
 // Profile page, in the nav drawer, and in Admin's user list) wherever the

@@ -109,7 +109,7 @@ export default function RequestAccount() {
         <div className="card-box login-card">
           <h2 style={{ textAlign: 'center', marginTop: 0 }}>Request Staff Account</h2>
           <p style={{ fontSize: 13, color: '#666', textAlign: 'center', marginTop: -6 }}>
-            68 NARHY Ward Charts — for nurses and doctors joining the ward. An admin reviews every
+            68 NARHY Ward Charts — for nurses, doctors and records staff joining the ward. An admin reviews every
             application before it's approved.
           </p>
 

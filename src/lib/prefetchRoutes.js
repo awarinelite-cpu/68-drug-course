@@ -13,6 +13,7 @@
 
 const routeImporters = [
   () => import("../pages/Home.jsx"),
+  () => import("../pages/Records.jsx"),
   () => import("../pages/Patient.jsx"),
   () => import("../pages/MyPatients.jsx"),
   () => import("../pages/PatientArchive.jsx"),

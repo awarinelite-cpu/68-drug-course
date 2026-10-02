@@ -1,7 +1,7 @@
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useNav } from "../contexts/NavContext.jsx";
 import { useAuth } from "../contexts/AuthContext.jsx";
-import { formatNameWithTitle } from "../lib/roles.js";
+import { formatNameWithTitle, canAccessRecords } from "../lib/roles.js";
 import { useOverallNurseThisWeek } from "../hooks/useOverallNurseThisWeek.js";
 
 // Falls back to the currently selected patient (stored by Home in
@@ -51,6 +51,9 @@ export default function NavDrawer() {
         </div>
         <div className="gnav-who">{profile ? formatNameWithTitle(profile.name, profile.role) + " (" + profile.role + ")" : ""}</div>
         <div className="gnav-drawer-body">
+          {profile?.role === "record" ? (
+            <button className="gnav-link" onClick={() => go("/records")}><span className="gnav-icon">&#128451;&#65039;</span>Records</button>
+          ) : (<>
           <button className="gnav-link" onClick={() => go("/")}><span className="gnav-icon">&#127968;</span>Home</button>
           <button className="gnav-link" onClick={handleSearch}><span className="gnav-icon">&#128269;</span>Search</button>
           <button
@@ -69,12 +72,16 @@ export default function NavDrawer() {
           )}
           <button className="gnav-link" onClick={() => go(patientId ? "/charts/calculators?patient=" + encodeURIComponent(patientId) : "/charts/calculators")}><span className="gnav-icon">&#129518;</span>Calculators</button>
           <button className="gnav-link" onClick={() => go("/charts/lab-reference")}><span className="gnav-icon">&#128300;</span>Lab Reference</button>
+          {canAccessRecords(profile?.role) && (
+            <button className="gnav-link" onClick={() => go("/records")}><span className="gnav-icon">&#128451;&#65039;</span>Records</button>
+          )}
           {profile?.role === "admin" && (
             <button className="gnav-link" onClick={() => go("/admin")}><span className="gnav-icon">&#9881;&#65039;</span>Admin</button>
           )}
           {profile?.role === "subadmin" && (
             <button className="gnav-link" onClick={() => go("/admin/users")}><span className="gnav-icon">&#128101;</span>All Users</button>
           )}
+          </>)}
         </div>
         <div className="gnav-drawer-foot">
           <button className="gnav-link" onClick={handleLogout}><span className="gnav-icon">&#128682;</span>Log Out</button>

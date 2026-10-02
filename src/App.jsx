@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect } from "react";
-import { Routes, Route, Navigate } from "react-router-dom";
+import { Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { AuthProvider, useAuth } from "./contexts/AuthContext.jsx";
 import { NavProvider } from "./contexts/NavContext.jsx";
 import { ThemeProvider } from "./contexts/ThemeContext.jsx";
@@ -12,6 +12,7 @@ import PageLoading from "./components/PageLoading.jsx";
 import { useServiceWorker } from "./hooks/useServiceWorker.js";
 import { useForegroundAlerts } from "./hooks/useForegroundAlerts.js";
 import { useHardwareBackButton } from "./hooks/useHardwareBackButton.js";
+import { canAccessRecords } from "./lib/roles.js";
 import { prefetchRoutes } from "./lib/prefetchRoutes.js";
 import { prefetchReportData } from "./lib/prefetchData.js";
 import { ensureWardBedsLoaded } from "./lib/nurses-report-common.js";
@@ -40,6 +41,7 @@ const WardBeds = lazy(() => import("./pages/WardBeds.jsx"));
 const NursingCatalog = lazy(() => import("./pages/NursingCatalog.jsx"));
 const AllUsers = lazy(() => import("./pages/AllUsers.jsx"));
 const Overview = lazy(() => import("./pages/Overview.jsx"));
+const Records = lazy(() => import("./pages/Records.jsx"));
 const Admission = lazy(() => import("./pages/Admission.jsx"));
 const DrugCourseChart = lazy(() => import("./pages/DrugCourseChart.jsx"));
 const Vitals = lazy(() => import("./pages/Vitals.jsx"));
@@ -68,9 +70,28 @@ function NurseReportGate({ children }) {
   return children;
 }
 
+// Records staff only ever get the Records page — any other URL bounces
+// them back to it. Everyone else (nurse/doctor) is kept out of /records;
+// admin and subadmin can open it alongside everything else.
+function RecordsGate({ children }) {
+  const { profile } = useAuth();
+  if (!canAccessRecords(profile?.role)) return <Navigate to="/" replace />;
+  return children;
+}
+
+function RecordOnlyRedirect({ children }) {
+  const { profile } = useAuth();
+  const location = useLocation();
+  if (profile?.role === "record" && location.pathname !== "/records") {
+    return <Navigate to="/records" replace />;
+  }
+  return children;
+}
+
 function AuthedShell({ children }) {
   return (
     <RequireAuth>
+      <RecordOnlyRedirect>
       <NavDrawer />
       {/* Sticky-footer layout: the shell is at least one screen tall and the
           page area grows to fill it, so the copyright footer always sits at
@@ -79,6 +100,7 @@ function AuthedShell({ children }) {
         <div className="app-shell-main">{children}</div>
         <Footer />
       </div>
+      </RecordOnlyRedirect>
     </RequireAuth>
   );
 }
@@ -120,6 +142,7 @@ export default function App() {
           <Route path="/login" element={<Login />} />
           <Route path="/request-account" element={<RequestAccount />} />
           <Route path="/" element={<AuthedShell><Home /></AuthedShell>} />
+          <Route path="/records" element={<AuthedShell><RecordsGate><Records /></RecordsGate></AuthedShell>} />
           <Route path="/patient" element={<AuthedShell><Patient /></AuthedShell>} />
           <Route path="/my-patients" element={<AuthedShell><MyPatients /></AuthedShell>} />
           <Route path="/archive" element={<AuthedShell><PatientArchive /></AuthedShell>} />
