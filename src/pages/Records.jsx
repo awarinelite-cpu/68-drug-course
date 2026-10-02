@@ -1,28 +1,32 @@
 import { useEffect, useMemo, useState } from "react";
-import { doc, setDoc, serverTimestamp } from "firebase/firestore";
+import { doc, setDoc, serverTimestamp, collection } from "firebase/firestore";
 import { db } from "../firebase.js";
 import { useAuth } from "../contexts/AuthContext.jsx";
 import { useGoBack } from "../hooks/useGoBack.js";
-import { getDocSafe } from "../lib/firestoreOffline.js";
+import { getDocSafe, getDocsSafe } from "../lib/firestoreOffline.js";
 import {
-  DEMOGRAPHIC_CATEGORIES, DEMOGRAPHIC_AFFILIATIONS, DEMOGRAPHIC_SEXES, DEMOGRAPHIC_FIELDS, todayISO
+  DEMOGRAPHIC_CATEGORIES, DEMOGRAPHIC_AFFILIATIONS, DEMOGRAPHIC_SEXES, DEMOGRAPHIC_FIELDS, reportDateId
 } from "../lib/nurses-report-common.js";
 import Topbar from "../components/Topbar.jsx";
 
-// Rows of the paper "Summary Breakdown of Statistics" sheet, in paper order.
+// Rows of the paper "Summary Breakdown of Statistics" sheet, in paper order,
+// each fed from the ward report(s) it corresponds to. The figures come from
+// the Patient Demographics ward nurses enter on their own Ward Report page
+// (live for today, or the archived copy once the Overall Nurse has filed
+// the day) — nothing is typed in here except Remarks.
 const RECORD_ROWS = [
-  { key: "ae", label: "A&E" },
-  { key: "fsw", label: "FSW" },
-  { key: "fmw", label: "FMW" },
-  { key: "msw1", label: "MSW 1" },
-  { key: "msw2", label: "MSW 2" },
-  { key: "mmw", label: "MMW" },
-  { key: "orth", label: "ORTH" },
-  { key: "pead", label: "PEAD" },
-  { key: "gynae", label: "GYNAE" },
-  { key: "offrs", label: "OFFR'S" },
-  { key: "award", label: "A WARD" },
-  { key: "maternity", label: "MATERNITY" }
+  { key: "ae", label: "A&E", wards: ["ae"] },
+  { key: "fsw", label: "FSW", wards: ["fsw2", "fswext"] },
+  { key: "fmw", label: "FMW", wards: ["fmw1"] },
+  { key: "msw1", label: "MSW 1", wards: ["msw"] },
+  { key: "msw2", label: "MSW 2", wards: ["esw"] },
+  { key: "mmw", label: "MMW", wards: ["mmw"] },
+  { key: "orth", label: "ORTH", wards: ["ortho"] },
+  { key: "pead", label: "PEAD", wards: ["paedbed", "paedcot"] },
+  { key: "gynae", label: "GYNAE", wards: ["gynae"] },
+  { key: "offrs", label: "OFFR'S", wards: ["officers"] },
+  { key: "award", label: "A WARD", wards: ["award"] },
+  { key: "maternity", label: "MATERNITY", wards: ["matbed", "matcot"] }
 ];
 const OFFICERS_ROW = "offrs";
 
@@ -38,8 +42,10 @@ function sumCells(rows, rowKeys, cat, aff) {
 export default function Records() {
   const { user, profile } = useAuth();
   const goBack = useGoBack("/");
-  const [date, setDate] = useState(todayISO());
+  const [date, setDate] = useState(reportDateId());
   const [rows, setRows] = useState({});
+  const [remarks, setRemarks] = useState({});
+  const [source, setSource] = useState("");
   const [loading, setLoading] = useState(true);
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -50,10 +56,31 @@ export default function Records() {
     setLoading(true); setDirty(false); setMsg(null);
     (async () => {
       try {
-        const snap = await getDocSafe(doc(db, "recordSummaries", date));
-        if (!cancelled) setRows(snap.exists() ? (snap.data().rows || {}) : {});
+        // Archived copy wins once the day has been filed; otherwise the live ward docs.
+        let wardsMap = {};
+        let src = "";
+        const arch = await getDocSafe(doc(db, "archives", "overall_" + date));
+        if (arch.exists() && arch.data().wards) {
+          wardsMap = arch.data().wards; src = "archived report";
+        } else {
+          const snap = await getDocsSafe(collection(db, "nurseReports", date, "wards"));
+          snap.forEach((d) => { wardsMap[d.id] = d.data(); });
+          src = Object.keys(wardsMap).length ? "live ward reports (not yet archived)" : "";
+        }
+        const built = {};
+        RECORD_ROWS.forEach((r) => {
+          const row = {};
+          DEMOGRAPHIC_FIELDS.forEach((f) => {
+            row[f.key] = r.wards.reduce((t, wk) => t + toNum(wardsMap[wk]?.[f.key]), 0);
+          });
+          built[r.key] = row;
+        });
+        let rem = {};
+        const saved = await getDocSafe(doc(db, "recordSummaries", date));
+        if (saved.exists()) rem = saved.data().remarks || {};
+        if (!cancelled) { setRows(built); setRemarks(rem); setSource(src); }
       } catch (e) {
-        if (!cancelled) { setRows({}); setMsg({ error: true, text: "Couldn't load this date: " + (e.code || e.message) }); }
+        if (!cancelled) { setRows({}); setRemarks({}); setSource(""); setMsg({ error: true, text: "Couldn't load this date: " + (e.code || e.message) }); }
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -61,28 +88,16 @@ export default function Records() {
     return () => { cancelled = true; };
   }, [date]);
 
-  function setCell(rowKey, field, value) {
-    setRows((r) => ({ ...r, [rowKey]: { ...(r[rowKey] || {}), [field]: value } }));
-    setDirty(true);
-  }
-
   async function save() {
     setSaving(true); setMsg(null);
-    // Store numbers as numbers, drop blanks.
     const clean = {};
-    RECORD_ROWS.forEach((r) => {
-      const src = rows[r.key] || {};
-      const out = {};
-      DEMOGRAPHIC_FIELDS.forEach((f) => { const n = toNum(src[f.key]); if (n) out[f.key] = n; });
-      if ((src.rmks || "").trim()) out.rmks = src.rmks.trim();
-      if (Object.keys(out).length) clean[r.key] = out;
-    });
+    RECORD_ROWS.forEach((r) => { const t = (remarks[r.key] || "").trim(); if (t) clean[r.key] = t; });
     try {
       await setDoc(doc(db, "recordSummaries", date), {
-        rows: clean, updatedAt: serverTimestamp(), updatedBy: user?.uid || "", updatedByName: profile?.name || ""
+        remarks: clean, updatedAt: serverTimestamp(), updatedBy: user?.uid || "", updatedByName: profile?.name || ""
       });
       setDirty(false);
-      setMsg({ text: "Saved." });
+      setMsg({ text: "Remarks saved." });
     } catch (e) {
       setMsg({ error: true, text: "Couldn't save: " + (e.code || e.message || "unknown error") });
     } finally {
@@ -120,8 +135,14 @@ export default function Records() {
 
           <div className="field no-print" style={{ maxWidth: 220 }}>
             <label>Date</label>
-            <input type="date" value={date} max={todayISO()} onChange={(e) => e.target.value && setDate(e.target.value)} />
+            <input type="date" value={date} max={reportDateId()} onChange={(e) => e.target.value && setDate(e.target.value)} />
           </div>
+
+          {!loading && (
+            <div className="field-hint" style={{ marginTop: -6, marginBottom: 10 }}>
+              {source ? "Figures are taken from the ward nurses' Patient Demographics (" + source + ")." : "No ward reports found for this date."}
+            </div>
+          )}
 
           {loading ? <div className="loading-note">Loading…</div> : (
             <div className="table-wrap">
@@ -148,15 +169,11 @@ export default function Records() {
                     <tr key={r.key}>
                       <td style={{ textAlign: "left", fontWeight: 600, whiteSpace: "nowrap" }}>{r.label}</td>
                       {DEMOGRAPHIC_FIELDS.map((f) => (
-                        <td key={f.key} style={{ padding: 2 }}>
-                          <input type="number" inputMode="numeric" min="0" style={cellInput}
-                            value={rows[r.key]?.[f.key] ?? ""}
-                            onChange={(e) => setCell(r.key, f.key, e.target.value)} />
-                        </td>
+                        <td key={f.key}>{toNum(rows[r.key]?.[f.key]) || ""}</td>
                       ))}
                       <td style={{ padding: 2 }}>
                         <input type="text" style={{ ...cellInput, width: 110, textAlign: "left", padding: "6px" }}
-                          value={rows[r.key]?.rmks ?? ""} onChange={(e) => setCell(r.key, "rmks", e.target.value)} />
+                          value={remarks[r.key] ?? ""} onChange={(e) => { setRemarks((m) => ({ ...m, [r.key]: e.target.value })); setDirty(true); }} />
                       </td>
                     </tr>
                   ))}
@@ -191,7 +208,7 @@ export default function Records() {
 
           <div className="no-print" style={{ display: "flex", gap: 8, marginTop: 14, flexWrap: "wrap" }}>
             <button className="btn btn-primary" disabled={saving || loading || !dirty} onClick={save}>
-              {saving ? "Saving…" : "Save"}
+              {saving ? "Saving…" : "Save Remarks"}
             </button>
             <button className="btn btn-secondary" onClick={() => window.print()}>Print</button>
           </div>
