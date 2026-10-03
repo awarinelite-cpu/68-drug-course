@@ -1652,6 +1652,15 @@ table.drugs-table tr.drop-after > td { box-shadow: inset 0 -3px 0 0 #7c3aed; }
 .rec-sheet h3 { font-size: clamp(18px, 2vw, 28px); color: #0f172a; }
 .rec-sheet input[type="text"] { width: 100% !important; font-size: 18px !important; font-weight: 600; border: 2px solid #334155; border-radius: 6px; }
 :root[data-theme="dark"] .rec-sheet h3 { color: #fff; }
+/* Night mode: the Summary Breakdown sheet was staying white (light text on a
+   white cell = unreadable). Give it a real dark palette. */
+:root[data-theme="dark"] .rec-sheet table.entries { border-color: #475569; }
+:root[data-theme="dark"] .rec-sheet table.entries th,
+:root[data-theme="dark"] .rec-sheet table.entries td { border-color: #475569; color: #F1F5F9; background: #0F2744; }
+:root[data-theme="dark"] .rec-sheet table.entries thead th { background: #16294F; color: #fff; border-color: #475569; }
+:root[data-theme="dark"] .rec-sheet table.entries tbody tr:nth-child(even) td { background: #14305A; }
+:root[data-theme="dark"] .rec-sheet table.entries tbody tr:last-child td { background: #7C5E10; color: #FFF7D6; border-top-color: #FBBF24; }
+:root[data-theme="dark"] .rec-sheet input[type="text"] { background: #0B1F3A; color: #F1F5F9; border-color: #64748B; }
 .rec-full { position: fixed; inset: 0; z-index: 2000; background: var(--surface-bg); overflow: auto; padding: 12px; }
 .rec-full .container { max-width: none !important; padding: 0; margin: 0; }
 .rec-full .card-box { box-shadow: none; border: 0; padding: 8px; }
