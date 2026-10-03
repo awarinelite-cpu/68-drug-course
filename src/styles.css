@@ -1890,3 +1890,11 @@ h3.ward-report-subheading, .ward-report-subheading { font-size: clamp(28px, 3.4v
   .patient-block { border-color: #000; box-shadow: none; break-inside: auto; }
   .patient-block-head { background: #000 !important; color: #fff !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 }
+
+/* Larger text for the patient list rows (Patients on <ward>) */
+.search-result-item { font-size: clamp(18px, 1.5vw, 22px); line-height: 1.4; padding: 16px 18px; }
+.search-result-item b { font-size: clamp(20px, 1.7vw, 25px); }
+.search-result-item .patient-diagnosis-col { font-size: clamp(18px, 1.5vw, 22px); }
+.search-result-item .patient-bed-tag { font-size: clamp(14px, 1.1vw, 16px); padding: 2px 9px; }
+.search-result-item .patient-avatar, .search-result-item .patient-avatar svg { width: 52px; height: 52px; }
+.search-result-item .patient-avatar--initial { font-size: 22px; }
