@@ -854,7 +854,7 @@ export default function OverallNurse() {
               {syncStatus.text && <span style={{ fontSize: 12, color: syncStatus.error ? '#dc2626' : '#16a34a' }}>{syncStatus.text}</span>}
             </div>
           )}
-          <div className="table-wrap">
+          <div className="table-wrap ov-sheet">
             <table className="report">
               <thead>
                 <tr>
@@ -957,7 +957,7 @@ export default function OverallNurse() {
 
         <div className="card-box">
           <h2>Patient Demographics</h2>
-          <div className="table-wrap">
+          <div className="table-wrap ov-sheet">
             <table className="report">
               <thead>
                 <tr>

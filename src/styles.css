@@ -1654,3 +1654,21 @@ table.drugs-table tr.drop-after > td { box-shadow: inset 0 -3px 0 0 #7c3aed; }
 .rec-full .container { max-width: none !important; padding: 0; margin: 0; }
 .rec-full .card-box { box-shadow: none; border: 0; padding: 8px; }
 @media print { .rec-full { position: static; overflow: visible; padding: 0; } .rec-sheet table.entries { min-width: 0; } }
+
+
+/* ── Overall Nurse tables: same bold, high-contrast look as the Records sheet ── */
+.ov-sheet table.report { width: 100%; border-collapse: collapse; border: 3px solid #0f172a; }
+.ov-sheet table.report th, .ov-sheet table.report td {
+  border: 2px solid #334155; padding: 12px 4px; font-size: clamp(16px, 1.5vw, 24px); font-weight: 700; background: #fff; white-space: nowrap;
+}
+.ov-sheet table.report td:not(.stat-beds):not(.stat-occ):not(.stat-vac):not(.stat-in):not(.stat-out) { color: #0f172a; }
+.ov-sheet table.report td.stat-beds { color: #15803d; }
+.ov-sheet table.report td.stat-occ, .ov-sheet table.report td.stat-in { color: #1d4ed8; }
+.ov-sheet table.report td.stat-vac, .ov-sheet table.report td.stat-out { color: #b91c1c; }
+.ov-sheet table.report thead th { background: #16294F; color: #fff; border-color: #0f172a; font-size: clamp(14px, 1.3vw, 20px); letter-spacing: .3px; }
+.ov-sheet table.report th.renamable-col:hover { background: #21396B; }
+.ov-sheet table.report tbody tr:nth-child(even) td { background: #eef3fb; }
+.ov-sheet table.report tbody tr.totals-row td { background: #fde68a; border-top: 3px solid #0f172a; font-size: clamp(18px, 1.7vw, 26px); }
+.ov-sheet table.report td.ward-name, .ov-sheet table.report th:first-child { text-align: left; padding-left: 10px; }
+.ov-sheet table.report td.ward-name { color: #0f172a; }
+:root[data-theme="dark"] .ov-sheet table.report td.stat-beds { color: #15803d; }
