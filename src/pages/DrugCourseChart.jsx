@@ -495,7 +495,7 @@ export default function DrugCourseChart() {
         // link to the drug it was waiting on; and marking a drug Completed
         // (by hand) starts whatever was waiting on it, same as the automatic
         // completion check does.
-        next = next.map((row, idx) => (idx === i && patch.action !== 'Inactive' && row.startsAfterId) ? { ...row, startsAfterId: '', actionNote: '' } : row);
+        next = next.map((row, idx) => (idx === i && patch.action !== 'Inactive' && (row.startsAfterId || row.waitUntil)) ? { ...row, startsAfterId: '', waitUntil: '', actionNote: '' } : row);
         next = activateFollowOnDrugs(next);
       }
       return next;

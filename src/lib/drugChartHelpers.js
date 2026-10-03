@@ -375,6 +375,27 @@ function inferStartDateForDrug(chartRows, index) {
 // status the nurse controls directly (Discontinued/Withheld/Other). Returns
 // a NEW drugs array if anything changed, or the same reference if not (so
 // callers can skip a re-render/save when nothing changed).
+const MONTHLY_WAIT_MS = 30 * 24 * 3600 * 1000;
+// Returns the updated drug if a Monthly drug should go Inactive (dose just
+// given) or come back to Ongoing (30 days elapsed), else null.
+function monthlyHoldStep(d, i, chartRows, now) {
+  if (d.action === 'Inactive' && d.waitUntil) {
+    const until = new Date(d.waitUntil);
+    if (isNaN(until) || now >= until) return { ...d, action: 'Ongoing', waitUntil: '', actionNote: '' };
+    return null;
+  }
+  if (d.action && d.action !== 'Ongoing') return null; // nurse-controlled status
+  const given = administrationTimesFor(chartRows, i);
+  if (!given.length) return null;
+  const last = given.reduce((a, b) => (b > a ? b : a));
+  const lastIso = last.toISOString();
+  if (d.heldForDose === lastIso) return null; // nurse already overrode this hold
+  const until = new Date(last.getTime() + MONTHLY_WAIT_MS);
+  if (now >= until) return null;
+  const label = until.toLocaleDateString([], { day: 'numeric', month: 'short', year: 'numeric' });
+  return { ...d, action: 'Inactive', waitUntil: until.toISOString(), heldForDose: lastIso, actionNote: 'Next monthly dose due ' + label };
+}
+
 export function withDrugCompletionChecked(drugs, chartRows) {
   // Repeat until nothing changes: completing one stage of a chained order
   // activates the next, and a chart reopened after a long gap can have
@@ -394,6 +415,14 @@ function completionPass(drugs, chartRows) {
   let changed = false;
   const next = drugs.map((d, i) => {
     const locked = ['Discontinued', 'Withheld', 'Other', 'Completed', 'Inactive'].includes(d.action);
+
+    // Monthly: once a dose is charted as given, park the drug as Inactive
+    // until 30 days after that dose, then flip it back to Ongoing so the next
+    // dose can be charted (and alerts resume).
+    if (normalizeFrequency(d.frequency) === 'Monthly') {
+      const held = monthlyHoldStep(d, i, chartRows, now);
+      if (held) { changed = true; return held; }
+    }
 
     // STAT: a single one-off dose. As soon as it's recorded as given on the
     // chart below, auto-flag the drug Completed.

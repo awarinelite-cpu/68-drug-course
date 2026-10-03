@@ -30,7 +30,7 @@ const INTERVAL_HOURS = {
   OD: 24, Mane: 24, Nocte: 24, AM: 24, PM: 24, HS: 24,
   BD: 12, TDS: 8, QDS: 6, QOD: 48,
   Q4H: 4, Q6H: 6, Q8H: 8, Q12H: 12,
-  Weekly: 168,
+  Weekly: 168, Monthly: 720,
   'STAT then Q4H': 4, 'STAT then Q6H': 6, 'STAT then Q8H': 8, 'STAT then Q12H': 12
 };
 
