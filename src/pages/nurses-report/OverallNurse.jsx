@@ -897,13 +897,6 @@ export default function OverallNurse() {
                   ))}
                   <th rowSpan={2}>Nurses on Duty</th>
                   <th rowSpan={2}>Access</th>
-                  {isAdmin && (
-                    <th rowSpan={2}>
-                      <button type="button" className="btn btn-secondary"
-                        style={{ padding: '3px 8px', fontSize: 11, whiteSpace: 'nowrap' }}
-                        onClick={addColumnPrompt}>+ Column</button>
-                    </th>
-                  )}
                 </tr>
                 <tr>{['In', 'Out', 'In', 'Out'].map((l, i) => <th key={i}>{l}</th>)}</tr>
               </thead>
@@ -938,7 +931,6 @@ export default function OverallNurse() {
                           {locked ? '\uD83D\uDD12 Locked' : '\uD83D\uDD13 Open'}
                         </button>
                       </td>
-                      {isAdmin && <td></td>}
                     </tr>
                   );
                 })}
@@ -947,7 +939,6 @@ export default function OverallNurse() {
                   {STAT_FIELDS.map((f) => <td key={f.key} className={movementColorClass(f.key)}>{totals[f.key]}</td>)}
                   {CUSTOM_TEXT_COLUMNS.map((c) => <td key={c.key}></td>)}
                   <td></td><td></td>
-                  {isAdmin && <td></td>}
                 </tr>
               </tbody>
             </table>
