@@ -1,11 +1,22 @@
+import { useEffect, useState } from "react";
 import { useNav } from "../contexts/NavContext.jsx";
 import { useTheme } from "../contexts/ThemeContext.jsx";
+
+// Wallpaper design rotates every 2 minutes (7 designs, driven by the clock so
+// it stays in step across pages).
+const WP_COUNT = 7, WP_MS = 120000;
+const wpIndex = () => Math.floor(Date.now() / WP_MS) % WP_COUNT;
 
 export default function Topbar({ brand, identity, children }) {
   const { openDrawer } = useNav();
   const themeCtx = useTheme();
+  const [wp, setWp] = useState(wpIndex);
+  useEffect(() => {
+    const t = setInterval(() => setWp(wpIndex()), 5000);
+    return () => clearInterval(t);
+  }, []);
   return (
-    <div className="topbar">
+    <div className="topbar" data-wp={wp}>
       <div className="gnav-topbar-left no-print">
         <div className="gnav-topbar-left-row">
           <button className="gnav-toggle" aria-label="Open menu" onClick={openDrawer}>&#9776;</button>
