@@ -144,6 +144,26 @@ export async function saveCatalog(db, type, items) {
   catalogPromise = null;
 }
 
+// Entries with the same name (e.g. one uploaded with a code and links, another
+// with the care-plan text) are combined into one: later entries win for every
+// field they actually fill in, and blank fields never wipe out earlier values.
+const isBlank = (v) => v == null || (Array.isArray(v) ? v.length === 0 : String(v).trim() === '');
+function overlay(base, next) {
+  const out = { ...base };
+  Object.keys(next).forEach((k) => { if (!isBlank(next[k])) out[k] = next[k]; });
+  return out;
+}
+export function combineSameName(list) {
+  const order = [], byName = new Map();
+  list.forEach((it) => {
+    const k = String(it.name || '').trim().toLowerCase();
+    if (!k) { order.push(it); return; }
+    if (byName.has(k)) byName.set(k, overlay(byName.get(k), it));
+    else { byName.set(k, { ...it }); order.push(k); }
+  });
+  return order.map((x) => (typeof x === 'string' ? byName.get(x) : x));
+}
+
 // Adds the given items to what is already stored (admin only). An uploaded entry
 // whose code (or, with no code, whose name) matches a stored one updates that
 // entry (blank cells in the upload keep the stored value); everything else already stored is kept untouched.
@@ -194,7 +214,7 @@ export function ensureCatalogLoaded(db) {
       try {
         const meta = await readCatalogMeta(db);
         const [nanda, nic, noc] = await Promise.all(['nanda', 'nic', 'noc'].map(t => loadType(db, t, meta)));
-        return { nanda, nic, noc };
+        return { nanda: combineSameName(nanda), nic, noc };
       } catch (e) {
         catalogPromise = null;
         return { nanda: [], nic: [], noc: [] };
