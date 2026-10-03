@@ -54,11 +54,12 @@ function NoteLines({ text, withDiagnosis }) {
     : <p className="patient-note-text" key={i}>{b.text}</p>)}</>;
 }
 
-function PatientBlockView({ p }) {
+function PatientBlockView({ p, n = 1, total = 1 }) {
   const summaryFields = PATIENT_FIELDS.filter(f => f.type !== 'textarea');
   const textFields = PATIENT_FIELDS.filter(f => f.type === 'textarea');
   return (
     <div className="patient-block">
+      <div className="patient-block-head"><span>{'PATIENT ' + n}</span>{total > 1 && <span className="pbh-of">{'of ' + total}</span>}</div>
       {p.status && <div className="status-stamp">{p.status}</div>}
       {summaryFields.map(f => p[f.key] ? (
         <div className="patient-line" key={f.key}><h3>{f.label}: </h3>{p[f.key]}</div>
@@ -312,7 +313,7 @@ function WardReportBlockView({ w, data }) {
       <div className="table-wrap"><DemographicsTableView data={data} w={w} /></div>
       {patients.length === 0
         ? <div className="no-patients" style={{ marginTop: 10 }}>No patient write-ups submitted for this ward.</div>
-        : patients.map((p, i) => <PatientBlockView p={p} key={p.id || i} />)}
+        : patients.map((p, i) => <PatientBlockView p={p} n={i + 1} total={patients.length} key={p.id || i} />)}
       {data.nightUpdate && (
         <div className="night-update-block">
           <h3 className="patient-note-label">{'Night Update' + (data.nightUpdateBy ? ' — ' + data.nightUpdateBy : '') + ':'}</h3>

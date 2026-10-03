@@ -211,11 +211,12 @@ function NoteLines({ text, withDiagnosis }) {
     : <p className="patient-note-text" key={i}>{b.text}</p>)}</>;
 }
 
-function PatientBlockView({ p }) {
+function PatientBlockView({ p, n = 1, total = 1 }) {
   const summaryFields = PATIENT_FIELDS.filter(f => f.type !== 'textarea');
   const textFields = PATIENT_FIELDS.filter(f => f.type === 'textarea');
   return (
     <div className="patient-block">
+      <div className="patient-block-head"><span>{'PATIENT ' + n}</span>{total > 1 && <span className="pbh-of">{'of ' + total}</span>}</div>
       {p.status && <div className="status-stamp">{p.status}</div>}
       {p.location && <div className="status-stamp">{p.location}</div>}
       {summaryFields.map(f => p[f.key] ? (
@@ -1499,7 +1500,7 @@ function WardPanelRest({ h, showLabel, isAdmin, navigate, includeShiftTable = tr
             ) : (
               wardDoc.patients.map((p, i) => (
                 <Fragment key={p.id}>
-                  <PatientBlockView p={p} />
+                  <PatientBlockView p={p} n={i + 1} total={wardDoc.patients.length} />
                   {i === wardDoc.patients.length - 1 && wardDoc.nightUpdate && (
                     <div className="night-update-block">
                       <h3 className="patient-note-label">{'Night Update' + (wardDoc.nightUpdateBy ? ' — ' + wardDoc.nightUpdateBy : '') + ':'}</h3>

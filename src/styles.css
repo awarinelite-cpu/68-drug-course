@@ -1598,7 +1598,7 @@ table.drugs-table tr.drop-after > td { box-shadow: inset 0 -3px 0 0 #7c3aed; }
   .ward-reports-box .ward-card { margin-left: 2px; margin-right: 2px; }
   .ward-reports-box .ward-card-body { padding: 0 6px 12px; }
   .ward-reports-box .ward-card-header { padding: 14px 12px; }
-  .ward-reports-box .patient-block { padding: 10px; }
+  .ward-reports-box .patient-block { --pb-pad: 10px; }
 }
 
 /* Mobile: Ward Nurse page cards (shift tables, patients, save) use nearly the full width */
@@ -1861,4 +1861,32 @@ h3.ward-report-subheading, .ward-report-subheading { font-size: clamp(28px, 3.4v
    right, beside the Plan and Nursing Diagnosis, instead of near the top. */
 @media (min-width: 1024px) {
   .status-stamp { top: 46%; left: 74%; width: 40%; font-size: clamp(26px, 2.6vw, 42px); transform: translate(-50%, -50%) rotate(-20deg); }
+}
+
+/* Clear demarcation between one patient's report and the next: a numbered
+   header band, a thick border with an accent bar on the left, and extra
+   space above each block so a nurse can see exactly where a report stops
+   and the next one starts. */
+.patient-block {
+  --pb-pad: 12px;
+  padding: 0 var(--pb-pad) var(--pb-pad);
+  margin-top: 34px;
+  border: 2px solid var(--primary-blue);
+  border-left-width: 8px;
+  border-radius: 10px;
+  box-shadow: 0 3px 10px rgba(22, 41, 79, .18);
+}
+.patient-block:first-of-type { margin-top: 14px; }
+.patient-block-head {
+  position: relative; z-index: 1;
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  margin: 0 calc(var(--pb-pad) * -1) 10px;
+  padding: 6px var(--pb-pad);
+  background: var(--primary-navy); color: #fff;
+  font-weight: 800; font-size: 14px; letter-spacing: 1.5px; text-transform: uppercase;
+}
+.patient-block-head .pbh-of { font-weight: 600; opacity: .85; letter-spacing: .5px; }
+@media print {
+  .patient-block { border-color: #000; box-shadow: none; break-inside: auto; }
+  .patient-block-head { background: #000 !important; color: #fff !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 }
