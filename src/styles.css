@@ -1797,3 +1797,18 @@ table.report td.ward-name { font-size: clamp(18px, 1.9vw, 28px); font-weight: 90
 .role-card .title { font-size: clamp(26px, 3.4vw, 40px); font-weight: 900; }
 .role-card .desc { font-size: clamp(18px, 2.2vw, 24px); max-width: 720px; }
 .role-card .status { font-size: clamp(18px, 2.2vw, 24px); }
+
+/* Desktop: ward Shift Statistics + Patient Demographics must fit the screen
+   width with no cut-off columns (incl. Nurses on duty). Inputs flex with their
+   cell instead of a fixed 76px/150px, text sizes scale with the window, and
+   headings wrap. Phones/tablets still side-scroll inside .table-wrap. */
+@media (min-width: 1024px) {
+  .table-wrap { overflow-x: visible; }
+  table.shift { width: 100%; table-layout: auto; }
+  table.shift th, table.shift td { padding: 8px 2px; font-size: clamp(13px, 1.15vw, 20px); white-space: normal; word-break: normal; }
+  table.shift thead th { font-size: clamp(11px, .95vw, 16px); letter-spacing: 0; white-space: normal; padding: 8px 2px; }
+  table.shift tr.total-row td { font-size: clamp(14px, 1.3vw, 22px); }
+  table.shift input { width: 100%; min-width: 0; max-width: 76px; padding: 5px 2px; font-size: clamp(13px, 1.15vw, 19px); box-sizing: border-box; }
+  table.shift input.duty-input { width: 100%; max-width: none; min-width: 90px; padding: 5px 6px; font-size: clamp(12px, 1vw, 16px); }
+  table.shift td.shift-name, table.shift th:first-child { padding-left: 6px; }
+}
