@@ -1743,3 +1743,7 @@ table.shift input:disabled, table.report input:disabled { background: #f1f5f9; c
 :root[data-theme="dark"] table.report th, :root[data-theme="dark"] table.report td,
 :root[data-theme="dark"] table.shift th, :root[data-theme="dark"] table.shift td { border-color: #334155; }
 :root[data-theme="dark"] table.report thead th, :root[data-theme="dark"] table.shift thead th { border-color: #0f172a; }
+
+/* Bigger report heading (period line + who-label) */
+h1.period-label, .period-label { font-size: clamp(20px, 2.6vw, 34px); font-weight: 800; line-height: 1.25; }
+.who-label { font-size: clamp(16px, 1.9vw, 24px); font-weight: 600; color: var(--text-primary); margin-top: 6px; }
