@@ -1672,3 +1672,18 @@ table.drugs-table tr.drop-after > td { box-shadow: inset 0 -3px 0 0 #7c3aed; }
 .ov-sheet table.report td.ward-name, .ov-sheet table.report th:first-child { text-align: left; padding-left: 10px; }
 .ov-sheet table.report td.ward-name { color: #0f172a; }
 :root[data-theme="dark"] .ov-sheet table.report td.stat-beds { color: #15803d; }
+
+/* ── Ward shift statistics tables: same bold, high-contrast look ── */
+table.ward-shift { width: 100%; border-collapse: collapse; border: 3px solid #0f172a; }
+table.ward-shift th, table.ward-shift td {
+  border: 2px solid #334155; padding: 12px 4px; font-size: clamp(16px, 1.5vw, 24px); font-weight: 700; background: #fff; white-space: nowrap;
+}
+table.ward-shift td { color: #0f172a; }
+table.ward-shift td.stat-beds { color: #15803d; }
+table.ward-shift td.stat-occ, table.ward-shift td.stat-in { color: #1d4ed8; }
+table.ward-shift td.stat-vac, table.ward-shift td.stat-out { color: #b91c1c; }
+table.ward-shift thead th { background: #16294F; color: #fff; border-color: #0f172a; font-size: clamp(14px, 1.3vw, 20px); letter-spacing: .3px; white-space: normal; }
+table.ward-shift tbody tr:nth-child(even) td { background: #eef3fb; }
+table.ward-shift tr.total-row td { background: #fde68a; border-top: 3px solid #0f172a; font-size: clamp(18px, 1.7vw, 26px); }
+table.ward-shift tr.shift-section-row td { background: #cbd5e1; color: #0f172a; }
+table.ward-shift td.shift-name, table.ward-shift th:first-child { text-align: left; padding-left: 10px; }
