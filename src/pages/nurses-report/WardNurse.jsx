@@ -1316,6 +1316,7 @@ function WardPanelRest({ h, showLabel, isAdmin, navigate, includeShiftTable = tr
     updatePatientStatus, lookupPatientByEmr, selectPatientFromWard, refreshPlan, applyNursingDiagnosis,
     nightOpenIds, openNightUpdate, saveReport, submitReport, pillClass, pillText
   } = h;
+  const hasParole = !!(paroleView && (paroleHasAny(paroleView.parole) || paroleHasAny(paroleView.dParole)));
 
   // Quick lookup only, not tied to any write-up — lets the nurse glance at
   // a patient's roster tag (Discharge/Trans Out/Death/admission tag) right
@@ -1358,7 +1359,7 @@ function WardPanelRest({ h, showLabel, isAdmin, navigate, includeShiftTable = tr
             </div>
           )}
 
-          {(includeShiftTable || includeDemographics) && (
+          {(includeShiftTable || includeDemographics || hasParole) && (
             <div className="card-box ward-nurse-box">
               {includeShiftTable && includeHeader && w && (
                 <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 10 }}>
@@ -1385,13 +1386,12 @@ function WardPanelRest({ h, showLabel, isAdmin, navigate, includeShiftTable = tr
                   </div>
                 </>
               )}
-            </div>
-          )}
-
-          {paroleView && (paroleHasAny(paroleView.parole) || paroleHasAny(paroleView.dParole)) && (
-            <div className="card-box ward-nurse-box">
-              <h2>{paroleHasAny(paroleView.parole) && paroleHasAny(paroleView.dParole) ? 'Parole / D/Parole' : paroleHasAny(paroleView.parole) ? 'Parole' : 'D/Parole'}</h2>
-              <ParoleTables paroleList={paroleView.parole} dParoleList={paroleView.dParole} onReadmit={paroleLoaded ? readmitParolee : undefined} busyId={readmitBusyId} />
+              {hasParole && (
+                <>
+                  <h2 style={{ marginTop: 14 }}>{paroleHasAny(paroleView.parole) && paroleHasAny(paroleView.dParole) ? 'Parole / D/Parole' : paroleHasAny(paroleView.parole) ? 'Parole' : 'D/Parole'}</h2>
+                  <ParoleTables paroleList={paroleView.parole} dParoleList={paroleView.dParole} onReadmit={paroleLoaded ? readmitParolee : undefined} busyId={readmitBusyId} />
+                </>
+              )}
             </div>
           )}
 
