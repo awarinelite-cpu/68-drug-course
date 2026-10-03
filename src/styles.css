@@ -1689,3 +1689,29 @@ table.ward-shift tbody tr:nth-child(even) td { background: #eef3fb; }
 table.ward-shift tr.total-row td { background: #fde68a; border-top: 3px solid #0f172a; font-size: clamp(18px, 1.7vw, 26px); }
 table.ward-shift tr.shift-section-row td { background: #cbd5e1; color: #0f172a; }
 table.ward-shift td.shift-name, table.ward-shift th:first-child { text-align: left; padding-left: 10px; }
+
+/* ── Live medical wallpaper on the top bar: a heartbeat (ECG) trace sweeping
+   across plus slowly drifting medical crosses. Pure CSS/SVG, no images to
+   load. It sits behind the bar's content (z-index -1 inside the bar's own
+   stacking context) and is switched off for reduced-motion and print. ── */
+.topbar::before {
+  content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none;
+  background-image:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='600' height='60' viewBox='0 0 600 60'%3E%3Cpath d='M0,32 H110 l8,-6 l8,6 H170 l6,4 l8,-34 l8,44 l6,-14 H260 l10,-8 l12,8 H600' fill='none' stroke='%235eead4' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E"),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='420' height='90' viewBox='0 0 420 90'%3E%3Cg stroke='white' stroke-width='3' stroke-linecap='round' fill='none'%3E%3Cpath d='M40,22 v16 M32,30 h16'/%3E%3Cpath d='M170,58 v12 M164,64 h12'/%3E%3Cpath d='M290,18 v14 M283,25 h14'/%3E%3Cpath d='M370,62 v10 M365,67 h10'/%3E%3C/g%3E%3C/svg%3E");
+  background-repeat: repeat-x, repeat-x;
+  background-size: 600px 60px, 420px 90px;
+  background-position: 0 50%, 0 50%;
+  opacity: .5;
+  animation: topbarWallpaper 9s linear infinite;
+}
+.topbar::after {
+  content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none;
+  background: linear-gradient(90deg, rgba(22,41,79,.55) 0%, rgba(22,41,79,0) 30%, rgba(22,41,79,0) 70%, rgba(22,41,79,.55) 100%);
+}
+@keyframes topbarWallpaper {
+  from { background-position: 0 50%, 0 50%; }
+  to   { background-position: -600px 50%, -420px 50%; }
+}
+@media (prefers-reduced-motion: reduce) { .topbar::before { animation: none; } }
+@media print { .topbar::before, .topbar::after { display: none; } }
