@@ -221,11 +221,10 @@ async function getTokenEntriesForUids(uids) {
 // devices for EVERY MHL patient, regardless of ward. Returns
 // patientId -> Set(uid), merging both collections since in principle a
 // patient could (incorrectly) be allocated from both apps at once.
-async function loadAllocatedUidsByPatient() {
-  const [snap, snapMhl] = await Promise.all([
-    db.collection('allocations').get(),
-    db.collection('allocations_mhl').get()
-  ]);
+// Only reads allocations belonging to the given patients (chunked, since a
+// Firestore `in` query takes at most 30 values) instead of scanning both
+// whole collections every cycle.
+async function loadAllocatedUidsByPatient(patientIds) {
   const map = {}; // patientId -> Set(uid)
   function ingest(s) {
     s.forEach((d) => {
@@ -234,8 +233,14 @@ async function loadAllocatedUidsByPatient() {
       (map[data.patientId] = map[data.patientId] || new Set()).add(data.uid);
     });
   }
-  ingest(snap);
-  ingest(snapMhl);
+  const ids = [...new Set(patientIds || [])];
+  const queries = [];
+  for (let i = 0; i < ids.length; i += 30) {
+    const chunk = ids.slice(i, i + 30);
+    queries.push(db.collection('allocations').where('patientId', 'in', chunk).get());
+    queries.push(db.collection('allocations_mhl').where('patientId', 'in', chunk).get());
+  }
+  (await Promise.all(queries)).forEach(ingest);
   return map;
 }
 
@@ -289,6 +294,18 @@ exports.updateNextDoseAt = onDocumentWritten(
     const data = after.data() || {};
     const drugs = Array.isArray(data.drugs) ? data.drugs : [];
     const chartRows = Array.isArray(data.rows) ? data.rows : [];
+
+    // The next-dose time only depends on drugs and rows. If neither changed
+    // (autosave of unrelated fields, or this trigger's own nextDoseAt
+    // write-back), there is nothing to recompute — skip all further work.
+    const before = event.data && event.data.before;
+    if (before && before.exists) {
+      const b = before.data() || {};
+      if (JSON.stringify(b.drugs || null) === JSON.stringify(data.drugs || null) &&
+          JSON.stringify(b.rows || null) === JSON.stringify(data.rows || null)) {
+        return;
+      }
+    }
 
     let earliest = null;
     drugs.forEach((drug, i) => {
@@ -350,6 +367,21 @@ exports.checkDueDrugs = onSchedule(
   { schedule: 'every 5 minutes', timeZone: 'Africa/Lagos', region: 'us-central1' },
   async () => {
     const now = new Date();
+
+    // Cheapest check first: is anything due at all? Most cycles it isn't,
+    // and then this run reads nothing else (no settings, no allocations).
+    const dueChartsSnap = await db.collectionGroup('drugCourseChart')
+      .where('nextDoseAt', '<=', admin.firestore.Timestamp.fromDate(now))
+      .get();
+
+    // this collection only ever holds one doc, 'main' — collectionGroup
+    // scope theoretically returns other doc ids too, so keep the guard.
+    const dueChartDocs = dueChartsSnap.docs.filter((d) => d.id === 'main');
+    if (dueChartDocs.length === 0) {
+      console.log('No doses due this cycle.');
+      return;
+    }
+
     const alarmSettings = await loadAlarmSettings();
     const rollout = await loadRolloutSettings();
 
@@ -363,22 +395,8 @@ exports.checkDueDrugs = onSchedule(
       return;
     }
 
-    const [dueChartsSnap, allocatedUidsByPatient] = await Promise.all([
-      db.collectionGroup('drugCourseChart')
-        .where('nextDoseAt', '<=', admin.firestore.Timestamp.fromDate(now))
-        .get(),
-      loadAllocatedUidsByPatient()
-    ]);
-
-    // this collection only ever holds one doc, 'main' — collectionGroup
-    // scope theoretically returns other doc ids too, so keep the guard.
-    const dueChartDocs = dueChartsSnap.docs.filter((d) => d.id === 'main');
-    if (dueChartDocs.length === 0) {
-      console.log('No doses due this cycle.');
-      return;
-    }
-
     const patientIds = [...new Set(dueChartDocs.map((d) => d.ref.parent.parent.id))];
+    const allocatedUidsByPatient = await loadAllocatedUidsByPatient(patientIds);
 
     const patientsSnap = await db.getAll(...patientIds.map((id) => db.collection('patients').doc(id)));
     const patientNames = {};

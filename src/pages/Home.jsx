@@ -245,7 +245,7 @@ export default function Home() {
   // a screen nobody's looking at, and skipped while a form is open so a
   // background refresh can't blow away unsaved input.
   useEffect(() => {
-    const POLL_MS = 30000;
+    const POLL_MS = 90000;
     const pollTimer = setInterval(() => {
       if (document.visibilityState !== 'visible') return;
       if (showNewForm || showBulkUpload || showEmrPaste) return;

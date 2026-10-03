@@ -163,6 +163,7 @@ export default function DrugCourseChart() {
 
   const chartRefPath = useRef(null);
   const saveTimerRef = useRef(null);
+  const lastSavedFingerprintRef = useRef(null);
   const lastAppliedUpdatedAtRef = useRef(null); // Firestore Timestamp of the version currently shown on screen
   const drugRowSnapshots = useRef({}); // index -> the drug row as it was when its edit opened, for audit diffing
   const chartRowSnapshots = useRef({}); // index -> the chart row as it was when its edit opened, for audit diffing
@@ -352,6 +353,7 @@ export default function DrugCourseChart() {
         const localMs = lastAppliedUpdatedAtRef.current?.toMillis ? lastAppliedUpdatedAtRef.current.toMillis() : 0;
         if (remoteMs > localMs) {
           lastAppliedUpdatedAtRef.current = data.updatedAt;
+          lastSavedFingerprintRef.current = null;
           const nextFields = { f_admission: '', f_discharge: '', f_diagnosis: '' };
           FIELD_IDS.forEach(id => { if (data[id] !== undefined) nextFields[id] = data[id]; });
           setFields((prev) => ({ ...prev, ...nextFields }));
@@ -365,7 +367,7 @@ export default function DrugCourseChart() {
           setAuditLog(data.auditLog || []);
         }
       } catch (e) { /* silent — just try again on the next cycle */ }
-    }, 30000);
+    }, 90000);
     return () => clearInterval(poll);
   }, [isArchived, chartEditMode, drugsEditMode]);
 
@@ -373,6 +375,12 @@ export default function DrugCourseChart() {
   function saveChart() {
     if (isArchived || !chartRefPath.current) return;
     const { fields: f, drugs: d, chartRows: c, verbalOrders: v, careInstructions: ci, auditLog: al } = latestRef.current;
+    // Skip the write when nothing changed since the last save — the 15s
+    // safety-net timer used to rewrite the whole chart (and wake the
+    // server-side triggers) every cycle even with no edits.
+    const fingerprint = JSON.stringify({ f, c, d, v, ci, al });
+    if (fingerprint === lastSavedFingerprintRef.current) return;
+    lastSavedFingerprintRef.current = fingerprint;
     const data = { ...f, rows: c, drugs: d, verbalOrders: v, careInstructions: ci, auditLog: al, updatedAt: serverTimestamp() };
     // Not awaited — with offline persistence, this writes to the local cache
     // immediately and syncs on reconnect, but the Promise itself only
@@ -381,6 +389,7 @@ export default function DrugCourseChart() {
     // flush edits before continuing still get what they need — the write
     // is already handed to the local cache by the time this returns.
     setDoc(chartRefPath.current, data, { merge: true }).catch((e) => {
+      lastSavedFingerprintRef.current = null; // let the next save retry
       setSaveStatus('Save failed: ' + (e.code || e.message));
     });
     setSaveStatus('Saved ' + formatTime(new Date()));
