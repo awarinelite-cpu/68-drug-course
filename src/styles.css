@@ -1907,3 +1907,51 @@ h3.ward-report-subheading, .ward-report-subheading { font-size: clamp(28px, 3.4v
 .search-result-item .patient-bed-tag { font-size: clamp(14px, 1.1vw, 16px); padding: 2px 9px; }
 .search-result-item .patient-avatar, .search-result-item .patient-avatar svg { width: 52px; height: 52px; }
 .search-result-item .patient-avatar--initial { font-size: 22px; }
+
+/* ── Night mode for every Nurses Report table (ward shift stats, patient
+   demographics, D/Parole, Overall Nurse, Archive, Analytics). The bold
+   high-contrast rules above hardcode white cells, which left the figures
+   unreadable at night. Same dark palette as the Records sheet. ── */
+:root[data-theme="dark"] table.report,
+:root[data-theme="dark"] table.shift,
+:root[data-theme="dark"] table.ward-shift,
+:root[data-theme="dark"] .ov-sheet table.report { border-color: #475569; }
+:root[data-theme="dark"] table.report th, :root[data-theme="dark"] table.report td,
+:root[data-theme="dark"] table.shift th, :root[data-theme="dark"] table.shift td,
+:root[data-theme="dark"] table.ward-shift th, :root[data-theme="dark"] table.ward-shift td,
+:root[data-theme="dark"] .ov-sheet table.report th, :root[data-theme="dark"] .ov-sheet table.report td {
+  border-color: #475569; background: #0F2744; color: #F1F5F9;
+}
+:root[data-theme="dark"] table.report thead th, :root[data-theme="dark"] table.shift thead th,
+:root[data-theme="dark"] table.ward-shift thead th, :root[data-theme="dark"] .ov-sheet table.report thead th {
+  background: #16294F; color: #fff; border-color: #475569;
+}
+:root[data-theme="dark"] table.report tbody tr:nth-child(even) td,
+:root[data-theme="dark"] table.shift tbody tr:nth-child(even) td,
+:root[data-theme="dark"] table.ward-shift tbody tr:nth-child(even) td,
+:root[data-theme="dark"] .ov-sheet table.report tbody tr:nth-child(even) td { background: #14305A; }
+:root[data-theme="dark"] table.report tr.totals-row td,
+:root[data-theme="dark"] table.shift tr.total-row td,
+:root[data-theme="dark"] table.ward-shift tr.total-row td,
+:root[data-theme="dark"] .ov-sheet table.report tbody tr.totals-row td { background: #5B4510; border-top-color: #FBBF24; color: #FFF7D6; }
+:root[data-theme="dark"] table.shift tr.shift-section-row td,
+:root[data-theme="dark"] table.ward-shift tr.shift-section-row td { background: #1E3A5F; color: #CBD5E1; }
+/* inputs inside the tables */
+:root[data-theme="dark"] table.shift input, :root[data-theme="dark"] table.report input,
+:root[data-theme="dark"] table.ward-shift input {
+  background: #0B1F3A; color: #F1F5F9; border-color: #64748B;
+}
+:root[data-theme="dark"] table.shift input:disabled, :root[data-theme="dark"] table.report input:disabled {
+  background: #0B1F3A; color: #F1F5F9; -webkit-text-fill-color: #F1F5F9; opacity: .85;
+}
+/* figure colours, brightened so they read on the dark cells */
+:root[data-theme="dark"] table td.stat-beds, :root[data-theme="dark"] table td.stat-beds input,
+:root[data-theme="dark"] .ov-sheet table.report td.stat-beds { color: #4ADE80; }
+:root[data-theme="dark"] table td.stat-occ, :root[data-theme="dark"] table td.stat-occ input,
+:root[data-theme="dark"] table td.stat-in, :root[data-theme="dark"] table td.stat-in input,
+:root[data-theme="dark"] .ov-sheet table.report td.stat-occ, :root[data-theme="dark"] .ov-sheet table.report td.stat-in,
+:root[data-theme="dark"] table.shift td.computed { color: #60A5FA; }
+:root[data-theme="dark"] table td.stat-vac, :root[data-theme="dark"] table td.stat-vac input,
+:root[data-theme="dark"] table td.stat-out, :root[data-theme="dark"] table td.stat-out input,
+:root[data-theme="dark"] .ov-sheet table.report td.stat-vac, :root[data-theme="dark"] .ov-sheet table.report td.stat-out { color: #F87171; }
+:root[data-theme="dark"] table.report th.renamable-col:hover { background: #21396B; }
