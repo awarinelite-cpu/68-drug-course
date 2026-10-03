@@ -505,7 +505,7 @@ export default function OverallNurse() {
   // no longer claim the role themselves (see RoleSelect.jsx + firestore.rules).
   async function appointOverall() {
     const u = usersByUid[appointUid];
-    if (!u) return;
+    if (!u || u.role !== 'nurse') return;
     try {
       await setDoc(roleRef, {
         weekId: wk,
@@ -1028,7 +1028,7 @@ export default function OverallNurse() {
               <select value={appointUid} onChange={(e) => setAppointUid(e.target.value)} style={{ padding: 8, minWidth: 200 }}>
                 <option value="">Select a nurse…</option>
                 {Object.entries(usersByUid)
-                  .filter(([, u]) => u && u.name && u.role !== 'admin' && u.role !== 'subadmin')
+                  .filter(([, u]) => u && u.name && u.role === 'nurse')
                   .sort((a, b) => (a[1].name || '').localeCompare(b[1].name || ''))
                   .map(([uid, u]) => <option key={uid} value={uid}>{u.name}</option>)}
               </select>
