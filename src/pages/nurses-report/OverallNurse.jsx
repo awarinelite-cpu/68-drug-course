@@ -295,6 +295,20 @@ export default function OverallNurse() {
   const [appointUid, setAppointUid] = useState('');
   // Ward Reports accordion: key of the ward card currently expanded (null = all collapsed)
   const [openWardKey, setOpenWardKey] = useState(null);
+
+  // Clicking anywhere outside an expanded ward card collapses it. Clicks on
+  // another ward card are left to that card's own header (it switches cards),
+  // and clicks inside a modal are ignored.
+  useEffect(() => {
+    if (!openWardKey) return undefined;
+    const onOutside = (e) => {
+      const t = e.target;
+      if (t && t.closest && (t.closest('.ward-card') || t.closest('.modal-overlay'))) return;
+      setOpenWardKey(null);
+    };
+    document.addEventListener('click', onOutside);
+    return () => document.removeEventListener('click', onOutside);
+  }, [openWardKey]);
   const [appointStatus, setAppointStatus] = useState({ text: '', error: false });
   const [whoLabel, setWhoLabel] = useState('');
   const [wardData, setWardData] = useState({});
