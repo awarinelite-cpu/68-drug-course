@@ -4,7 +4,7 @@ import { db } from "../firebase.js";
 import { useAuth } from "../contexts/AuthContext.jsx";
 import { useGoBack } from "../hooks/useGoBack.js";
 import { downloadTextFile } from "../lib/csv.js";
-import { CATALOG_TYPES, templateCsv, parseCatalogCsv, saveCatalog, readCatalogMeta } from "../lib/nursingCatalog.js";
+import { CATALOG_TYPES, templateCsv, parseCatalogCsv, saveCatalog, mergeIntoCatalog, readCatalogMeta } from "../lib/nursingCatalog.js";
 import Topbar from "../components/Topbar.jsx";
 
 function CatalogCard({ type, meta, onSaved }) {
@@ -28,12 +28,22 @@ function CatalogCard({ type, meta, onSaved }) {
 
   async function upload() {
     if (!parsed || !parsed.items.length) return;
-    const have = meta && meta.count ? ' This replaces the ' + meta.count + ' entries currently stored.' : '';
+    const merge = !!cfg.mergeOnUpload;
+    const have = meta && meta.count
+      ? (merge ? ' They will be added to the ' + meta.count + ' entries already stored (entries with the same code are updated).' : ' This replaces the ' + meta.count + ' entries currently stored.')
+      : '';
     if (!window.confirm('Upload ' + parsed.items.length + ' entries to ' + cfg.label + '?' + have)) return;
     setSaving(true); setStatus(null);
     try {
-      await saveCatalog(db, type, parsed.items);
-      setStatus({ text: 'Uploaded ' + parsed.items.length + ' entries.', error: false });
+      let text;
+      if (merge) {
+        const r = await mergeIntoCatalog(db, type, parsed.items);
+        text = 'Added ' + r.added + ' new entries' + (r.updated ? ', updated ' + r.updated + ' existing' : '') + '. ' + r.total + ' stored in total.';
+      } else {
+        await saveCatalog(db, type, parsed.items);
+        text = 'Uploaded ' + parsed.items.length + ' entries.';
+      }
+      setStatus({ text, error: false });
       setParsed(null);
       if (fileRef.current) fileRef.current.value = '';
       onSaved();
@@ -70,7 +80,7 @@ function CatalogCard({ type, meta, onSaved }) {
             </ul>
           )}
           <button className="btn btn-primary" style={{ marginTop: 10 }} disabled={saving || !parsed.items.length} onClick={upload}>
-            {saving ? 'Uploading…' : 'Upload & replace'}
+            {saving ? 'Uploading…' : (cfg.mergeOnUpload ? 'Upload & add' : 'Upload & replace')}
           </button>
         </div>
       )}
@@ -102,7 +112,7 @@ export default function NursingCatalog() {
             Upload the NANDA-I diagnoses, NIC interventions and NOC outcomes as CSV. Nurses then search NANDA-I diagnoses on the ward
             report; picking one fills Planning, Implementation and Evaluation with starter text they can edit. Upload NIC and NOC first
             if you link them by code from the NANDA file. NANDA-I, NIC and NOC are copyrighted — upload only content your institution is
-            licensed to use, or your own wording, and have it reviewed by a nurse educator. Uploading replaces that catalog.
+            licensed to use, or your own wording, and have it reviewed by a nurse educator. Uploading NIC or NOC replaces that catalog; uploading NANDA-I diagnoses adds to the existing list.
           </p>
         </div>
         <CatalogCard type="nanda" meta={meta.nanda} onSaved={() => setTick(t => t + 1)} />

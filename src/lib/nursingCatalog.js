@@ -17,6 +17,7 @@ const CHUNK_CHARS = 300000; // well under 1 MiB even with multi-byte characters
 export const CATALOG_TYPES = {
   nanda: {
     label: 'NANDA-I Nursing Diagnoses',
+    mergeOnUpload: true, // new uploads are ADDED to the stored list instead of replacing it
     nameHeader: 'diagnosis',
     nameAliases: ['diagnosis', 'name', 'nursingdiagnosis', 'label', 'title'],
     listCols: { nic_codes: 'nicCodes', noc_codes: 'nocCodes' },
@@ -139,6 +140,28 @@ export async function saveCatalog(db, type, items) {
     try { await deleteDoc(doc(db, COLLECTION, 'catalog_' + type + '_' + i)); } catch (e) { /* stale chunk, harmless */ }
   }
   catalogPromise = null;
+}
+
+// Adds the given items to what is already stored (admin only). An uploaded entry
+// whose code (or, with no code, whose name) matches a stored one updates that
+// entry; everything else already stored is kept untouched.
+export async function mergeIntoCatalog(db, type, newItems) {
+  const meta = await readCatalogMeta(db);
+  const existing = await loadType(db, type, meta);
+  const keyOf = (it) => (it.code ? 'c' + normCode(it.code) : 'n' + String(it.name || '').toLowerCase());
+  const nameKey = (it) => 'n' + String(it.name || '').toLowerCase();
+  const merged = existing.slice();
+  const index = new Map();
+  merged.forEach((it, i) => { index.set(keyOf(it), i); if (it.code) index.set(nameKey(it), i); });
+  let added = 0, updated = 0;
+  newItems.forEach((it) => {
+    let i = index.get(keyOf(it));
+    if (i === undefined && it.code) i = index.get(nameKey(it)); // same name stored under another/blank code
+    if (i === undefined) { merged.push(it); const at = merged.length - 1; index.set(keyOf(it), at); if (it.code) index.set(nameKey(it), at); added++; }
+    else { merged[i] = it; updated++; }
+  });
+  await saveCatalog(db, type, merged);
+  return { added, updated, total: merged.length };
 }
 
 async function loadType(db, type, meta) {
