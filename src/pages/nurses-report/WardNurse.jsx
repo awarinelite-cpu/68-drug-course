@@ -1036,7 +1036,10 @@ function useWardReport(wardKey, isAdmin, profile, user) {
     if (hasNightUpdate && profile?.name) {
       doc_ = { ...doc_, patients: doc_.patients.map((p) => (p.nightUpdate && p.nightUpdate.trim() && !p.nightUpdateBy) ? { ...p, nightUpdateBy: profile.name } : p) };
     }
-    if (hasNightUpdate && !doc_.shifts.pm.nurseOnDuty && profile?.name) {
+    // The nurse who submits the report is the night-shift nurse, so PM Nurses on
+    // Duty always carries the submitter's name — even when it is the same nurse
+    // already named under AM — and even if no separate night update was typed.
+    if (!doc_.shifts.pm.nurseOnDuty && profile?.name) {
       doc_ = { ...doc_, shifts: { ...doc_.shifts, pm: { ...doc_.shifts.pm, nurseOnDuty: profile.name } } };
     }
 
