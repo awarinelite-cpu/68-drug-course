@@ -1,7 +1,7 @@
 import { formatTime } from './time-format.js';
 
 export const ROUTE_OPTIONS = ['', 'Oral', 'IV', 'IM', 'SC', 'Sublingual', 'Topical', 'Rectal', 'Suppository', 'Inhalation', 'NG Tube', 'Other'];
-export const FREQ_OPTIONS = ['', 'OD', 'Daily', 'Mane', 'Nocte', 'AM', 'PM', 'HS', 'BD', 'TDS', 'Premeal TDS', 'QDS', 'QOD', 'STAT', 'STAT then Q4H', 'STAT then Q6H', 'STAT then Q8H', 'STAT then Q12H', 'PRN', 'Q4H', 'Q6H', '8hrly', 'Q8H', '12hrly', 'Q12H', 'Weekly', 'Twice Weekly', 'Thrice Weekly', '0,12,24hr'];
+export const FREQ_OPTIONS = ['', 'OD', 'Daily', 'Mane', 'Nocte', 'AM', 'PM', 'HS', 'BD', 'TDS', 'Premeal TDS', 'QDS', 'QOD', 'STAT', 'STAT then Q4H', 'STAT then Q6H', 'STAT then Q8H', 'STAT then Q12H', 'PRN', 'Q4H', 'Q6H', '8hrly', 'Q8H', '12hrly', 'Q12H', 'Weekly', 'Twice Weekly', 'Thrice Weekly', 'Monthly', '0,12,24hr'];
 // 'Inactive' = ordered but not started yet — used for the 2nd half of a "X then Y" order
 // (see parseSequentialCourseLine) until the 1st half is Completed.
 export const ACTION_OPTIONS = ['', 'Ongoing', 'Inactive', 'Completed', 'Discontinued', 'Withheld', 'Other'];
@@ -57,7 +57,7 @@ export function defaultRow() {
 // push alert): next due = this drug's own last-administered time + its
 // frequency's interval, or its start/created time if never given yet. Kept
 // here too so a nurse can see it at a glance without waiting on a push.
-export const INTERVAL_HOURS = { OD: 24, Mane: 24, Nocte: 24, AM: 24, PM: 24, HS: 24, BD: 12, TDS: 8, QDS: 6, QOD: 48, Q4H: 4, Q6H: 6, Q8H: 8, Q12H: 12, Weekly: 168, 'STAT then Q4H': 4, 'STAT then Q6H': 6, 'STAT then Q8H': 8, 'STAT then Q12H': 12 };
+export const INTERVAL_HOURS = { OD: 24, Mane: 24, Nocte: 24, AM: 24, PM: 24, HS: 24, BD: 12, TDS: 8, QDS: 6, QOD: 48, Q4H: 4, Q6H: 6, Q8H: 8, Q12H: 12, Weekly: 168, Monthly: 720, 'STAT then Q4H': 4, 'STAT then Q6H': 6, 'STAT then Q8H': 8, 'STAT then Q12H': 12 };
 
 // --- "N times weekly" frequencies (Weekly, Twice Weekly, Thrice Weekly, ...) ---
 // An open-ended pattern rather than a fixed list, so any dose-count phrasing
@@ -635,6 +635,7 @@ const FREQ_ALIASES = {
   q8h: 'Q8H', '8hrly': 'Q8H', '8hourly': 'Q8H',
   q12h: 'Q12H', '12hrly': 'Q12H', '12hourly': 'Q12H',
   weekly: 'Weekly',
+  monthly: 'Monthly',
   '01224hr': '0,12,24hr', '01224hrs': '0,12,24hr'
 };
 // Meal-time qualifiers a doctor tacks on right after the dose to say when
@@ -1255,6 +1256,7 @@ const FREQ_SCAN_PATTERNS = [
   { re: /\bthrice\s*weekly\b/i, toFreq: () => 'Thrice Weekly' },
   { re: /\btwice\s*weekly\b/i, toFreq: () => 'Twice Weekly' },
   { re: /\bweekly\b/i, toFreq: () => 'Weekly' },
+  { re: /\bmonthly\b/i, toFreq: () => 'Monthly' },
 ];
 function extractFallbackFrequency(raw) {
   let best = null;
