@@ -146,7 +146,7 @@ export async function saveCatalog(db, type, items) {
 
 // Adds the given items to what is already stored (admin only). An uploaded entry
 // whose code (or, with no code, whose name) matches a stored one updates that
-// entry; everything else already stored is kept untouched.
+// entry (blank cells in the upload keep the stored value); everything else already stored is kept untouched.
 export async function mergeIntoCatalog(db, type, newItems) {
   const meta = await readCatalogMeta(db);
   const existing = await loadType(db, type, meta);
@@ -160,7 +160,16 @@ export async function mergeIntoCatalog(db, type, newItems) {
     let i = index.get(keyOf(it));
     if (i === undefined && it.code) i = index.get(nameKey(it)); // same name stored under another/blank code
     if (i === undefined) { merged.push(it); const at = merged.length - 1; index.set(keyOf(it), at); if (it.code) index.set(nameKey(it), at); added++; }
-    else { merged[i] = it; updated++; }
+    else {
+      // An uploaded blank never wipes what is already stored: keep the old value for any empty field.
+      const prev = merged[i], next = { ...it };
+      Object.keys(prev).forEach((k) => {
+        const v = next[k];
+        const empty = v === undefined || v === null || v === '' || (Array.isArray(v) && !v.length);
+        if (empty && prev[k] !== undefined) next[k] = prev[k];
+      });
+      merged[i] = next; updated++;
+    }
   });
   await saveCatalog(db, type, merged);
   return { added, updated, total: merged.length };
