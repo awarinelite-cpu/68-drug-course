@@ -35,6 +35,7 @@ export const CATALOG_TYPES = {
   },
   nic: {
     label: 'NIC Nursing Interventions',
+    mergeOnUpload: true,
     nameHeader: 'intervention',
     nameAliases: ['intervention', 'name', 'label', 'title'],
     listCols: { activities: 'activities' },
@@ -51,6 +52,7 @@ export const CATALOG_TYPES = {
   },
   noc: {
     label: 'NOC Nursing Outcomes',
+    mergeOnUpload: true,
     nameHeader: 'outcome',
     nameAliases: ['outcome', 'name', 'label', 'title'],
     listCols: { indicators: 'indicators' },

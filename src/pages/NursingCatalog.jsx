@@ -118,7 +118,7 @@ export default function NursingCatalog() {
             Upload the NANDA-I diagnoses, NIC interventions and NOC outcomes as CSV. Nurses then search NANDA-I diagnoses on the ward
             report; picking one fills Planning, Implementation and Evaluation with starter text they can edit. Upload NIC and NOC first
             if you link them by code from the NANDA file. NANDA-I, NIC and NOC are copyrighted — upload only content your institution is
-            licensed to use, or your own wording, and have it reviewed by a nurse educator. Uploading NIC or NOC replaces that catalog; uploading NANDA-I diagnoses adds to the existing list.
+            licensed to use, or your own wording, and have it reviewed by a nurse educator. Uploads are added to what is already stored (entries with the same code are updated).
           </p>
         </div>
         <CatalogCard type="nanda" meta={meta.nanda} onSaved={() => setTick(t => t + 1)} />
