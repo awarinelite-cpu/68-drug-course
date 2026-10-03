@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { collection, query, where, getDocs } from "firebase/firestore";
+import { collection, query, where, getDocs, doc, writeBatch } from "firebase/firestore";
+import { useAuth } from "../../contexts/AuthContext.jsx";
 import { db } from "../../firebase.js";
 import { useGoBack } from "../../hooks/useGoBack.js";
 import { useTimeFormat, formatDateTime } from "../../lib/time-format.js";
@@ -14,6 +15,8 @@ function fmtTimestamp(ts) {
 export default function ArchiveList() {
   useTimeFormat(); // re-render if admin changes the system time format elsewhere
   const navigate = useNavigate();
+  const { profile } = useAuth();
+  const isAdmin = profile?.role === 'admin';
   const goBack = useGoBack('/nurses-report/role-select');
   const [searchParams] = useSearchParams();
   const type = searchParams.get('type') === 'ward' ? 'ward' : 'overall';
@@ -41,6 +44,27 @@ export default function ArchiveList() {
       setEmptyMsg('No archived reports yet.');
     })();
   }, [type, wardKey]);
+
+  async function removeFile(f) {
+    const overall = f.type === 'overall';
+    const msg = overall
+      ? 'Delete the overall report for ' + (f.dateId || f.id) + ' AND all ward reports filed for that date? This cannot be undone.'
+      : 'Delete ' + (f.fileName || f.dateId || f.id) + '? This cannot be undone.';
+    if (!window.confirm(msg)) return;
+    try {
+      const ids = new Set([f.id]);
+      if (overall && f.dateId) {
+        const sibs = await getDocs(query(collection(db, 'archives'), where('dateId', '==', f.dateId)));
+        sibs.forEach(d => ids.add(d.id));
+      }
+      const batch = writeBatch(db);
+      ids.forEach(id => batch.delete(doc(db, 'archives', id)));
+      await batch.commit();
+      setAllFiles(prev => prev.filter(x => !ids.has(x.id)));
+    } catch (e) {
+      setEmptyMsg("Couldn't delete: " + (e.code || e.message || 'unknown error'));
+    }
+  }
 
   const q = query_.trim().toLowerCase();
   const filtered = !q ? allFiles : allFiles.filter(f =>
@@ -76,6 +100,9 @@ export default function ArchiveList() {
                   {f.archivedAt && <><br />{fmtTimestamp(f.archivedAt)}</>}
                 </div>
                 {f.lastEditedAt && <div className="edited-badge">Edited</div>}
+                {isAdmin && <button className="btn btn-secondary" style={{ marginTop: 6, padding: '4px 10px', color: '#c0392b' }}
+                  onClick={(e) => { e.stopPropagation(); removeFile(f); }}
+                  onKeyDown={(e) => e.stopPropagation()}>Delete</button>}
               </div>
             ))}
           </div>

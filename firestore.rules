@@ -192,13 +192,13 @@ service cloud.firestore {
     // may create an archive entry the first time; once it exists, only an
     // admin or subadmin may change it (correcting a figure or note) — even
     // the Overall Nurse who filed it cannot edit it afterwards. Archive
-    // files are permanent: delete is never allowed, by anyone.
+    // files are permanent except that an admin may delete any of them.
     match /archives/{archiveId} {
       allow read: if isKnownUser();
       allow create: if isKnownUser()
         && (isAdmin() || isSubadmin() || isOverallForWeek(request.resource.data.weekId));
       allow update: if isAdmin() || isSubadmin();
-      allow delete: if false;
+      allow delete: if isAdmin();
     }
 
     // Nurse-to-nurse messaging (Messages page) — both direct 1:1 chats and
@@ -324,7 +324,7 @@ service cloud.firestore {
       allow create: if isKnownUser()
         && (isAdmin() || isSubadmin() || isOverallForWeekMhl(request.resource.data.weekId));
       allow update: if isAdmin() || isSubadmin();
-      allow delete: if false;
+      allow delete: if isAdmin();
     }
   }
 }

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { collection, orderBy, query, limit } from "firebase/firestore";
+import { collection, orderBy, query, limit, doc, deleteDoc } from "firebase/firestore";
+import { useAuth } from "../contexts/AuthContext.jsx";
 import { useNavigate } from "react-router-dom";
 import { db } from "../firebase.js";
 import { useGoBack } from "../hooks/useGoBack.js";
@@ -14,6 +15,8 @@ function fmtSaved(ts) {
 // Past Summary Breakdown of Statistics tables saved from the Records page,
 // newest first. Read-only.
 export default function RecordsArchive() {
+  const { profile } = useAuth();
+  const isAdmin = profile?.role === "admin";
   const goBack = useGoBack("/records");
   const navigate = useNavigate();
   const [items, setItems] = useState([]);
@@ -40,6 +43,17 @@ export default function RecordsArchive() {
 
   const open = items.find((i) => i.id === openId);
 
+  async function removeItem(i) {
+    if (!window.confirm("Delete the saved table for " + i.date.split("-").reverse().join("/") + "? This cannot be undone.")) return;
+    try {
+      await deleteDoc(doc(db, "recordArchives", i.id));
+      setItems((prev) => prev.filter((x) => x.id !== i.id));
+      setOpenId("");
+    } catch (e) {
+      setError("Couldn't delete: " + (e.code || e.message));
+    }
+  }
+
   return (
     <>
       <Topbar brand="Records Archive">
@@ -53,6 +67,7 @@ export default function RecordsArchive() {
             <div className="no-print" style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
               <button className="btn btn-secondary" onClick={() => setOpenId("")}>All saved tables</button>
               <button className="btn btn-secondary" onClick={() => window.print()}>Print</button>
+              {isAdmin && <button className="btn btn-secondary" style={{ color: "#c0392b" }} onClick={() => removeItem(open)}>Delete</button>}
             </div>
             <RecordsSheet date={open.date} rows={open.rows || {}} officers={open.officers || {}} remarks={open.remarks || {}} />
             <div className="field-hint">
@@ -66,10 +81,13 @@ export default function RecordsArchive() {
             {error && <div className="error-msg">{error}</div>}
             {!loading && !error && !items.length && <div className="field-hint">Nothing saved yet. Open the Records page and tap Save to Archive.</div>}
             {items.map((i) => (
-              <button key={i.id} className="btn btn-secondary" style={{ display: "block", width: "100%", textAlign: "left", marginBottom: 8 }} onClick={() => setOpenId(i.id)}>
-                <strong>{i.date.split("-").reverse().join("/")}</strong>
-                <span style={{ opacity: 0.7, fontSize: 13 }}>{fmtSaved(i.savedAt) ? "  ·  saved " + fmtSaved(i.savedAt) : ""}{i.savedByName ? " by " + i.savedByName : ""}</span>
-              </button>
+              <div key={i.id} style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+                <button className="btn btn-secondary" style={{ flex: 1, textAlign: "left" }} onClick={() => setOpenId(i.id)}>
+                  <strong>{i.date.split("-").reverse().join("/")}</strong>
+                  <span style={{ opacity: 0.7, fontSize: 13 }}>{fmtSaved(i.savedAt) ? "  ·  saved " + fmtSaved(i.savedAt) : ""}{i.savedByName ? " by " + i.savedByName : ""}</span>
+                </button>
+                {isAdmin && <button className="btn btn-secondary" style={{ color: "#c0392b" }} onClick={() => removeItem(i)}>Delete</button>}
+              </div>
             ))}
           </div>
         )}
