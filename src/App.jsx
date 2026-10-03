@@ -83,7 +83,7 @@ function RecordsGate({ children }) {
 function RecordOnlyRedirect({ children }) {
   const { profile } = useAuth();
   const location = useLocation();
-  if (profile?.role === "record" && !location.pathname.startsWith("/records")) {
+  if (profile?.role === "record" && !location.pathname.startsWith("/records") && location.pathname !== "/nurses-report/analytics") {
     return <Navigate to="/records" replace />;
   }
   return children;

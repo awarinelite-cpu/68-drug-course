@@ -54,6 +54,7 @@ export default function NavDrawer() {
           {profile?.role === "record" ? (<>
             <button className="gnav-link" onClick={() => go("/records")}><span className="gnav-icon">&#128451;&#65039;</span>Records</button>
             <button className="gnav-link" onClick={() => go("/records/archive")}><span className="gnav-icon">&#128194;</span>Records Archive</button>
+            <button className="gnav-link" onClick={() => go("/nurses-report/analytics")}><span className="gnav-icon">&#128200;</span>Analytics</button>
           </>) : (<>
           <button className="gnav-link" onClick={() => go("/")}><span className="gnav-icon">&#127968;</span>Home</button>
           <button className="gnav-link" onClick={handleSearch}><span className="gnav-icon">&#128269;</span>Search</button>

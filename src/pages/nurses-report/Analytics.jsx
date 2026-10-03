@@ -3,6 +3,7 @@ import { collection, query, where, getDocs } from "firebase/firestore";
 import Chart from "chart.js/auto";
 import { db } from "../../firebase.js";
 import { useGoBack } from "../../hooks/useGoBack.js";
+import { useAuth } from "../../contexts/AuthContext.jsx";
 import { useTheme } from "../../contexts/ThemeContext.jsx";
 import {
   WARDS, DEMOGRAPHIC_FIELDS, DEMOGRAPHIC_CATEGORIES, DEMOGRAPHIC_AFFILIATIONS, STAT_FIELDS, OCC_INCREASE_KEYS, OCC_DECREASE_KEYS,
@@ -202,7 +203,8 @@ function openPicker(input) {
 // wants the same true-3D treatment rather than a flat fill.
 
 export default function Analytics() {
-  const goBack = useGoBack('/nurses-report/role-select');
+  const { profile: me } = useAuth();
+  const goBack = useGoBack(me?.role === 'record' || me?.role === 'doctor' ? '/' : '/nurses-report/role-select');
   const { theme } = useTheme();
   // Chart.js doesn't resolve CSS custom properties on its own, so pull the
   // same light/dark colors used elsewhere in the app (--text-primary,
