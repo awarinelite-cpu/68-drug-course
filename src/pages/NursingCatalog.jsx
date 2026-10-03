@@ -70,9 +70,15 @@ function CatalogCard({ type, meta, onSaved }) {
       {parsed && (
         <div style={{ marginTop: 10, fontSize: 13 }}>
           <div><b>{parsed.fileName}</b>: {parsed.items.length} valid entries{parsed.skipped ? ', ' + parsed.skipped + ' skipped' : ''}.</div>
-          {parsed.items.slice(0, 3).map((it, i) => (
-            <div key={i} style={{ color: '#555' }}>{[it.code, it.name].filter(Boolean).join(' \u2014 ')}</div>
-          ))}
+          <div style={{ marginTop: 8, width: '100%', maxHeight: 360, overflowY: 'auto', border: '1px solid #d1d5db', borderRadius: 8, background: '#f9fafb' }}>
+            {parsed.items.map((it, i) => (
+              <div key={i} style={{ display: 'flex', gap: 10, padding: '7px 10px', borderBottom: '1px solid #e5e7eb', color: '#374151', fontSize: 14, lineHeight: 1.35 }}>
+                <span style={{ minWidth: 28, color: '#9ca3af', textAlign: 'right' }}>{i + 1}.</span>
+                <span style={{ minWidth: 58, fontWeight: 600 }}>{it.code || '\u2014'}</span>
+                <span style={{ flex: 1, wordBreak: 'break-word' }}>{it.name}</span>
+              </div>
+            ))}
+          </div>
           {parsed.errors.length > 0 && (
             <ul style={{ color: '#b45309', margin: '6px 0 0 18px', padding: 0, maxHeight: 120, overflowY: 'auto' }}>
               {parsed.errors.slice(0, 20).map((m, i) => <li key={i}>{m}</li>)}
