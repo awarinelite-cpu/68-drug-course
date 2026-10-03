@@ -5,7 +5,7 @@ import { useAuth } from "../contexts/AuthContext.jsx";
 import { useGoBack } from "../hooks/useGoBack.js";
 import { getDocSafe, getDocsSafe } from "../lib/firestoreOffline.js";
 import {
-  DEMOGRAPHIC_CATEGORIES, DEMOGRAPHIC_AFFILIATIONS, DEMOGRAPHIC_SEXES, DEMOGRAPHIC_FIELDS, reportDateId
+  DEMOGRAPHIC_CATEGORIES, DEMOGRAPHIC_AFFILIATIONS, DEMOGRAPHIC_SEXES, DEMOGRAPHIC_FIELDS, OFFICER_FIELDS, reportDateId
 } from "../lib/nurses-report-common.js";
 import Topbar from "../components/Topbar.jsx";
 
@@ -28,7 +28,6 @@ const RECORD_ROWS = [
   { key: "award", label: "A WARD", wards: ["award"] },
   { key: "maternity", label: "MATERNITY", wards: ["matbed", "matcot"] }
 ];
-const OFFICERS_ROW = "offrs";
 
 function toNum(v) { const n = parseInt(v, 10); return Number.isFinite(n) && n > 0 ? n : 0; }
 
@@ -45,6 +44,7 @@ export default function Records() {
   const [date, setDate] = useState(reportDateId());
   const [rows, setRows] = useState({});
   const [remarks, setRemarks] = useState({});
+  const [officers, setOfficers] = useState({}); // { adm, disch, dead, bid } — N/ Army Numbers, all wards
   const [source, setSource] = useState("");
   const [loading, setLoading] = useState(true);
   const [dirty, setDirty] = useState(false);
@@ -75,12 +75,19 @@ export default function Records() {
           });
           built[r.key] = row;
         });
+        // Officers (Army Number N/...) are counted per ward as patients are
+        // admitted / leave, wherever they are — add them up across every
+        // ward that appears on the sheet.
+        const offr = {};
+        OFFICER_FIELDS.forEach((f) => {
+          offr[f.category] = RECORD_ROWS.reduce((t, r) => t + r.wards.reduce((u, wk) => u + toNum(wardsMap[wk]?.[f.key]), 0), 0);
+        });
         let rem = {};
         const saved = await getDocSafe(doc(db, "recordSummaries", date));
         if (saved.exists()) rem = saved.data().remarks || {};
-        if (!cancelled) { setRows(built); setRemarks(rem); setSource(src); }
+        if (!cancelled) { setRows(built); setRemarks(rem); setOfficers(offr); setSource(src); }
       } catch (e) {
-        if (!cancelled) { setRows({}); setRemarks({}); setSource(""); setMsg({ error: true, text: "Couldn't load this date: " + (e.code || e.message) }); }
+        if (!cancelled) { setRows({}); setRemarks({}); setOfficers({}); setSource(""); setMsg({ error: true, text: "Couldn't load this date: " + (e.code || e.message) }); }
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -108,11 +115,11 @@ export default function Records() {
   const allKeys = useMemo(() => RECORD_ROWS.map((r) => r.key), []);
   const totalFor = (field) => allKeys.reduce((t, rk) => t + toNum(rows[rk]?.[field]), 0);
 
-  // Footer lines: OFFRS from the OFFR'S row's military cells; SLDRS = all
-  // military minus officers; CIVS = all civilian cells.
+  // Footer lines (all wards): OFFRS = patients with an N/ Army Number;
+  // SLDRS = all other military; CIVS = all civilian cells.
   const footer = DEMOGRAPHIC_CATEGORIES.reduce((acc, cat) => {
-    const offrs = sumCells(rows, [OFFICERS_ROW], cat.key, "mil");
-    const sldrs = sumCells(rows, allKeys, cat.key, "mil") - offrs;
+    const offrs = toNum(officers[cat.key]);
+    const sldrs = Math.max(0, sumCells(rows, allKeys, cat.key, "mil") - offrs);
     const civs = sumCells(rows, allKeys, cat.key, "civ");
     acc[cat.key] = { offrs, sldrs, civs };
     return acc;
@@ -202,7 +209,7 @@ export default function Records() {
                   ))}
                 </tbody>
               </table>
-              <div className="field-hint">OFFRS comes from the OFFR'S row (military); SLDRS is all other military; CIVS is all civilian.</div>
+              <div className="field-hint">OFFRS = officers in every ward (Army Number N/…); SLDRS = all other military; CIVS = all civilians.</div>
             </div>
           )}
 

@@ -20,7 +20,7 @@ import {
 import { ROSTER_TAG_FOR_REASON, clearAllocationsForPatient, EXIT_STAT_KEY, EXIT_DEMOGRAPHIC_CATEGORY, setPatientParoleStatus, releaseParoleOnExit } from "../lib/patientAdmissionStatus.js";
 import { PAROLE_PATIENT_WARD_LABEL, todayISO } from "../lib/nurses-report-common.js";
 import { bumpShiftStatForPatientWard, bumpDemographicStatForPatientWard } from "../lib/shiftStatsSync.js";
-import { classifyAffiliation } from "../lib/patientAffiliation.js";
+import { classifyAffiliation, isOfficerArmyNumber } from "../lib/patientAffiliation.js";
 import { parsePatientFields, extractDrugSection } from "../lib/patientParse.js";
 import { readEmrStash } from "../lib/emrBridge.js";
 import { useTimeFormat, formatTime, formatDateTime } from "../lib/time-format.js";
@@ -1117,8 +1117,9 @@ export default function DrugCourseChart() {
     // recorded. Not yet reversed by Readmit (same limitation as that
     // other copy of this flow).
     const demographicCategory = EXIT_DEMOGRAPHIC_CATEGORY[reason];
-    if (demographicCategory && (patient?.gender === 'M' || patient?.gender === 'F')) {
-      bumpDemographicStatForPatientWard(patient?.ward, patient?.pedBedType, demographicCategory, classifyAffiliation(patient), patient.gender, 1).catch(() => {});
+    const officer = isOfficerArmyNumber(patient?.armyNumber);
+    if (demographicCategory && (patient?.gender === 'M' || patient?.gender === 'F' || officer)) {
+      bumpDemographicStatForPatientWard(patient?.ward, patient?.pedBedType, demographicCategory, classifyAffiliation(patient), patient?.gender, 1, { officer }).catch(() => {});
     }
 
     const { fields: f, drugs: d, chartRows: c, verbalOrders: v, careInstructions: ci, auditLog: al } = latestRef.current;

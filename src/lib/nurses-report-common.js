@@ -412,6 +412,7 @@ export function isWardDocUntouched(wardDoc) {
   // ward, matching the paper "Summary Breakdown of Statistics" form) rather
   // than per shift, so they're checked at the top level here.
   const demographicsUntouched = DEMOGRAPHIC_FIELDS.every(f => !wardDoc[f.key]) &&
+    OFFICER_FIELDS.every(f => !wardDoc[f.key]) &&
     !wardDoc.demographicsRemarks && !wardDoc.childMale && !wardDoc.childFemale;
   return shiftsUntouched && demographicsUntouched;
 }
@@ -435,6 +436,7 @@ export function defaultWardDoc(w, startOcc = 0) {
   SHIFTS.forEach(s => { d.shifts[s.key] = blankShift(); });
   SHIFT_STAT_FIELDS.forEach(f => { d[f.key] = 0; });
   DEMOGRAPHIC_FIELDS.forEach(f => { d[f.key] = 0; });
+  OFFICER_FIELDS.forEach(f => { d[f.key] = 0; });
   return d;
 }
 
@@ -469,6 +471,12 @@ export const DEMOGRAPHIC_SEXES = ['M', 'F'];
 // iterating this the same way it always has; components that need the
 // paper form's three-row grouped header instead nest by
 // DEMOGRAPHIC_CATEGORIES / DEMOGRAPHIC_AFFILIATIONS directly.
+// Officer tally kept alongside the demographics: one daily count per ward
+// per movement (offr_adm, offr_disch, offr_dead, offr_bid), bumped
+// automatically for any patient whose Army Number is N/<digits>. Feeds the
+// OFFRS line on the Records page; not part of the nurses' entry table.
+export const OFFICER_FIELDS = DEMOGRAPHIC_CATEGORIES.map((c) => ({ key: 'offr_' + c.key, category: c.key }));
+
 export const DEMOGRAPHIC_FIELDS = DEMOGRAPHIC_CATEGORIES.flatMap((cat) =>
   DEMOGRAPHIC_AFFILIATIONS.flatMap((aff) =>
     DEMOGRAPHIC_SEXES.map((sex) => ({

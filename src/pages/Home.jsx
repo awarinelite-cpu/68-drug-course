@@ -19,7 +19,7 @@ import { loadWardPatients, loadIncomingTransfers, searchPatients, findPatientByE
 import { activeAdmissionTag, ADMISSION_TAG_LABEL, clearAdmissionTag, readmitLatestAdmission, READMIT_ELIGIBLE_TAGS, hasActiveAdmissionData } from "../lib/patientAdmissionStatus.js";
 import { bumpShiftStatForPatientWard, bumpDemographicStatForPatientWard } from "../lib/shiftStatsSync.js";
 import { WARD_OPTIONS } from "../lib/drugChartHelpers.js";
-import { classifyAffiliation } from "../lib/patientAffiliation.js";
+import { classifyAffiliation, isOfficerArmyNumber } from "../lib/patientAffiliation.js";
 import { formatShortNameTag } from "../lib/roles.js";
 
 function normEmr(emr) { return (emr || '').trim().toLowerCase(); }
@@ -510,8 +510,9 @@ export default function Home() {
     // DemographicsTable in WardNurse.jsx) instead of a nurse typing it
     // in by hand — only when a gender was actually recorded, since
     // there's no cell to bump otherwise.
-    if (data.gender === 'M' || data.gender === 'F') {
-      bumpDemographicStatForPatientWard(data.ward, data.pedBedType, 'adm', data.militaryCivilian, data.gender, 1).catch(() => {});
+    const officer = isOfficerArmyNumber(data.armyNumber);
+    if (data.gender === 'M' || data.gender === 'F' || officer) {
+      bumpDemographicStatForPatientWard(data.ward, data.pedBedType, 'adm', data.militaryCivilian, data.gender, 1, { officer }).catch(() => {});
     }
 
     // Update the in-memory ward list directly instead of re-querying —

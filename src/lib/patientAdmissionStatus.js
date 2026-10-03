@@ -3,7 +3,7 @@ import { db } from "../firebase.js";
 import { STATUS_LABELS, WARD_OPTIONS, defaultRow } from "./drugChartHelpers.js";
 import { formatDateTime } from "./time-format.js";
 import { bumpShiftStat, bumpShiftStatForPatientWard, bumpDemographicStat, bumpDemographicStatForPatientWard } from "./shiftStatsSync.js";
-import { classifyAffiliation } from "./patientAffiliation.js";
+import { classifyAffiliation, isOfficerArmyNumber } from "./patientAffiliation.js";
 import { PAROLE_STATUS, PAROLE_OUT_KEY, PAROLE_WARD_KEY, PAROLE_PATIENT_WARD_LABEL, isParoleActive } from "./nurses-report-common.js";
 
 // Which Shift Statistics column each exit reason feeds — 'referred' is
@@ -204,7 +204,7 @@ export async function applyPatientStatus({ patientId, reason, transferWard, from
   // function stays the single source of truth for the Shift Statistics
   // side effect below — Patient.jsx, WardNurse.jsx's submitReport, and any
   // future caller all get it automatically just by calling applyPatientStatus.
-  let patientWard = '', patientPedBedType = '', patientGender = '', patientAffiliation = 'civ';
+  let patientWard = '', patientPedBedType = '', patientGender = '', patientAffiliation = 'civ', patientIsOfficer = false;
   try {
     const patientSnap = await getDoc(doc(db, 'patients', patientId));
     if (patientSnap.exists()) {
@@ -216,6 +216,7 @@ export async function applyPatientStatus({ patientId, reason, transferWard, from
       // this stays correct even for records saved before that field
       // existed, or edited outside the app.
       patientAffiliation = classifyAffiliation(pdata);
+      patientIsOfficer = isOfficerArmyNumber(pdata.armyNumber);
     }
   } catch (e) { /* fine to skip the automatic stat bump if this fails */ }
 
@@ -295,8 +296,8 @@ export async function applyPatientStatus({ patientId, reason, transferWard, from
   // written is saved the same way exitStatRef is, so a later Readmit
   // can reverse this exact count too instead of leaving it stuck.
   const demographicCategory = EXIT_DEMOGRAPHIC_CATEGORY[reason];
-  const demographicStatRef = (demographicCategory && (patientGender === 'M' || patientGender === 'F'))
-    ? await bumpDemographicStatForPatientWard(patientWard, patientPedBedType, demographicCategory, patientAffiliation, patientGender, 1)
+  const demographicStatRef = (demographicCategory && (patientGender === 'M' || patientGender === 'F' || patientIsOfficer))
+    ? await bumpDemographicStatForPatientWard(patientWard, patientPedBedType, demographicCategory, patientAffiliation, patientGender, 1, { officer: patientIsOfficer })
     : null;
 
   const admissionDoc = {
@@ -473,8 +474,9 @@ export async function admitExistingPatientToWard({ patientId, currentWard, nurse
     const patientSnap = await getDoc(doc(db, 'patients', patientId));
     if (patientSnap.exists()) {
       const pdata = patientSnap.data();
-      if (pdata.gender === 'M' || pdata.gender === 'F') {
-        bumpDemographicStatForPatientWard(nurseWard, nextPedBedType, 'adm', classifyAffiliation(pdata), pdata.gender, 1).catch(() => {});
+      const officer = isOfficerArmyNumber(pdata.armyNumber);
+      if (pdata.gender === 'M' || pdata.gender === 'F' || officer) {
+        bumpDemographicStatForPatientWard(nurseWard, nextPedBedType, 'adm', classifyAffiliation(pdata), pdata.gender, 1, { officer }).catch(() => {});
       }
     }
   } catch (e) { /* best-effort, same as the Shift Statistics bump above */ }
@@ -774,8 +776,9 @@ export async function readmitFromParole({ patientId }) {
     bumpShiftStat(PAROLE_WARD_KEY, PAROLE_OUT_KEY, -1).catch(() => {});
   } else {
     bumpShiftStatForPatientWard(wardLabel, '', 'adm', 1).catch(() => {});
-    if (data.gender === 'M' || data.gender === 'F') {
-      bumpDemographicStatForPatientWard(wardLabel, '', 'adm', classifyAffiliation(data), data.gender, 1).catch(() => {});
+    const officer = isOfficerArmyNumber(data.armyNumber);
+    if (data.gender === 'M' || data.gender === 'F' || officer) {
+      bumpDemographicStatForPatientWard(wardLabel, '', 'adm', classifyAffiliation(data), data.gender, 1, { officer }).catch(() => {});
     }
   }
   return { ok: true, stillOnWard };

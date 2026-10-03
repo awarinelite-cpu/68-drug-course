@@ -189,12 +189,19 @@ export async function bumpShiftStatForPatientWard(patientWardLabel, pedBedType, 
 // Best-effort and never throws; a patient with no recorded gender
 // simply doesn't get counted here (same as a blank cell a nurse never
 // filled in), so this never blocks the admission/exit it's attached to.
-export async function bumpDemographicStat(wardKey, category, affiliation, sex, delta = 1, { dateId } = {}) {
-  if (!category || !affiliation || !DEMOGRAPHIC_SEXES.includes(sex)) return null;
+export async function bumpDemographicStat(wardKey, category, affiliation, sex, delta = 1, { dateId, officer } = {}) {
+  if (!category || !affiliation) return null;
+  const sexOk = DEMOGRAPHIC_SEXES.includes(sex);
+  // Officer tally (Army Number N/...) — counted per ward per movement, even
+  // when no gender was recorded, since the Records OFFRS line has no M/F split.
+  const officerOk = !!officer && affiliation === 'mil';
+  if (!sexOk && !officerOk) return null;
   const w = WARDS.find(x => x.key === wardKey);
   if (!w) return null;
   const useDateId = dateId || reportDateId();
-  const fieldKey = category + '_' + affiliation + sex;
+  const fieldKeys = [];
+  if (sexOk) fieldKeys.push(category + '_' + affiliation + sex);
+  if (officerOk) fieldKeys.push('offr_' + category);
   const ref = doc(db, 'nurseReports', useDateId, 'wards', wardKey);
   await ensureWardBedsLoaded(db);
   const seedHeadcount = await liveHeadcountForWardKey(wardKey);
@@ -204,25 +211,29 @@ export async function bumpDemographicStat(wardKey, category, affiliation, sex, d
       if (!snap.exists()) {
         const startOcc = typeof seedHeadcount === 'number' ? seedHeadcount : 0;
         const seed = defaultWardDoc(w, startOcc);
-        seed[fieldKey] = Math.max(0, delta);
+        fieldKeys.forEach((k) => { seed[k] = Math.max(0, delta); });
         tx.set(ref, { ...seed, updatedAt: serverTimestamp() });
         return;
       }
       const data = snap.data();
       if (data.locked) {
         const pending = Array.isArray(data.pendingStatBumps) ? data.pendingStatBumps.slice() : [];
-        pending.push({ demographic: true, fieldKey, delta, queuedAt: new Date().toISOString() });
+        fieldKeys.forEach((k) => pending.push({ demographic: true, fieldKey: k, delta, queuedAt: new Date().toISOString() }));
         tx.update(ref, { pendingStatBumps: pending });
         return;
       }
-      const current = typeof data[fieldKey] === 'number' ? data[fieldKey] : 0;
-      tx.update(ref, { [fieldKey]: Math.max(0, current + delta), updatedAt: serverTimestamp() });
+      const updates = { updatedAt: serverTimestamp() };
+      fieldKeys.forEach((k) => {
+        const current = typeof data[k] === 'number' ? data[k] : 0;
+        updates[k] = Math.max(0, current + delta);
+      });
+      tx.update(ref, updates);
     });
   } catch (e) {
-    console.warn('bumpDemographicStat failed for', wardKey, fieldKey, e);
+    console.warn('bumpDemographicStat failed for', wardKey, fieldKeys.join(','), e);
     return null;
   }
-  return { wardKey, category, affiliation, sex, dateId: useDateId };
+  return { wardKey, category, affiliation, sex: sexOk ? sex : '', officer: officerOk, dateId: useDateId };
 }
 
 // Resolves a patient-chart ward label the same way

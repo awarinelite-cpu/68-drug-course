@@ -30,6 +30,13 @@ export function looksLikeArmyNumber(value) {
   return ARMY_NUMBER_PATTERNS.some((re) => re.test(v));
 }
 
+// An officer is any patient whose Army Number is N/<digits> (e.g. N/764521),
+// in whatever ward they are admitted. Soldiers' numbers (06NA/59/5240 etc.)
+// never match this.
+export function isOfficerArmyNumber(value) {
+  return /^N\/\d+$/i.test((value || '').trim());
+}
+
 export function looksLikeMilitaryInsurance(value) {
   const v = (value || '').trim();
   if (!v) return false;
