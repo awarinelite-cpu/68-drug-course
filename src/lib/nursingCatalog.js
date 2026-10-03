@@ -234,6 +234,10 @@ const bulletize = (text) => String(text || '').split('\n').map(l => l.trim()).fi
 // evaluation columns wins; otherwise it is built from the linked NOC
 // outcomes (planning + evaluation) and NIC interventions (implementation).
 export function buildStarterText(dx, catalog) {
+  // A same-name sibling entry (any spelling/case/punctuation) may hold the care text this one lacks.
+  const key = (n) => String(n || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  const sibs = (catalog.nanda || []).filter(x => x !== dx && key(x.name) === key(dx.name));
+  dx = sibs.reduce((acc, x) => overlay(acc, x), { ...dx });
   const byCode = (list) => { const m = new Map(); list.forEach(x => { if (x.code) m.set(normCode(x.code), x); }); return m; };
   const nocs = (dx.nocCodes || []).map(c => byCode(catalog.noc).get(normCode(c))).filter(Boolean);
   const nics = (dx.nicCodes || []).map(c => byCode(catalog.nic).get(normCode(c))).filter(Boolean);
@@ -245,5 +249,12 @@ export function buildStarterText(dx, catalog) {
   const evaluation = dx.evaluation || (nocs.length
     ? 'Evaluate progress towards:\n' + bullets(nocs.map(o => o.name + ((o.indicators || []).length ? ' (' + o.indicators.slice(0, 4).join('; ') + ')' : '')))
     : '');
-  return { planning, implementation, evaluation };
+  // Last resort so a picked diagnosis never leaves the boxes empty: generic, editable starter text.
+  const nm = String(dx.name || 'the problem').trim();
+  const low = nm.charAt(0).toLowerCase() + nm.slice(1);
+  return {
+    planning: planning || ('Patient will show improvement in ' + low + ' within the shift / 24 hours.\nPatient and family will understand the plan of care.'),
+    implementation: implementation || bulletize('Assess and monitor ' + low + ' every shift and as needed\nCarry out the doctor\u2019s orders and give prescribed medication on time\nProvide comfort, safety and a supportive environment\nEducate the patient and family on the plan of care\nReport any change to the doctor and document care given'),
+    evaluation: evaluation || ('Review ' + low + ' at the end of the shift: goal met / partially met / not met.\nContinue, change or stop the plan accordingly.')
+  };
 }
