@@ -1856,3 +1856,9 @@ h3.ward-report-subheading, .ward-report-subheading { font-size: clamp(28px, 3.4v
 .topbar { background: linear-gradient(155deg, #0d2149 0%, #040d24 70%); }
 .topbar::after { background: linear-gradient(90deg, rgba(4,13,36,.6) 0%, rgba(4,13,36,0) 30%, rgba(4,13,36,0) 70%, rgba(4,13,36,.6) 100%); }
 :root[data-theme="dark"] .topbar { background: linear-gradient(155deg, #0d2149 0%, #040d24 70%); }
+
+/* Desktop: the ONGOING RX / status watermark sits in the empty space on the
+   right, beside the Plan and Nursing Diagnosis, instead of near the top. */
+@media (min-width: 1024px) {
+  .status-stamp { top: 46%; left: 74%; width: 40%; font-size: clamp(26px, 2.6vw, 42px); transform: translate(-50%, -50%) rotate(-20deg); }
+}
