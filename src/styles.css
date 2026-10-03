@@ -1968,3 +1968,17 @@ h3.ward-report-subheading, .ward-report-subheading { font-size: clamp(28px, 3.4v
 :root[data-theme="dark"] .ov-sheet table.report td.stat-vac,
 :root[data-theme="dark"] .ov-sheet table.report td.stat-out { color: #F87171; }
 :root[data-theme="dark"] .ov-sheet table.report input { background: #0B1F3A; color: #F1F5F9; border-color: #64748B; }
+
+/* NANDA-I picker: very visible text in both themes (the diagnosis names were
+   inheriting light text on a white list at night). */
+.nanda-result span { font-weight: 800; font-size: 17px; }
+.nanda-result small { font-weight: 600; font-size: 14px; }
+:root[data-theme="dark"] .nanda-picker input[type=search] { background: #0B1F3A; color: #fff; border: 2px solid #60A5FA; font-size: 17px; font-weight: 600; }
+:root[data-theme="dark"] .nanda-picker input[type=search]::placeholder { color: #CBD5E1; opacity: 1; }
+:root[data-theme="dark"] .nanda-results { background: #0F2744; border: 2px solid #60A5FA; }
+:root[data-theme="dark"] .nanda-result { color: #FFFFFF; border-bottom: 1px solid #334155; }
+:root[data-theme="dark"] .nanda-result span { color: #FFFFFF; }
+:root[data-theme="dark"] .nanda-result small { color: #FDE68A; }
+:root[data-theme="dark"] .nanda-result:active, :root[data-theme="dark"] .nanda-result:hover { background: #1E3A5F; }
+:root[data-theme="dark"] .nanda-empty { color: #E2E8F0; font-size: 15px; font-weight: 600; }
+:root[data-theme="dark"] .nanda-close { background: #16294F; color: #FFFFFF; font-weight: 700; font-size: 15px; }
