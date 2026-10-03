@@ -474,7 +474,7 @@ function useWardReport(wardKey, isAdmin, profile, user) {
           // ADMISSION_TAG_LABEL/activeAdmissionTag in
           // patientAdmissionStatus.js and WardPatientPicker below for how
           // it's shown (blue, vs dischargeStatus's red).
-          list.push({ id: d.id, name: data.name || '', emr: data.emr || '', age: data.age || '', admissionDate: data.admissionDate || '', diagnosis: data.diagnosis || '', gender: data.gender || '', dischargeStatus: data.dischargeStatus || '', admissionTag: activeAdmissionTag(data), paroleStatus: data.paroleStatus || '', paroleStart: data.paroleStart || '', paroleReturn: data.paroleReturn || '', paroleAt: (data.paroleAt && typeof data.paroleAt.toMillis === 'function') ? data.paroleAt.toMillis() : 0 });
+          list.push({ id: d.id, phone: data.phone || '', address: data.address || '', nextKinName: data.nextKinName || '', name: data.name || '', emr: data.emr || '', age: data.age || '', admissionDate: data.admissionDate || '', diagnosis: data.diagnosis || '', gender: data.gender || '', dischargeStatus: data.dischargeStatus || '', admissionTag: activeAdmissionTag(data), paroleStatus: data.paroleStatus || '', paroleStart: data.paroleStart || '', paroleReturn: data.paroleReturn || '', paroleAt: (data.paroleAt && typeof data.paroleAt.toMillis === 'function') ? data.paroleAt.toMillis() : 0 });
         });
         list.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
         if (!cancelled) { setWardPatientOptions(list); setOptionsLoaded(true); }
@@ -844,6 +844,9 @@ function useWardReport(wardKey, isAdmin, profile, user) {
           if (!next.name && record.name) next.name = record.name;
           if (!next.age && record.age) next.age = record.age;
           if (!next.doa && record.admissionDate) next.doa = record.admissionDate;
+          if (!next.phone && record.phone) next.phone = record.phone;
+          if (!next.address && record.address) next.address = record.address;
+          if (!next.nextKin && record.nextKinName) next.nextKin = record.nextKinName;
           const diagnosisSource = chartDiagnosis || record.diagnosis;
           if (diagnosisSource) next.diagnosis = withPatientDiagnosis(next.diagnosis, diagnosisSource);
           if (!next.sex && record.gender) next.sex = record.gender === 'M' ? 'Male' : record.gender === 'F' ? 'Female' : record.gender;
@@ -886,6 +889,9 @@ function useWardReport(wardKey, isAdmin, profile, user) {
         // type it by hand, matching every other write-up already on file.
         if (!next.sex && record.gender) next.sex = record.gender === 'M' ? 'Male' : record.gender === 'F' ? 'Female' : record.gender;
         if (!next.doa && record.admissionDate) next.doa = record.admissionDate;
+        if (!next.phone && record.phone) next.phone = record.phone;
+        if (!next.address && record.address) next.address = record.address;
+        if (!next.nextKin && record.nextKinName) next.nextKin = record.nextKinName;
         // The patient's diagnosis goes on the bold "Diagnosis:" line at the
         // top of the Notes box (blank-only, existing notes are kept below it).
         const diagnosisSource = chartDiagnosis || record.diagnosis;
