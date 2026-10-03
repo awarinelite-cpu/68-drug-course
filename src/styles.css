@@ -152,7 +152,9 @@
 }
 
 * { box-sizing: border-box; }
-html, body { overflow-x: hidden; max-width: 100%; }
+html { overflow-x: hidden; max-width: 100%; }
+/* clip (not hidden) so body isn't a scroll container — that would break the sticky top bar */
+body { overflow-x: clip; max-width: 100%; }
 body { font-family: var(--font-sans); margin: 0; background: var(--background); color: var(--text-primary); font-size: 16px; -webkit-font-smoothing: antialiased; }
 a { text-decoration: none; color: inherit; }
 h1, h2, h3, h4 { font-weight: 700; letter-spacing: -.01em; }
@@ -167,7 +169,7 @@ h1, h2, h3, h4 { font-weight: 700; letter-spacing: -.01em; }
   color: var(--surface); padding: 13px 22px;
   display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px;
   box-shadow: 0 1px 0 rgba(255,255,255,.06) inset, 0 4px 14px -6px rgba(6,14,32,.45);
-  position: relative; z-index: 5;
+  position: sticky; top: 0; z-index: 50;
 }
 .topbar .brand { font-weight: 800; font-size: 16.5px; letter-spacing: -.01em; }
 /* Reserve room on the right so this group never sits under the fixed
