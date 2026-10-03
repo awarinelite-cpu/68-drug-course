@@ -174,6 +174,15 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    // Records Archive — each day's saved Summary Breakdown of Statistics table
+    // (one doc per date, keyed YYYY-MM-DD). Only record staff, admin and
+    // subadmin can read or save; only admin can delete.
+    match /recordArchives/{dateId} {
+      allow read: if isKnownUser() && (isAdmin() || isSubadmin() || isRecord());
+      allow create, update: if isKnownUser() && (isAdmin() || isSubadmin() || isRecord());
+      allow delete: if isAdmin();
+    }
+
     // Ward Charts Archive — the finalized, permanent daily record. One
     // "overall_<dateId>" doc plus one "ward_<wardKey>_<dateId>" doc per
     // ward are created together (see nurses-report/overall-nurse.html's

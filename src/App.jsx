@@ -42,6 +42,7 @@ const NursingCatalog = lazy(() => import("./pages/NursingCatalog.jsx"));
 const AllUsers = lazy(() => import("./pages/AllUsers.jsx"));
 const Overview = lazy(() => import("./pages/Overview.jsx"));
 const Records = lazy(() => import("./pages/Records.jsx"));
+const RecordsArchive = lazy(() => import("./pages/RecordsArchive.jsx"));
 const Admission = lazy(() => import("./pages/Admission.jsx"));
 const DrugCourseChart = lazy(() => import("./pages/DrugCourseChart.jsx"));
 const Vitals = lazy(() => import("./pages/Vitals.jsx"));
@@ -82,7 +83,7 @@ function RecordsGate({ children }) {
 function RecordOnlyRedirect({ children }) {
   const { profile } = useAuth();
   const location = useLocation();
-  if (profile?.role === "record" && location.pathname !== "/records") {
+  if (profile?.role === "record" && !location.pathname.startsWith("/records")) {
     return <Navigate to="/records" replace />;
   }
   return children;
@@ -142,6 +143,7 @@ export default function App() {
           <Route path="/login" element={<Login />} />
           <Route path="/request-account" element={<RequestAccount />} />
           <Route path="/" element={<AuthedShell><Home /></AuthedShell>} />
+          <Route path="/records/archive" element={<AuthedShell><RecordsGate><RecordsArchive /></RecordsGate></AuthedShell>} />
           <Route path="/records" element={<AuthedShell><RecordsGate><Records /></RecordsGate></AuthedShell>} />
           <Route path="/patient" element={<AuthedShell><Patient /></AuthedShell>} />
           <Route path="/my-patients" element={<AuthedShell><MyPatients /></AuthedShell>} />
