@@ -339,8 +339,21 @@ exports.updateNextDoseAt = onDocumentWritten(
     // write must never be skipped. A stale/duplicate task is
     // self-correcting (sendDoseAlert always re-reads the chart fresh), so
     // it's a far better failure mode here than losing nextDoseAt.
-    let newTaskName = null;
+    // Allocated-only alerting: a patient with no allocated nurse never gets
+    // an alert, so don't create a task for them at all (it would only fire
+    // sendDoseAlert to log "no nurse allocated"). syncDoseTaskOnAllocation
+    // below creates the task when a nurse allocates later. If the lookup
+    // fails we fall back to scheduling, the old behaviour.
+    let hasNurse = true;
     if (newValue) {
+      try {
+        hasNurse = (await loadAllocatedUidsForPatient(event.params.patientId)).size > 0;
+      } catch (err) {
+        console.error('allocation lookup failed — scheduling task anyway:', err);
+      }
+    }
+    let newTaskName = null;
+    if (newValue && hasNurse) {
       try {
         newTaskName = await scheduleDoseAlertTask({ patientId: event.params.patientId, chartId: event.params.chartId, dueAt: earliest });
       } catch (err) {
@@ -355,6 +368,52 @@ exports.updateNextDoseAt = onDocumentWritten(
 
     await after.ref.set({ nextDoseAt: newValue, scheduledTaskName: newTaskName }, { merge: true });
   }
+);
+
+// Keeps the dose-alert task in step with nurse allocation. Tasks are only
+// created for patients who have an allocated nurse (see updateNextDoseAt),
+// so when the first nurse allocates, create the task for the chart's next
+// FUTURE dose; when the last nurse is removed, cancel it. Doses already
+// overdue at allocation time are not alerted (one alarm only, no surprise
+// alerts). Only acts on allocation create/delete, never on edits.
+async function syncDoseTaskForAllocation(event) {
+  const b = event.data && event.data.before;
+  const a = event.data && event.data.after;
+  const before = !!(b && b.exists);
+  const after = !!(a && a.exists);
+  if (before === after) return;
+  const patientId = ((after ? a : b).data() || {}).patientId;
+  if (!patientId) return;
+
+  const uids = await loadAllocatedUidsForPatient(patientId);
+  // Created but another nurse already covers it, or deleted but someone
+  // is still allocated: nothing changes.
+  if (after && uids.size > 1) return;
+  if (!after && uids.size > 0) return;
+
+  const chartRef = db.collection('patients').doc(patientId).collection('drugCourseChart').doc('main');
+  const snap = await chartRef.get();
+  if (!snap.exists) return;
+  const chart = snap.data() || {};
+
+  if (after) {
+    const ms = chart.nextDoseAt && chart.nextDoseAt.toMillis ? chart.nextDoseAt.toMillis() : null;
+    if (!ms || ms <= Date.now()) return;
+    const name = await scheduleDoseAlertTask({ patientId, chartId: 'main', dueAt: new Date(ms) });
+    try { await cancelScheduledTask(chart.scheduledTaskName); } catch (e) { console.error('cancel old task (non-fatal):', e); }
+    await chartRef.set({ scheduledTaskName: name }, { merge: true });
+  } else if (chart.scheduledTaskName) {
+    try { await cancelScheduledTask(chart.scheduledTaskName); } catch (e) { console.error('cancel task (non-fatal):', e); }
+    await chartRef.set({ scheduledTaskName: null }, { merge: true });
+  }
+}
+exports.syncDoseTaskOnAllocation = onDocumentWritten(
+  { document: 'allocations/{allocId}', region: 'us-central1', retry: false },
+  syncDoseTaskForAllocation
+);
+exports.syncDoseTaskOnAllocationMhl = onDocumentWritten(
+  { document: 'allocations_mhl/{allocId}', region: 'us-central1', retry: false },
+  syncDoseTaskForAllocation
 );
 
 // NOTE: the old checkDueDrugs 5-minute polling function was removed. Dose
