@@ -1840,3 +1840,14 @@ h3.ward-report-subheading, .ward-report-subheading { font-size: clamp(28px, 3.4v
 @media (min-width: 1024px) {
   .topbar .brand { font-size: clamp(24px, 2.3vw, 34px); font-weight: 900; letter-spacing: 0; line-height: 1.15; }
 }
+
+/* Desktop: larger patient write-ups in the ward report — used by both the
+   Ward Nurse page and the Overall Nurse page (same .patient-block markup). */
+@media (min-width: 1024px) {
+  .patient-block .patient-line, .patient-block .patient-line h3 { font-size: clamp(20px, 1.6vw, 26px); margin: 3px 0; }
+  .patient-block .patient-note-label { font-size: clamp(20px, 1.6vw, 26px); margin-top: 12px; }
+  .patient-block .patient-note-text { font-size: clamp(20px, 1.6vw, 26px); line-height: 1.45; }
+  .patient-block .patient-note-subheading { font-size: clamp(20px, 1.6vw, 26px); }
+  .patient-block .patient-note-diagnosis, .diagnosis-note-key, .diagnosis-note-box .diagnosis-note-input { font-size: clamp(24px, 2vw, 32px); }
+  .patient-block { padding-left: 4px; padding-right: 4px; }
+}
