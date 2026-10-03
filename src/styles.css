@@ -1955,3 +1955,16 @@ h3.ward-report-subheading, .ward-report-subheading { font-size: clamp(28px, 3.4v
 :root[data-theme="dark"] table td.stat-out, :root[data-theme="dark"] table td.stat-out input,
 :root[data-theme="dark"] .ov-sheet table.report td.stat-vac, :root[data-theme="dark"] .ov-sheet table.report td.stat-out { color: #F87171; }
 :root[data-theme="dark"] table.report th.renamable-col:hover { background: #21396B; }
+
+/* Overall Nurse tables: the light-mode text rule uses a long :not() chain
+   that out-ranks the night rules above, leaving dark text on dark cells.
+   Match it here so every cell in those tables is readable at night. */
+:root[data-theme="dark"] .ov-sheet table.report td:not(.stat-beds):not(.stat-occ):not(.stat-vac):not(.stat-in):not(.stat-out),
+:root[data-theme="dark"] .ov-sheet table.report td.ward-name { color: #F1F5F9; }
+:root[data-theme="dark"] .ov-sheet table.report tbody tr.totals-row td:not(.stat-beds):not(.stat-occ):not(.stat-vac):not(.stat-in):not(.stat-out) { color: #FFF7D6; }
+:root[data-theme="dark"] .ov-sheet table.report td.stat-beds { color: #4ADE80; }
+:root[data-theme="dark"] .ov-sheet table.report td.stat-occ,
+:root[data-theme="dark"] .ov-sheet table.report td.stat-in { color: #60A5FA; }
+:root[data-theme="dark"] .ov-sheet table.report td.stat-vac,
+:root[data-theme="dark"] .ov-sheet table.report td.stat-out { color: #F87171; }
+:root[data-theme="dark"] .ov-sheet table.report input { background: #0B1F3A; color: #F1F5F9; border-color: #64748B; }
