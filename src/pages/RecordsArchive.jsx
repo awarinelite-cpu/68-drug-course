@@ -61,7 +61,7 @@ export default function RecordsArchive() {
         <button className="btn btn-secondary no-print" style={{ padding: "6px 12px" }} onClick={goBack}>Back</button>
       </Topbar>
 
-      <div className="container" style={{ maxWidth: 1100 }}>
+      <div className="container" style={{ maxWidth: "98%" }}>
         {open ? (
           <div className="card-box">
             <div className="no-print" style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>

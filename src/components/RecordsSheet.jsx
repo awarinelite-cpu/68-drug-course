@@ -47,8 +47,8 @@ function sumCells(rows, rowKeys, cat, aff) {
   return t;
 }
 
-const th = { whiteSpace: "nowrap", fontSize: 13 };
-const remarkInput = { width: 110, textAlign: "left", padding: "6px", fontSize: 15, boxSizing: "border-box" };
+const th = { whiteSpace: "nowrap" };
+const remarkInput = { width: "100%", textAlign: "left", padding: "8px", boxSizing: "border-box" };
 
 // The sheet itself. Pass onRemarkChange to make the Rmks column editable;
 // leave it out for a read-only view (the archive).
@@ -64,7 +64,7 @@ export default function RecordsSheet({ date, rows, officers, remarks, onRemarkCh
   }, {});
 
   return (
-    <>
+    <div className="rec-sheet">
       <h3 style={{ marginTop: 0, textAlign: "center" }}>
         SUMMARY BREAKDOWN OF STATISTICS AS AT {date.split("-").reverse().join("/")}
       </h3>
@@ -74,7 +74,7 @@ export default function RecordsSheet({ date, rows, officers, remarks, onRemarkCh
             <tr>
               <th rowSpan={3} style={th}>Ward</th>
               {DEMOGRAPHIC_CATEGORIES.map((c) => <th key={c.key} colSpan={4} style={th}>{c.label}</th>)}
-              <th rowSpan={3} style={th}>Rmks</th>
+              <th rowSpan={3} style={th} className="rec-rmks">Rmks</th>
             </tr>
             <tr>
               {DEMOGRAPHIC_CATEGORIES.map((c) => DEMOGRAPHIC_AFFILIATIONS.map((a) => (
@@ -109,7 +109,7 @@ export default function RecordsSheet({ date, rows, officers, remarks, onRemarkCh
       </div>
 
       <div className="table-wrap" style={{ marginTop: 16 }}>
-        <table className="entries" style={{ marginTop: 0, maxWidth: 520 }}>
+        <table className="entries rec-foot" style={{ marginTop: 0 }}>
           <thead>
             <tr><th></th>{DEMOGRAPHIC_CATEGORIES.map((c) => <th key={c.key} style={th}>{c.key === "adm" ? "ADM" : c.label.toUpperCase()}</th>)}</tr>
           </thead>
@@ -124,6 +124,6 @@ export default function RecordsSheet({ date, rows, officers, remarks, onRemarkCh
         </table>
         <div className="field-hint">OFFRS = officers in every ward (Army Number N/…); SLDRS = all other military; CIVS = all civilians.</div>
       </div>
-    </>
+    </div>
   );
 }

@@ -26,6 +26,7 @@ export default function Records() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState(null); // { error, text }
+  const [full, setFull] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -84,13 +85,14 @@ export default function Records() {
   }
 
   return (
-    <>
-      <Topbar brand="Records">
+    <div className={full ? "rec-full" : ""}>
+      {full && <button className="btn btn-secondary no-print" style={{ position: "sticky", top: 0, left: 0, zIndex: 5, marginBottom: 8 }} onClick={() => setFull(false)}>✕ Exit full screen</button>}
+      {!full && <Topbar brand="Records">
         <button className="btn btn-secondary no-print" style={{ padding: "6px 12px" }} onClick={() => navigate("/records/archive")}>Archive</button>
         <button className="btn btn-secondary no-print" style={{ padding: "6px 12px" }} onClick={goBack}>Back</button>
-      </Topbar>
+      </Topbar>}
 
-      <div className="container" style={{ maxWidth: 1100 }}>
+      <div className="container" style={{ maxWidth: full ? "none" : "98%" }}>
         <div className="card-box">
           <div className="field no-print" style={{ maxWidth: 220 }}>
             <label>Date</label>
@@ -114,10 +116,11 @@ export default function Records() {
               {saving ? "Saving…" : savedInfo ? "Save Again to Archive" : "Save to Archive"}
             </button>
             <button className="btn btn-secondary" onClick={() => window.print()}>Print</button>
+            <button className="btn btn-secondary" onClick={() => setFull(true)}>Full screen</button>
           </div>
           {msg && <div className={msg.error ? "error-msg" : "info-msg"}>{msg.text}</div>}
         </div>
       </div>
-    </>
+    </div>
   );
 }

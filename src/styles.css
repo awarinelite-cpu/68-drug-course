@@ -1632,3 +1632,25 @@ table.drugs-table tr.drop-after > td { box-shadow: inset 0 -3px 0 0 #7c3aed; }
 .parole-heading { margin: 10px 0 6px; font-size: 16px; }
 .parole-count { font-weight: normal; color: #6b7280; font-size: 14px; }
 .parole-table td, .parole-table th { text-align: center; }
+
+
+/* ── Records sheet: full-width, high-contrast ── */
+.rec-sheet .table-wrap { overflow-x: auto; }
+.rec-sheet table.entries { width: 100%; min-width: 1100px; table-layout: fixed; border-collapse: collapse; border: 3px solid #0f172a; }
+.rec-sheet table.entries th, .rec-sheet table.entries td {
+  border: 2px solid #334155; padding: 12px 4px; font-size: clamp(16px, 1.5vw, 24px); font-weight: 700;
+  color: #0f172a; white-space: nowrap; background: #fff;
+}
+.rec-sheet table.entries thead th { background: #16294F; color: #fff; border-color: #0f172a; font-size: clamp(14px, 1.3vw, 20px); letter-spacing: .3px; }
+.rec-sheet table.entries tbody tr:nth-child(even) td { background: #eef3fb; }
+.rec-sheet table.entries tbody tr:last-child td { background: #fde68a; border-top: 3px solid #0f172a; font-size: clamp(18px, 1.7vw, 26px); }
+.rec-sheet table.entries td:first-child, .rec-sheet table.entries th:first-child { width: 10%; text-align: left; padding-left: 10px; }
+.rec-sheet .rec-rmks { width: 14%; }
+.rec-sheet table.entries.rec-foot { min-width: 0; max-width: 640px; table-layout: auto; }
+.rec-sheet h3 { font-size: clamp(18px, 2vw, 28px); color: #0f172a; }
+.rec-sheet input[type="text"] { width: 100% !important; font-size: 18px !important; font-weight: 600; border: 2px solid #334155; border-radius: 6px; }
+:root[data-theme="dark"] .rec-sheet h3 { color: #fff; }
+.rec-full { position: fixed; inset: 0; z-index: 2000; background: var(--surface-bg); overflow: auto; padding: 12px; }
+.rec-full .container { max-width: none !important; padding: 0; margin: 0; }
+.rec-full .card-box { box-shadow: none; border: 0; padding: 8px; }
+@media print { .rec-full { position: static; overflow: visible; padding: 0; } .rec-sheet table.entries { min-width: 0; } }
