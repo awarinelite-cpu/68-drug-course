@@ -959,10 +959,8 @@ export default function OverallNurse() {
             </table>
           </div>
           <div className="save-status" style={{ color: saveStatus.error ? '#dc2626' : '#6b7280' }}>{saveStatus.text}</div>
-        </div>
 
-        <div className="card-box">
-          <h2>Patient Demographics</h2>
+          <h2 style={{ marginTop: 14 }}>Patient Demographics</h2>
           <div className="table-wrap ov-sheet">
             <table className="report">
               <thead>
