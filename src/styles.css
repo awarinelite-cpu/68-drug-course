@@ -1851,3 +1851,8 @@ h3.ward-report-subheading, .ward-report-subheading { font-size: clamp(28px, 3.4v
   .patient-block .patient-note-diagnosis, .diagnosis-note-key, .diagnosis-note-box .diagnosis-note-input { font-size: clamp(24px, 2vw, 32px); }
   .patient-block { padding-left: 4px; padding-right: 4px; }
 }
+
+/* Top bar: dark navy blue (only the bar — other navy elements keep their colour) */
+.topbar { background: linear-gradient(155deg, #0d2149 0%, #040d24 70%); }
+.topbar::after { background: linear-gradient(90deg, rgba(4,13,36,.6) 0%, rgba(4,13,36,0) 30%, rgba(4,13,36,0) 70%, rgba(4,13,36,.6) 100%); }
+:root[data-theme="dark"] .topbar { background: linear-gradient(155deg, #0d2149 0%, #040d24 70%); }
