@@ -1357,9 +1357,9 @@ function WardPanelRest({ h, showLabel, isAdmin, navigate, includeShiftTable = tr
             </div>
           )}
 
-          {includeShiftTable && (
+          {(includeShiftTable || includeDemographics) && (
             <div className="card-box ward-nurse-box">
-              {includeHeader && w && (
+              {includeShiftTable && includeHeader && w && (
                 <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 10 }}>
                   <button className="btn btn-secondary" style={{ padding: '6px 12px' }} type="button"
                     onClick={() => navigate('/nurses-report/archive-list?type=ward&ward=' + encodeURIComponent(w.key) + '&label=' + encodeURIComponent(w.label))}>
@@ -1367,11 +1367,23 @@ function WardPanelRest({ h, showLabel, isAdmin, navigate, includeShiftTable = tr
                   </button>
                 </div>
               )}
-              <div className="table-wrap">
-                <div className="ward-report-title">24 HOURS WARD REPORT WEF 0900HRS OF 26/09/26 TO 0900HRS OF 27/09/26</div>
-                <ShiftTable wardDoc={wardDoc} census={census} movementTotals={movementTotals} editable={editable}
-                  onBeds={updateBeds} onField={updateShiftField} onDuty={updateDuty} parole={paroleView} />
-              </div>
+              {includeShiftTable && (
+                <div className="table-wrap">
+                  <div className="ward-report-title">24 HOURS WARD REPORT WEF 0900HRS OF 26/09/26 TO 0900HRS OF 27/09/26</div>
+                  <ShiftTable wardDoc={wardDoc} census={census} movementTotals={movementTotals} editable={editable}
+                    onBeds={updateBeds} onField={updateShiftField} onDuty={updateDuty} parole={paroleView} />
+                </div>
+              )}
+              {includeDemographics && (
+                <>
+                  <h2 style={includeShiftTable ? { marginTop: 14 } : undefined}>Patient Demographics</h2>
+                  <div className="table-wrap">
+                    <DemographicsTable wardDoc={wardDoc} editable={editable}
+                      onField={(key, raw) => { touchedDemographicFieldsRef.current.add(key); const n = parseFloat(raw); updateWardDoc({ [key]: isNaN(n) ? 0 : n }); }}
+                      onRemarks={(v) => updateWardDoc({ demographicsRemarks: v })} />
+                  </div>
+                </>
+              )}
             </div>
           )}
 
@@ -1379,17 +1391,6 @@ function WardPanelRest({ h, showLabel, isAdmin, navigate, includeShiftTable = tr
             <div className="card-box ward-nurse-box">
               <h2>{paroleHasAny(paroleView.parole) && paroleHasAny(paroleView.dParole) ? 'Parole / D/Parole' : paroleHasAny(paroleView.parole) ? 'Parole' : 'D/Parole'}</h2>
               <ParoleTables paroleList={paroleView.parole} dParoleList={paroleView.dParole} onReadmit={paroleLoaded ? readmitParolee : undefined} busyId={readmitBusyId} />
-            </div>
-          )}
-
-          {includeDemographics && (
-            <div className="card-box ward-nurse-box">
-              <h2>Patient Demographics</h2>
-              <div className="table-wrap">
-                <DemographicsTable wardDoc={wardDoc} editable={editable}
-                  onField={(key, raw) => { touchedDemographicFieldsRef.current.add(key); const n = parseFloat(raw); updateWardDoc({ [key]: isNaN(n) ? 0 : n }); }}
-                  onRemarks={(v) => updateWardDoc({ demographicsRemarks: v })} />
-              </div>
             </div>
           )}
 
@@ -1709,19 +1710,19 @@ function MergedWardReportPanel({ group, isAdmin, profile, user, navigate }) {
               editable: h.editable, updateBeds: h.updateBeds, updateShiftField: h.updateShiftField, updateDuty: h.updateDuty
             }))} />
           </div>
-        </div>
-      )}
-      {bothLoaded && mergedDemographics && (
-        <div className="card-box">
-          <h2>Patient Demographics</h2>
-          <div className="table-wrap">
-            <MergedDemographicsTable panels={hooks.map((h) => ({
-              w: { ...h.w, label: DEMOGRAPHICS_ROW_LABEL[h.w.key] || h.w.label },
-              wardDoc: h.wardDoc, editable: h.editable,
-              onField: (key, raw) => { h.touchedDemographicFieldsRef.current.add(key); const n = parseFloat(raw); h.updateWardDoc({ [key]: isNaN(n) ? 0 : n }); },
-              onRemarks: (v) => h.updateWardDoc({ demographicsRemarks: v })
-            }))} />
-          </div>
+          {mergedDemographics && (
+            <>
+              <h2 style={{ marginTop: 14 }}>Patient Demographics</h2>
+              <div className="table-wrap">
+                <MergedDemographicsTable panels={hooks.map((h) => ({
+                  w: { ...h.w, label: DEMOGRAPHICS_ROW_LABEL[h.w.key] || h.w.label },
+                  wardDoc: h.wardDoc, editable: h.editable,
+                  onField: (key, raw) => { h.touchedDemographicFieldsRef.current.add(key); const n = parseFloat(raw); h.updateWardDoc({ [key]: isNaN(n) ? 0 : n }); },
+                  onRemarks: (v) => h.updateWardDoc({ demographicsRemarks: v })
+                }))} />
+              </div>
+            </>
+          )}
         </div>
       )}
       <WardPanelRest h={hA} showLabel={false} isAdmin={isAdmin} navigate={navigate}
