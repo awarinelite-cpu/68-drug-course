@@ -68,11 +68,11 @@ export default function RoleSelect() {
         <button className="btn btn-secondary" style={{ padding: '6px 12px' }} onClick={goBack}>Back</button>
       </Topbar>
       <div className="container">
-        <p style={{ fontSize: 13, color: '#555' }}>Choose your role for this shift. The Overall Nurse role runs for the whole week.</p>
+        <p style={{ fontSize: 'clamp(16px, 2vw, 22px)', color: '#555' }}>Choose your role for this shift. The Overall Nurse role runs for the whole week.</p>
         <div className="role-grid">
           <button className="role-card" onClick={assumeOverall}>
             <span className="icon">🗂️</span>
-            <span className="title">OVERALL NURSE PAGE</span>
+            <span className="title">OVERALL REPORT</span>
             <span className="desc">
               {canViewDirectly
                 ? "View every ward's 24-hour report as " + (isAdmin ? 'admin' : 'subadmin') + " — and appoint this week's Overall Nurse."
@@ -82,7 +82,7 @@ export default function RoleSelect() {
           </button>
           <button className="role-card" onClick={() => navigate('/nurses-report/ward-nurse')}>
             <span className="icon">🏥</span>
-            <span className="title">WARD NURSE</span>
+            <span className="title">WARD REPORT</span>
             <span className="desc">Submit and manage your own ward's 24-hour report.</span>
           </button>
           <button className="role-card" onClick={() => navigate('/nurses-report/analytics')}>

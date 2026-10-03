@@ -1791,3 +1791,9 @@ table.report td.ward-name { font-size: clamp(18px, 1.9vw, 28px); font-weight: 90
 @media (min-width: 900px) { .ward-pick-card { font-size: 24px; min-height: 120px; } }
 .ward-heading { font-size: 28px; }
 @media (min-width: 900px) { .ward-heading { font-size: 38px; } }
+
+/* Bigger role-picker cards (Overall Report / Ward Report / Analytics) */
+.role-card .icon { font-size: 56px; }
+.role-card .title { font-size: clamp(26px, 3.4vw, 40px); font-weight: 900; }
+.role-card .desc { font-size: clamp(18px, 2.2vw, 24px); max-width: 720px; }
+.role-card .status { font-size: clamp(18px, 2.2vw, 24px); }
