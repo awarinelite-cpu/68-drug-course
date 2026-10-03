@@ -341,7 +341,7 @@ exports.updateNextDoseAt = onDocumentWritten(
     // it's a far better failure mode here than losing nextDoseAt.
     // Allocated-only alerting: a patient with no allocated nurse never gets
     // an alert, so don't create a task for them at all (it would only fire
-    // sendDoseAlert to log "no nurse allocated"). syncDoseTaskOnAllocation
+    // sendDoseAlert to log "no nurse allocated"). allocSyncDoseTask
     // below creates the task when a nurse allocates later. If the lookup
     // fails we fall back to scheduling, the old behaviour.
     let hasNurse = true;
@@ -407,11 +407,11 @@ async function syncDoseTaskForAllocation(event) {
     await chartRef.set({ scheduledTaskName: null }, { merge: true });
   }
 }
-exports.syncDoseTaskOnAllocation = onDocumentWritten(
+exports.allocSyncDoseTask = onDocumentWritten(
   { document: 'allocations/{allocId}', region: 'us-central1', retry: false },
   syncDoseTaskForAllocation
 );
-exports.syncDoseTaskOnAllocationMhl = onDocumentWritten(
+exports.allocSyncDoseTaskMhl = onDocumentWritten(
   { document: 'allocations_mhl/{allocId}', region: 'us-central1', retry: false },
   syncDoseTaskForAllocation
 );
