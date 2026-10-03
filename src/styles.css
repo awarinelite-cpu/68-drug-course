@@ -1715,3 +1715,31 @@ table.ward-shift td.shift-name, table.ward-shift th:first-child { text-align: le
 }
 @media (prefers-reduced-motion: reduce) { .topbar::before { animation: none; } }
 @media print { .topbar::before, .topbar::after { display: none; } }
+
+/* ── Nurses Report statistics + demographics tables (report / shift): same
+   bold, high-contrast look everywhere (Overall Nurse, Ward Nurse entry
+   tables, Archive view, Analytics). Colour classes are left alone. ── */
+table.report, table.shift { width: 100%; border-collapse: collapse; border: 3px solid #0f172a; }
+table.report th, table.report td, table.shift th, table.shift td {
+  border: 2px solid #334155; padding: 10px 4px; font-size: clamp(16px, 1.5vw, 24px); font-weight: 700; background: #fff; white-space: nowrap;
+}
+table.report td, table.shift td { color: #0f172a; }
+table.report td.stat-beds, table.shift td.stat-beds { color: #15803d; }
+table.report td.stat-occ, table.report td.stat-in, table.shift td.stat-occ, table.shift td.stat-in { color: #1d4ed8; }
+table.report td.stat-vac, table.report td.stat-out, table.shift td.stat-vac, table.shift td.stat-out { color: #b91c1c; }
+table.shift td.computed { color: #1d4ed8; }
+table.report thead th, table.shift thead th { background: #16294F; color: #fff; border-color: #0f172a; font-size: clamp(14px, 1.3vw, 20px); letter-spacing: .3px; }
+table.report th.renamable-col:hover { background: #21396B; }
+table.report tbody tr:nth-child(even) td, table.shift tbody tr:nth-child(even) td { background: #eef3fb; }
+table.report tr.totals-row td, table.shift tr.total-row td { background: #fde68a; border-top: 3px solid #0f172a; font-size: clamp(18px, 1.7vw, 26px); }
+table.shift tr.shift-section-row td { background: #cbd5e1; color: #0f172a; }
+table.report td.ward-name, table.shift td.shift-name, table.report th:first-child, table.shift th:first-child { text-align: left; padding-left: 10px; }
+table.shift input, table.report input {
+  width: 76px; padding: 6px 4px; border: 2px solid #334155; border-radius: 6px; background: #fff; color: #0f172a;
+  font-size: clamp(16px, 1.5vw, 22px); font-weight: 700; text-align: center;
+}
+table.shift input.duty-input, table.report input.duty-input { width: 150px; text-align: left; }
+table.shift input:disabled, table.report input:disabled { background: #f1f5f9; color: #0f172a; -webkit-text-fill-color: #0f172a; }
+:root[data-theme="dark"] table.report th, :root[data-theme="dark"] table.report td,
+:root[data-theme="dark"] table.shift th, :root[data-theme="dark"] table.shift td { border-color: #334155; }
+:root[data-theme="dark"] table.report thead th, :root[data-theme="dark"] table.shift thead th { border-color: #0f172a; }
