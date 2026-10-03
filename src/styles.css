@@ -1812,3 +1812,21 @@ table.report td.ward-name { font-size: clamp(18px, 1.9vw, 28px); font-weight: 90
   table.shift input.duty-input { width: 100%; max-width: none; min-width: 90px; padding: 5px 6px; font-size: clamp(12px, 1vw, 16px); }
   table.shift td.shift-name, table.shift th:first-child { padding-left: 6px; }
 }
+
+/* Larger ward report text (still fits the screen on desktop) */
+@media (min-width: 1024px) {
+  table.shift th, table.shift td { font-size: clamp(15px, 1.4vw, 24px); }
+  table.shift thead th { font-size: clamp(13px, 1.1vw, 19px); font-weight: 800; }
+  table.shift tr.total-row td { font-size: clamp(17px, 1.6vw, 26px); }
+  table.shift input { max-width: 84px; font-size: clamp(15px, 1.4vw, 23px); }
+  table.shift input.duty-input { font-size: clamp(14px, 1.2vw, 19px); }
+  .ward-report-title { font-size: clamp(22px, 2.8vw, 36px); }
+}
+@media (max-width: 1023px) {
+  table.shift th, table.shift td { font-size: 18px; }
+  table.shift thead th { font-size: 16px; }
+  table.shift input { font-size: 20px; }
+  .ward-report-title { font-size: clamp(20px, 4.2vw, 28px); }
+}
+h3.ward-report-subheading, .ward-report-subheading { font-size: clamp(28px, 3.4vw, 40px); }
+.patient-block, .patient-block label, .patient-block input, .patient-block textarea, .patient-block select { font-size: clamp(17px, 1.5vw, 22px); }
