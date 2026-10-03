@@ -282,7 +282,7 @@ function ShiftTable({ wardDoc, census, movementTotals, editable, onBeds, onField
               </Fragment>
             ))}
             <td>
-              <input type="text" className="duty-input" placeholder="Nurse name(s)" disabled={!editable}
+              <input type="text" className="duty-input" placeholder={s.key === 'am' ? 'AM nurse name' : 'PM nurse name'} disabled={!editable}
                 value={wardDoc.shifts[s.key].nurseOnDuty} onChange={(e) => onDuty(s.key, e.target.value)} />
             </td>
           </tr>
@@ -993,9 +993,21 @@ function useWardReport(wardKey, isAdmin, profile, user) {
   async function saveReport() {
     if (!wardDoc || !editable) return;
     let doc_ = wardDoc;
-    if (!doc_.shifts.am.nurseOnDuty && profile?.name) {
-      doc_ = { ...doc_, shifts: { ...doc_.shifts, am: { ...doc_.shifts.am, nurseOnDuty: profile.name } } };
-      setWardDoc(doc_);
+    // AM Nurses on Duty = the nurse who wrote the morning report; PM Nurses on
+    // Duty = the nurse who wrote the night update. Whoever saves is credited to
+    // the shift they are writing: once a night update exists the saver is the
+    // night nurse, so they must never be written in as the AM nurse.
+    const savingNight = !!((doc_.nightUpdate && doc_.nightUpdate.trim()) || doc_.patients.some((p) => p.nightUpdate && p.nightUpdate.trim()));
+    if (profile?.name) {
+      if (savingNight) {
+        if (!doc_.shifts.pm.nurseOnDuty) {
+          doc_ = { ...doc_, shifts: { ...doc_.shifts, pm: { ...doc_.shifts.pm, nurseOnDuty: profile.name } } };
+          setWardDoc(doc_);
+        }
+      } else if (!doc_.shifts.am.nurseOnDuty) {
+        doc_ = { ...doc_, shifts: { ...doc_.shifts, am: { ...doc_.shifts.am, nurseOnDuty: profile.name } } };
+        setWardDoc(doc_);
+      }
     }
     const ref = doc(db, 'nurseReports', dateId, 'wards', wardKey);
     // Take the live/background movement figures for anything the nurse
@@ -1577,7 +1589,7 @@ function MergedShiftTable({ panels }) {
                   </td>
                 ))}
                 <td>
-                  <input type="text" className="duty-input" placeholder="Nurse name(s)" disabled={!p.editable}
+                  <input type="text" className="duty-input" placeholder={s.key === 'am' ? 'AM nurse name' : 'PM nurse name'} disabled={!p.editable}
                     value={p.wardDoc.shifts[s.key].nurseOnDuty} onChange={(e) => p.updateDuty(s.key, e.target.value)} />
                 </td>
               </tr>
