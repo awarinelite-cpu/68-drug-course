@@ -1835,3 +1835,8 @@ h3.ward-report-subheading, .ward-report-subheading { font-size: clamp(28px, 3.4v
 .topbar .brand { font-size: clamp(22px, 2.6vw, 34px); font-weight: 900; letter-spacing: 0; line-height: 1.15; }
 .topbar .topbar-identity { font-size: clamp(15px, 1.5vw, 20px); }
 .gnav-drawer-title, .nav-drawer-title { font-size: 20px; }
+
+/* Desktop only: larger hospital name in the top bar */
+@media (min-width: 1024px) {
+  .topbar .brand { font-size: clamp(24px, 2.3vw, 34px); font-weight: 900; letter-spacing: 0; line-height: 1.15; }
+}
