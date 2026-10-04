@@ -106,9 +106,9 @@ export default function RequestAccount() {
   return (
     <div className="login-page" style={{ backgroundImage: `url(${wardBg})` }}>
       <div className="container" style={{ maxWidth: 420, marginTop: 60 }}>
-        <div className="card-box login-card">
+        <div className="card-box login-card req-account-card">
           <h2 style={{ textAlign: 'center', marginTop: 0 }}>Request Staff Account</h2>
-          <p style={{ fontSize: 13, color: '#666', textAlign: 'center', marginTop: -6 }}>
+          <p className="req-intro" style={{ fontSize: 13, color: '#666', textAlign: 'center', marginTop: -6 }}>
             68 NARHY Ward Charts — for nurses, doctors and records staff joining the ward. An admin reviews every
             application before it's approved.
           </p>

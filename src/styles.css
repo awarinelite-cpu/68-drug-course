@@ -2153,3 +2153,29 @@ h3.ward-report-subheading, .ward-report-subheading { font-size: clamp(28px, 3.4v
   .rec-sheet table.entries tbody tr:last-child > :first-child { border-bottom-left-radius: 16px; }
   .rec-sheet table.entries tbody tr:last-child > :last-child { border-bottom-right-radius: 16px; }
 }
+
+/* ── Request Staff Account: readable over the ward photo ──
+   The shared see-through login card left labels and hints sitting directly on
+   the picture. For this form only: a mostly-solid card, bigger/darker labels,
+   and clearly outlined solid fields. */
+.card-box.login-card.req-account-card {
+  background: rgba(255,255,255,0.93); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+  border: 2px solid rgba(255,255,255,0.9); padding: 24px 20px;
+}
+.req-account-card h2 { font-size: 26px; color: #0f172a; }
+.req-account-card .req-intro { font-size: 16px !important; line-height: 1.45; color: #1f2937 !important; font-weight: 500; }
+.req-account-card label { font-size: 18px; font-weight: 800; color: #0f172a; margin-bottom: 6px; }
+.req-account-card input, .req-account-card select {
+  font-size: 18px; font-weight: 600; color: #000; background-color: #fff;
+  border: 2px solid #475569; padding: 13px 14px; border-radius: 10px;
+}
+.req-account-card input::placeholder { color: #475569; font-weight: 500; opacity: 1; }
+.req-account-card input:focus, .req-account-card select:focus { border-color: #1d4ed8; box-shadow: 0 0 0 4px rgba(29,78,216,.25); }
+.req-account-card .field { margin-bottom: 16px; }
+.req-account-card .btn { font-size: 18px; padding: 14px 16px; }
+.req-account-card a { font-size: 16px !important; font-weight: 700; }
+:root[data-theme="dark"] .card-box.login-card.req-account-card { background: rgba(11,31,58,0.94); border-color: rgba(148,163,184,0.5); }
+:root[data-theme="dark"] .req-account-card h2, :root[data-theme="dark"] .req-account-card label { color: #fff; }
+:root[data-theme="dark"] .req-account-card .req-intro { color: #e5e7eb !important; }
+:root[data-theme="dark"] .req-account-card input, :root[data-theme="dark"] .req-account-card select { background-color: #0B1F3A; color: #fff; border-color: #94a3b8; }
+:root[data-theme="dark"] .req-account-card input::placeholder { color: #cbd5e1; }
