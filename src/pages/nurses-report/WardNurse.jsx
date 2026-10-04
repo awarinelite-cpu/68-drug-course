@@ -73,6 +73,30 @@ function linkedPatientIdFor(p) {
   return (p && (p.sourcePatientId || p.emrPatientId)) || '';
 }
 
+// Switching a write-up to a DIFFERENT patient must never leave the old
+// patient's details behind (that is how one patient's notes end up on
+// another's report). These helpers decide whether a pick is a switch and
+// wipe everything patient-specific when it is.
+const PATIENT_WORK_KEYS = ['diagnosis', 'npAssessment', 'npPlan', 'npNursingDiagnosis', 'npPlanning', 'npImplementation', 'npEvaluation', 'nightUpdate'];
+function patientHasWork(p) { return PATIENT_WORK_KEYS.some((k) => String((p && p[k]) || '').trim()); }
+function isSwitchToDifferentPatient(p, newId, record) {
+  if (!p) return false;
+  const cur = linkedPatientIdFor(p);
+  if (cur) return cur !== newId;
+  // Not linked yet (typed by hand): different if the identity typed doesn't match the record picked.
+  const emr = String(p.emr || '').trim(), name = String(p.name || '').trim().toLowerCase();
+  if (emr && record.emr) return emr !== String(record.emr).trim();
+  if (name && record.name) return name !== String(record.name).trim().toLowerCase();
+  return false;
+}
+function clearedPatientWrite(p) {
+  const out = { ...p, status: '', nightUpdate: '', nightUpdateBy: '' };
+  PATIENT_FIELDS.forEach((f) => { out[f.key] = ''; });
+  delete out.sourcePatientId; delete out.emrPatientId; delete out.vitalsSnapshot; delete out.vitalsLine;
+  return out;
+}
+const SWITCH_WARNING = 'This will REPLACE everything on this write-up with the newly selected patient (notes, vital signs roll, plan, nursing process, night update and status).\n\nOK = switch patient and clear the old patient\u2019s information.\nCancel = keep the current patient.';
+
 // Matches the Vitals Chart's own field keys (temp/pulse/resp/bp/spo2) and
 // mirrors how a nurse writes it on paper: "T-36.8⁰c P-98b/m R-20c/m BP-
 // 123/80mmHg SPO2- 99%." Missing values render as an em dash rather than
@@ -786,7 +810,7 @@ function useWardReport(wardKey, isAdmin, profile, user) {
       const line = formatVitalsLine({ temp: latest.temp || '', pulse: latest.pulse || '', resp: latest.resp || '', bp: latest.bp || '', spo2: latest.spo2 || '' });
       setWardDoc((d) => ({
         ...d,
-        patients: d.patients.map((p) => (p.id === id && !p.npAssessment) ? { ...p, npAssessment: line } : p)
+        patients: d.patients.map((p) => (p.id === id && !p.npAssessment && linkedPatientIdFor(p) === patientId) ? { ...p, npAssessment: line } : p)
       }));
     } catch (e) {
       // Non-fatal — the nurse can still type vitals in by hand.
@@ -804,7 +828,7 @@ function useWardReport(wardKey, isAdmin, profile, user) {
       if (!text) return;
       setWardDoc((d) => ({
         ...d,
-        patients: d.patients.map((p) => (p.id === id && !p.npPlan) ? { ...p, npPlan: text } : p)
+        patients: d.patients.map((p) => (p.id === id && !p.npPlan && linkedPatientIdFor(p) === patientId) ? { ...p, npPlan: text } : p)
       }));
     } catch (e) {
       // Non-fatal — the nurse can still type the plan in by hand.
@@ -848,6 +872,13 @@ function useWardReport(wardKey, isAdmin, profile, user) {
       }
       const record = snap.docs[0].data();
       const foundId = snap.docs[0].id;
+      const currentP = wardDoc.patients.find((p) => p.id === id);
+      const curLink = linkedPatientIdFor(currentP);
+      const switching = !!curLink && curLink !== foundId;
+      if (switching && patientHasWork(currentP) && !window.confirm(SWITCH_WARNING)) {
+        setEmrLookup((s) => ({ ...s, [id]: { text: 'Kept the current patient.', error: false } }));
+        return;
+      }
       // The Drug Course Chart's diagnosis (if one's been typed in) takes
       // priority over the older personal-info diagnosis — see
       // fetchChartDiagnosis above.
@@ -856,7 +887,7 @@ function useWardReport(wardKey, isAdmin, profile, user) {
         ...d,
         patients: d.patients.map((p) => {
           if (p.id !== id) return p;
-          const next = { ...p, emrPatientId: foundId };
+          const next = { ...(switching ? { ...clearedPatientWrite(p), emr: p.emr } : p), emrPatientId: foundId };
           if (!next.name && record.name) next.name = record.name;
           if (!next.age && record.age) next.age = record.age;
           if (!next.doa && record.admissionDate) next.doa = record.admissionDate;
@@ -888,6 +919,9 @@ function useWardReport(wardKey, isAdmin, profile, user) {
     if (!sourcePatientId) { setWardDoc((d) => ({ ...d, patients: d.patients.map((p) => p.id === id ? { ...p, sourcePatientId: '' } : p) })); return; }
     const record = wardPatientOptions.find((p) => p.id === sourcePatientId);
     if (!record) return;
+    const current = wardDoc.patients.find((p) => p.id === id);
+    const switching = isSwitchToDifferentPatient(current, sourcePatientId, record);
+    if (switching && patientHasWork(current) && !window.confirm(SWITCH_WARNING)) return;
     // The Drug Course Chart's diagnosis (if one's been typed in) takes
     // priority over the older personal-info diagnosis — see
     // fetchChartDiagnosis above.
@@ -896,7 +930,7 @@ function useWardReport(wardKey, isAdmin, profile, user) {
       ...d,
       patients: d.patients.map((p) => {
         if (p.id !== id) return p;
-        const next = { ...p, sourcePatientId };
+        const next = { ...(switching ? clearedPatientWrite(p) : p), sourcePatientId };
         if (!next.emr && record.emr) next.emr = record.emr;
         if (!next.name && record.name) next.name = record.name;
         if (!next.age && record.age) next.age = record.age;
