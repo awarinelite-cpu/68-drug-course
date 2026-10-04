@@ -1982,3 +1982,14 @@ h3.ward-report-subheading, .ward-report-subheading { font-size: clamp(28px, 3.4v
 :root[data-theme="dark"] .nanda-result:active, :root[data-theme="dark"] .nanda-result:hover { background: #1E3A5F; }
 :root[data-theme="dark"] .nanda-empty { color: #E2E8F0; font-size: 15px; font-weight: 600; }
 :root[data-theme="dark"] .nanda-close { background: #16294F; color: #FFFFFF; font-weight: 700; font-size: 15px; }
+
+/* Overall Nurse stats table: on desktop the many columns (incl. the long
+   email in Nurses on Duty and the Access column) pushed the right edge past
+   the page and got clipped by body overflow-x. Let the sheet scroll sideways
+   if it still doesn't fit, wrap long emails, and tighten cell padding. */
+@media (min-width: 1024px) {
+  .table-wrap.ov-sheet { overflow-x: auto; }
+  .ov-sheet table.report th, .ov-sheet table.report td { padding-left: 4px; padding-right: 4px; }
+  .ov-sheet table.report td .duty-name-btn { overflow-wrap: anywhere; word-break: break-all; }
+  .ov-sheet table.report td { overflow-wrap: anywhere; }
+}
