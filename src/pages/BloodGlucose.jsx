@@ -8,6 +8,7 @@ import { usePatientHeader } from "../hooks/usePatientHeader.js";
 import Topbar from "../components/Topbar.jsx";
 import PatientBanner from "../components/PatientBanner.jsx";
 import { formatTime } from "../lib/time-format.js";
+import usePrintOrientation from "../hooks/usePrintOrientation.js";
 
 const STATUS_LABELS = { referred: 'Referred to another hospital', transferred: 'Transferred to another ward', discharged: 'Discharged', died: 'Death' };
 
@@ -79,6 +80,7 @@ function openPicker(el) {
 }
 
 export default function BloodGlucose() {
+  usePrintOrientation('landscape');
   const [searchParams] = useSearchParams();
   const patientId = searchParams.get('patient');
   const admissionId = searchParams.get('admission');

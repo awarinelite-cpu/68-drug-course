@@ -13,6 +13,7 @@ import Topbar from "../../components/Topbar.jsx";
 import ParoleTables, { hasAny as paroleHasAny } from "../../components/ParoleTables.jsx";
 import { splitDiagnosisNote } from "../../lib/diagnosisNote.js";
 import DiagnosisNoteEditor, { DiagnosisHeadline } from "../../components/DiagnosisNoteEditor.jsx";
+import usePrintOrientation from "../../hooks/usePrintOrientation.js";
 
 const movementFields = SHIFT_STAT_FIELDS;
 const byKey = k => movementFields.find(f => f.key === k);
@@ -561,6 +562,7 @@ function DemoStatsTableEdit({ wardsMeta, wardsMap, onChange }) {
 }
 
 export default function ArchiveView() {
+  usePrintOrientation('landscape');
   useTimeFormat(); // re-render if admin changes the system time format elsewhere
   const { user, profile } = useAuth();
   const goBack = useGoBack('/nurses-report/role-select');

@@ -2025,3 +2025,31 @@ h3.ward-report-subheading, .ward-report-subheading { font-size: clamp(28px, 3.4v
   .ov-sheet table.report thead { display: table-header-group; }
   .ov-sheet table.report tr { break-inside: avoid; page-break-inside: avoid; }
 }
+
+/* ── Print, app-wide: every printable chart/report fits the paper ──
+   The on-screen layouts use scroll containers, max-content tables and
+   body overflow-x: clip, which cut the right-hand columns off a printout.
+   For print: let content flow, make tables exactly page width, wrap text,
+   shrink type, and keep rows whole. */
+@media print {
+  html, body { overflow: visible !important; max-width: none !important; }
+  .sheet, .table-wrap, .rec-sheet .table-wrap, .rec-full, .info-grid-wrap { overflow: visible !important; max-width: 100% !important; }
+  table.chart, table.drugs-table, table.entries, table.shift, table.ward-shift, table.report {
+    width: 100% !important; min-width: 0 !important; max-width: 100% !important; table-layout: auto !important;
+  }
+  table.chart th, table.chart td, table.drugs-table th, table.drugs-table td, table.entries th, table.entries td {
+    white-space: normal !important; min-width: 0 !important; max-width: none !important;
+    padding: 3px 2px !important; font-size: 11px !important; line-height: 1.2; overflow-wrap: anywhere;
+  }
+  table.shift th, table.shift td, table.ward-shift th, table.ward-shift td {
+    white-space: normal !important; min-width: 0 !important; padding: 3px 2px !important; font-size: 10px !important; line-height: 1.15;
+  }
+  table.chart td input, table.chart td select, table.chart td textarea,
+  table.drugs-table td input, table.drugs-table td select, table.drugs-table td textarea,
+  table.shift input, table.ward-shift input {
+    width: 100% !important; min-width: 0 !important; font-size: inherit !important; padding: 0 !important; border: none !important; background: transparent !important;
+  }
+  table.entries td.popup-cell { max-width: none !important; white-space: normal !important; text-overflow: clip !important; }
+  table.chart thead, table.drugs-table thead, table.entries thead, table.shift thead, table.ward-shift thead { display: table-header-group; }
+  table.chart tr, table.drugs-table tr, table.entries tr, table.shift tr, table.ward-shift tr { break-inside: avoid; page-break-inside: avoid; }
+}

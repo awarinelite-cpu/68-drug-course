@@ -8,12 +8,14 @@ import { getDocSafe, getDocsSafe } from "../lib/firestoreOffline.js";
 import { reportDateId } from "../lib/nurses-report-common.js";
 import Topbar from "../components/Topbar.jsx";
 import RecordsSheet, { RECORD_ROWS, buildSheetFromWards } from "../components/RecordsSheet.jsx";
+import usePrintOrientation from "../hooks/usePrintOrientation.js";
 
 function fmtSaved(ts) {
   try { return ts?.toDate ? ts.toDate().toLocaleString() : ""; } catch { return ""; }
 }
 
 export default function Records() {
+  usePrintOrientation('landscape');
   const { user, profile } = useAuth();
   const goBack = useGoBack("/");
   const navigate = useNavigate();

@@ -11,6 +11,7 @@ import { usePatientHeader } from "../hooks/usePatientHeader.js";
 import { formatHHMM12 } from "../lib/drugChartHelpers.js";
 import Topbar from "./Topbar.jsx";
 import PatientBanner from "./PatientBanner.jsx";
+import usePrintOrientation from "../hooks/usePrintOrientation.js";
 
 const STATUS_LABELS = { referred: 'Referred to another hospital', transferred: 'Transferred to another ward', discharged: 'Discharged', died: 'Death' };
 
@@ -154,6 +155,7 @@ function FormField({ col, value, otherValue, onChange, onOtherChange }) {
 }
 
 export default function EntryChart({ title, collectionName, columns, deriveRows, summary, entryNoun = 'Entry', sortOrder = 'desc' }) {
+  usePrintOrientation('landscape');
   const { profile } = useAuth();
   const [searchParams] = useSearchParams();
   const patientId = searchParams.get('patient');

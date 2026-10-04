@@ -24,6 +24,7 @@ import { classifyAffiliation, isOfficerArmyNumber } from "../lib/patientAffiliat
 import { parsePatientFields, extractDrugSection } from "../lib/patientParse.js";
 import { readEmrStash } from "../lib/emrBridge.js";
 import { useTimeFormat, formatTime, formatDateTime } from "../lib/time-format.js";
+import usePrintOrientation from "../hooks/usePrintOrientation.js";
 
 const FIELD_IDS = ['f_admission', 'f_discharge', 'f_diagnosis'];
 
@@ -127,6 +128,7 @@ function SkipReasonPopup({ nums, reason, onClose }) {
 }
 
 export default function DrugCourseChart() {
+  usePrintOrientation('landscape');
   useTimeFormat(); // re-render if admin changes the system time format elsewhere
   const { profile } = useAuth();
   const navigate = useNavigate();

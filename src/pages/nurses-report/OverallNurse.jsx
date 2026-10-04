@@ -26,6 +26,7 @@ import Topbar from "../../components/Topbar.jsx";
 import ParoleTables, { hasAny as paroleHasAny } from "../../components/ParoleTables.jsx";
 import { splitDiagnosisNote } from "../../lib/diagnosisNote.js";
 import { DiagnosisHeadline } from "../../components/DiagnosisNoteEditor.jsx";
+import usePrintOrientation from "../../hooks/usePrintOrientation.js";
 
 const movementFields = SHIFT_STAT_FIELDS;
 const byKey = k => movementFields.find(f => f.key === k);
@@ -287,16 +288,7 @@ export default function OverallNurse() {
   const navigate = useNavigate();
   const goBack = useGoBack('/nurses-report/role-select');
 
-  // Print this report on a landscape page (the table is wide). Scoped to this
-  // page only — the <style> is removed when the page unmounts.
-  useEffect(() => {
-    const el = document.createElement('style');
-    el.setAttribute('data-ov-print-page', '1');
-    el.textContent = '@media print { @page { size: landscape; margin: 8mm; } }';
-    document.head.appendChild(el);
-    return () => { if (el.parentNode) el.parentNode.removeChild(el); };
-  }, []);
-
+  usePrintOrientation('landscape');
   const [access, setAccess] = useState('checking'); // 'checking' | 'denied' | 'granted'
   const [deniedMsg, setDeniedMsg] = useState('');
   // Everyone can VIEW this page; only admin/subadmin/the appointed Overall

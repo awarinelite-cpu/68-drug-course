@@ -7,6 +7,7 @@ import { useGoBack } from "../hooks/useGoBack.js";
 import { getDocsSafe } from "../lib/firestoreOffline.js";
 import Topbar from "../components/Topbar.jsx";
 import RecordsSheet from "../components/RecordsSheet.jsx";
+import usePrintOrientation from "../hooks/usePrintOrientation.js";
 
 function fmtSaved(ts) {
   try { return ts?.toDate ? ts.toDate().toLocaleString() : ""; } catch { return ""; }
@@ -15,6 +16,7 @@ function fmtSaved(ts) {
 // Past Summary Breakdown of Statistics tables saved from the Records page,
 // newest first. Read-only.
 export default function RecordsArchive() {
+  usePrintOrientation('landscape');
   const { profile } = useAuth();
   const isAdmin = profile?.role === "admin";
   const goBack = useGoBack("/records");
