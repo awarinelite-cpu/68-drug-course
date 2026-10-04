@@ -97,6 +97,25 @@ export default function AllUsers() {
     loadUsers();
   }
 
+  async function editUserName(u) {
+    const input = window.prompt('Edit name for ' + (u.email || u.name || 'this user') + ':', u.name || '');
+    if (input === null) return;
+    const newName = input.trim().replace(/\s+/g, ' ');
+    if (!newName) { alert('Name cannot be empty.'); return; }
+    if (newName === (u.name || '')) return;
+    try {
+      await updateDoc(doc(db, 'users', u.id), { name: newName });
+      // Keep the Overall Nurse banner in step if this user holds the role this week.
+      if (overall && overall.uid === u.id) {
+        await setDoc(doc(db, 'nurseReportRoles', wk), { overallNurse: { uid: u.id, name: newName } }, { merge: true });
+      }
+      setStatus({ text: 'Name updated to ' + newName + '.', error: false });
+    } catch (e) {
+      alert("Couldn't update name: " + (e.code || e.message || 'unknown error'));
+    }
+    loadUsers();
+  }
+
   function openDeleteUserModal(u) {
     if (u.id === user.uid) { alert("You can't delete your own account."); return; }
     setDeleteTarget(u);
@@ -205,6 +224,8 @@ export default function AllUsers() {
                       </td>
                       {isAdmin && (
                         <td>
+                          <button className="btn btn-secondary" style={{ padding: '4px 10px', fontSize: 11, marginRight: 6 }}
+                            onClick={() => editUserName(u)}>Edit Name</button>
                           {u.id !== user.uid && (u.role === 'nurse' || u.role === 'subadmin') && (
                             <button className="btn btn-secondary" style={{ padding: '4px 10px', fontSize: 11, marginRight: 6 }}
                               onClick={() => setUserRole(u, u.role === 'subadmin' ? 'nurse' : 'subadmin')}>
