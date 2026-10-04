@@ -1992,5 +1992,19 @@ h3.ward-report-subheading, .ward-report-subheading { font-size: clamp(28px, 3.4v
   .ov-sheet table.report th, .ov-sheet table.report td { padding-left: 4px; padding-right: 4px; }
   .ov-sheet table.report td .duty-name-btn { overflow-wrap: anywhere; word-break: break-all; }
   .ov-sheet table.report td { overflow-wrap: anywhere; }
-  .ov-sheet table.report td:nth-last-child(2) { white-space: normal; min-width: 150px; }
+  .ov-sheet table.report td:nth-last-child(2) { white-space: normal; min-width: 110px; }
+}
+
+/* Overall Nurse stats table: scale type and spacing to the window so all
+   columns fit on a desktop screen without side-scrolling. */
+@media screen and (min-width: 1024px) {
+  .ov-sheet table.report { table-layout: auto; width: 100%; }
+  .ov-sheet table.report th, .ov-sheet table.report td {
+    white-space: normal; padding: 7px 2px; font-size: clamp(11px, 1vw, 16px); line-height: 1.2; text-align: center;
+  }
+  .ov-sheet table.report thead th { font-size: clamp(9px, .8vw, 13px); letter-spacing: 0; overflow-wrap: normal; word-break: normal; }
+  .ov-sheet table.report tbody tr.totals-row td { font-size: clamp(12px, 1.1vw, 18px); }
+  .ov-sheet table.report td.ward-name, .ov-sheet table.report th:first-child { text-align: left; padding-left: 6px; white-space: nowrap; }
+  .ov-sheet table.report td .duty-name-btn { font-size: clamp(9px, .8vw, 13px); font-weight: 600; }
+  .ov-sheet table.report .lock-btn { font-size: clamp(9px, .8vw, 13px); padding: 3px 6px; }
 }
