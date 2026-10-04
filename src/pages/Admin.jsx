@@ -288,6 +288,14 @@ export default function Admin() {
 
         <div className="card-box">
           <button className="btn btn-primary" style={{ width: '100%', fontSize: 16, fontWeight: 'bold', padding: '12px 16px' }}
+            onClick={() => navigate('/admin/duplicate-patients')}>
+            Duplicate Patients &rarr;
+          </button>
+          <p style={{ fontSize: 12, color: '#666', margin: '8px 0 0' }}>Find patients saved twice under the same EMR and merge them.</p>
+        </div>
+
+        <div className="card-box">
+          <button className="btn btn-primary" style={{ width: '100%', fontSize: 16, fontWeight: 'bold', padding: '12px 16px' }}
             onClick={() => navigate('/admin/users')}>
             All Users &rarr;
           </button>
