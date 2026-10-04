@@ -2083,3 +2083,19 @@ h3.ward-report-subheading, .ward-report-subheading { font-size: clamp(28px, 3.4v
   .drug-chart-page [style*="font-size: 12px"] { font-size: 16px !important; }
   .drug-chart-page [style*="font-size: 13px"] { font-size: 17px !important; }
 }
+
+/* ── Drug Course Chart: clearer table structure (screen only) ── */
+.drug-chart-page { --dc-line: #0f172a; --dc-zebra: #eef3fb; --dc-th-bg: #16294F; --dc-th-text: #fff; }
+:root[data-theme="dark"] .drug-chart-page { --dc-line: #94a3b8; --dc-zebra: #14305A; --dc-th-bg: #0b1f45; --dc-th-text: #fff; }
+@media screen {
+  .drug-chart-page table.drugs-table, .drug-chart-page table.chart { border-collapse: collapse; border: 3px solid var(--dc-line); }
+  .drug-chart-page table.drugs-table th, .drug-chart-page table.drugs-table td,
+  .drug-chart-page table.chart th, .drug-chart-page table.chart td {
+    border: 2px solid var(--dc-line); padding: 9px 6px;
+  }
+  .drug-chart-page table.drugs-table th, .drug-chart-page table.chart th {
+    background: var(--dc-th-bg); color: var(--dc-th-text); border-color: var(--dc-line); letter-spacing: .3px;
+  }
+  .drug-chart-page table.drugs-table tbody tr:nth-child(even) td, .drug-chart-page table.chart tbody tr:nth-child(even) td { background: var(--dc-zebra); }
+  .drug-chart-page table.drugs-table tbody tr td:first-child:not(.col-rowedit), .drug-chart-page table.chart tbody tr td.col-date { font-weight: 800; }
+}
