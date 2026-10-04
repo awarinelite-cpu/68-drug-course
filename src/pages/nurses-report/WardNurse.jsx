@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { doc, getDocs, collection, query, where, orderBy, limit, setDoc, serverTimestamp } from "firebase/firestore";
+import { doc, getDocs, collection, query, where, orderBy, limit, setDoc, serverTimestamp, onSnapshot } from "firebase/firestore";
 import { getDocSafe, getDocsSafe } from "../../lib/firestoreOffline.js";
 import { db } from "../../firebase.js";
 import { useAuth } from "../../contexts/AuthContext.jsx";
@@ -590,6 +590,22 @@ function useWardReport(wardKey, isAdmin, profile, user) {
       setWardDoc(next);
     })();
     return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [wardKey, dateId]);
+
+  // Live-sync ONLY the lock flag. The report above is read once when the page
+  // opens, so without this a ward nurse kept seeing "locked" after the Overall
+  // Nurse reopened access — and a later save would even write the stale
+  // locked:true back over the unlock. Nothing else is touched, so whatever the
+  // nurse is typing is never overwritten.
+  useEffect(() => {
+    const ref = doc(db, 'nurseReports', dateId, 'wards', wardKey);
+    const unsub = onSnapshot(ref, (snap) => {
+      if (!snap.exists()) return;
+      const locked = !!snap.data().locked;
+      setWardDoc((d) => (d && !!d.locked !== locked ? { ...d, locked } : d));
+    }, () => { /* non-fatal — lock state just won't live-update */ });
+    return () => unsub();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [wardKey, dateId]);
 
