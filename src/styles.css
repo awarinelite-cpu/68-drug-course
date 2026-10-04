@@ -1005,9 +1005,10 @@ table.chart td input[readonly] { background:#f8f8f8; color:#333; }
 
 .care-bullet { background:#fffbeb; border:1px solid #fde68a; border-radius:8px; padding:8px 10px; }
 .care-bullet-row { display:flex; align-items:flex-start; gap:6px; }
-.care-bullet-row .care-dot { font-size: 16px; line-height:1.4; color:#b45309; }
-.care-text { font-size: 16px; white-space:pre-wrap; flex:1; }
-.care-meta { font-size: 16px; color:#8a6d3b; margin-top:3px; }
+.care-bullet-row .care-dot { font-size: clamp(22px, 5.5vw, 28px); line-height:1.3; color:#b45309; }
+.care-text { font-size: clamp(22px, 5.5vw, 28px); line-height:1.3; font-weight:600; white-space:pre-wrap; flex:1; }
+.care-meta { font-size: 15px; color:#8a6d3b; margin-top:3px; }
+.care-bullet textarea, .modal-box .modal-footer textarea { font-size: clamp(20px, 5vw, 24px); line-height:1.3; }
 .audit-entry { border-bottom:1px solid #f0f0f0; padding:6px 0; }
 .audit-entry:last-child { border-bottom:none; }
 .audit-entry .audit-meta { font-size: 16px; color:#555; font-weight:bold; margin-bottom:2px; }
