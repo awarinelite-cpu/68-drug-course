@@ -2099,3 +2099,21 @@ h3.ward-report-subheading, .ward-report-subheading { font-size: clamp(28px, 3.4v
   .drug-chart-page table.drugs-table tbody tr:nth-child(even) td, .drug-chart-page table.chart tbody tr:nth-child(even) td { background: var(--dc-zebra); }
   .drug-chart-page table.drugs-table tbody tr td:first-child:not(.col-rowedit), .drug-chart-page table.chart tbody tr td.col-date { font-weight: 800; }
 }
+
+/* ── Drug Course Chart: rounded table corners (screen only) ──
+   border-radius doesn't apply to a collapsed-border table, so the grid is
+   drawn with separate borders (right + bottom on every cell, plus the outer
+   top/left edges) and the four outer corner cells are rounded. */
+@media screen {
+  .drug-chart-page table.drugs-table, .drug-chart-page table.chart { border-collapse: separate; border-spacing: 0; border: none; }
+  .drug-chart-page table.drugs-table th, .drug-chart-page table.drugs-table td,
+  .drug-chart-page table.chart th, .drug-chart-page table.chart td {
+    border: none; border-right: 2px solid var(--dc-line); border-bottom: 2px solid var(--dc-line);
+  }
+  .drug-chart-page table.drugs-table tr > :first-child, .drug-chart-page table.chart tr > :first-child { border-left: 2px solid var(--dc-line); }
+  .drug-chart-page table.drugs-table thead tr:first-child > *, .drug-chart-page table.chart thead tr:first-child > * { border-top: 2px solid var(--dc-line); }
+  .drug-chart-page table.drugs-table thead tr:first-child > :first-child, .drug-chart-page table.chart thead tr:first-child > :first-child { border-top-left-radius: 14px; }
+  .drug-chart-page table.drugs-table thead tr:first-child > :last-child, .drug-chart-page table.chart thead tr:first-child > :last-child { border-top-right-radius: 14px; }
+  .drug-chart-page table.drugs-table tbody tr:last-child > :first-child, .drug-chart-page table.chart tbody tr:last-child > :first-child { border-bottom-left-radius: 14px; }
+  .drug-chart-page table.drugs-table tbody tr:last-child > :last-child, .drug-chart-page table.chart tbody tr:last-child > :last-child { border-bottom-right-radius: 14px; }
+}
