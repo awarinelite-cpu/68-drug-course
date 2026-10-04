@@ -707,7 +707,13 @@ export default function Home() {
   // a nurse there accepts or rejects them. With a search query, the list
   // is searchResults (cross-ward, see the debounced effect above);
   // otherwise it's this ward's own list.
-  const visiblePatients = q ? (searchResults || []) : (myWardPatients || []);
+  // Ward list is shown A→Z by name (ignoring case, accents and leading
+  // punctuation). Search results keep their own relevance order.
+  const alphaKey = (n) => String(n || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/^[^A-Za-z0-9]+/, '').toLowerCase();
+  const visiblePatients = q
+    ? (searchResults || [])
+    : [...(myWardPatients || [])].sort((a, b) =>
+        alphaKey(a.name).localeCompare(alphaKey(b.name), undefined, { numeric: true, sensitivity: 'base' }));
   const patientsLoaded = q ? searchResults !== null : myWardPatients !== null;
   // The count shown next to the heading. Where myWard has a matching
   // nurse-report ward (see reportWardKeysForPatientWard), it's that
