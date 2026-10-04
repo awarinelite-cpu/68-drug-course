@@ -2085,8 +2085,8 @@ h3.ward-report-subheading, .ward-report-subheading { font-size: clamp(28px, 3.4v
 }
 
 /* ── Drug Course Chart: clearer table structure (screen only) ── */
-.drug-chart-page { --dc-line: #0f172a; --dc-zebra: #eef3fb; --dc-th-bg: #16294F; --dc-th-text: #fff; }
-:root[data-theme="dark"] .drug-chart-page { --dc-line: #94a3b8; --dc-zebra: #14305A; --dc-th-bg: #0b1f45; --dc-th-text: #fff; }
+.drug-chart-page { --dc-line: #0f172a; --dc-zebra: #eef3fb; --dc-th-bg: #d1d5db; --dc-th-text: #000; }
+:root[data-theme="dark"] .drug-chart-page { --dc-line: #94a3b8; --dc-zebra: #14305A; --dc-th-bg: #4b5563; --dc-th-text: #fff; }
 @media screen {
   .drug-chart-page table.drugs-table, .drug-chart-page table.chart { border-collapse: collapse; border: 3px solid var(--dc-line); }
   .drug-chart-page table.drugs-table th, .drug-chart-page table.drugs-table td,
