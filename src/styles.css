@@ -623,19 +623,21 @@ td.flag-deficit input, td.flag-deficit select { color: #b45309 !important; font-
 }
 /* --- Nav drawer (ported from js/nav.js injectStyles()) --- */
 .gnav-toggle {
-  width: 36px; height: 36px; border: none; border-radius: var(--radius-sm); flex-shrink: 0;
-  background: rgba(255,255,255,.14); color: var(--surface); font-size: 17px; line-height: 1;
+  width: 46px; height: 46px; border: 2px solid rgba(255,255,255,.85); border-radius: var(--radius-sm); flex-shrink: 0;
+  background: #2563eb; color: #fff; font-size: 28px; font-weight: 900; line-height: 1;
   display: flex; align-items: center; justify-content: center; cursor: pointer; padding: 0;
-  transition: background-color .12s ease;
+  box-shadow: 0 2px 8px rgba(0,0,0,.35);
+  transition: background-color .12s ease, transform .12s ease;
 }
-.gnav-toggle:hover { background: rgba(255,255,255,.26); }
+.gnav-toggle:hover { background: #1d4ed8; }
+.gnav-toggle:active { transform: scale(.94); }
 .gnav-topbar-left { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; min-width: 0; }
 .gnav-topbar-left-row { display: flex; align-items: center; gap: 10px; min-width: 0; }
 /* Lines up under the brand text, clear of the hamburger icon (36px) + its gap (10px). */
 /* Default (portrait/mobile): identity tag stays inline in the button row,
    same spot it's always been. Landscape and desktop get the roomier
    below-brand layout instead — see the media query further down. */
-.topbar-identity--below { margin-left: 46px; display: none; }
+.topbar-identity--below { margin-left: 56px; display: none; }
 .topbar-identity--inline { display: inline-flex; }
 @media (min-width: 900px), (orientation: landscape) {
   .topbar-identity--below { display: block; }
