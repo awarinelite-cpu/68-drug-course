@@ -23,6 +23,7 @@
 // the one-time, admin-triggered backfill for those older records (see
 // Admin.jsx) — the only function here that still does a full collection
 // scan, and only because it has to run once.
+import { lookupEmrOwner } from "./patientUnique.js";
 import { collection, query, where, orderBy, limit, getDocs, writeBatch, doc as fsDoc } from "firebase/firestore";
 import { db } from "../firebase.js";
 
@@ -112,6 +113,12 @@ export async function searchPatients(term) {
 export async function findPatientByEmrExact(emr) {
   const norm = (emr || "").trim().toLowerCase();
   if (!norm) return null;
+  // The EMR index is the authority (it also catches older records that have
+  // no emrLower yet, and EMRs typed with stray spaces).
+  try {
+    const owner = await lookupEmrOwner(emr);
+    if (owner && owner.patient) return { id: owner.patient.id, ...owner.patient };
+  } catch (e) { /* fall through to the query */ }
   const snap = await getDocs(query(collection(db, "patients"), where("emrLower", "==", norm), limit(1)));
   return snap.empty ? null : toRecord(snap.docs[0]);
 }

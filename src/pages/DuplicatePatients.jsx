@@ -5,6 +5,7 @@ import { db } from "../firebase.js";
 import { useAuth } from "../contexts/AuthContext.jsx";
 import { useGoBack } from "../hooks/useGoBack.js";
 import Topbar from "../components/Topbar.jsx";
+import { pointEmrIndexAt, buildEmrIndex } from "../lib/patientUnique.js";
 
 // Admin tool: finds patient records that share the same EMR number (the cause
 // of the "Duplicate EMR" warning in the ward-report patient picker), shows
@@ -76,6 +77,19 @@ export default function DuplicatePatients() {
 
   function totalDocs(r) { return Object.values(r.counts || {}).reduce((a, b) => a + b, 0); }
 
+  async function runBuildIndex() {
+    if (busy) return;
+    setBusy(true);
+    setMsg('Registering EMR numbers…');
+    try {
+      const r = await buildEmrIndex();
+      setMsg('EMR index built: ' + r.indexed + ' newly protected, ' + r.alreadyIndexed + ' already protected' + (r.skippedDuplicates ? ', ' + r.skippedDuplicates + ' skipped because they still have duplicate records (merge them, then run this again).' : '.'));
+    } catch (e) {
+      setMsg("Couldn't build the EMR index: " + (e.code || e.message || 'unknown error') + (e.code === 'permission-denied' ? ' — deploy the updated Firestore rules first.' : ''));
+    }
+    setBusy(false);
+  }
+
   function openKeep(group, keep) {
     setTarget({ group, keep });
     setConfirmText('');
@@ -121,6 +135,7 @@ export default function DuplicatePatients() {
         }
         await deleteDoc(doc(db, 'patients', o.id));
       }
+      await pointEmrIndexAt(keep.id, keep.emr);
       setTarget(null);
       setMsg('Done — kept ' + (keep.name || 'record') + ' (' + keep.emr + ') and removed ' + others.length + ' duplicate record(s).');
       await load();
@@ -156,7 +171,14 @@ export default function DuplicatePatients() {
                 {loading ? 'Checking all patients…' : (groups.length ? groups.length + ' EMR number(s) with duplicate records' : 'No duplicate EMR records found.')}
               </div>
               {msg && <div className="info-msg" style={{ marginTop: 8 }}>{msg}</div>}
-              <button className="btn btn-secondary" style={{ marginTop: 8 }} disabled={loading || busy} onClick={load}>Re-check</button>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 8 }}>
+                <button className="btn btn-secondary" disabled={loading || busy} onClick={load}>Re-check</button>
+                <button className="btn btn-primary" disabled={loading || busy} onClick={runBuildIndex}>Protect all patients (build EMR index)</button>
+              </div>
+              <p style={{ fontSize: 12, color: '#666', margin: '8px 0 0' }}>
+                Run “Protect all patients” once (and again after merging duplicates). It registers every existing patient’s EMR so the database
+                refuses a second record for the same number. EMRs that still have duplicates are skipped until you merge them.
+              </p>
             </>
           )}
         </div>

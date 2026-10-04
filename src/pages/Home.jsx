@@ -21,6 +21,7 @@ import { bumpShiftStatForPatientWard, bumpDemographicStatForPatientWard } from "
 import { WARD_OPTIONS } from "../lib/drugChartHelpers.js";
 import { classifyAffiliation, isOfficerArmyNumber } from "../lib/patientAffiliation.js";
 import { formatShortNameTag } from "../lib/roles.js";
+import { createPatientUnique } from '../lib/patientUnique.js';
 
 function normEmr(emr) { return (emr || '').trim().toLowerCase(); }
 
@@ -489,9 +490,24 @@ export default function Home() {
     // fine locally and syncs automatically on reconnect, so there's
     // nothing to wait for.
     const ref = existing ? doc(db, 'patients', existing.id) : doc(collection(db, 'patients'));
-    setDoc(ref, data, { merge: !!existing }).catch((e) => {
-      console.warn('Patient write queued locally; will retry once back online:', e);
-    });
+    if (existing) {
+      setDoc(ref, data, { merge: true }).catch((e) => {
+        console.warn('Patient write queued locally; will retry once back online:', e);
+      });
+    } else {
+      // New record: saved together with its EMR-index entry, so the database
+      // itself refuses a second record for the same EMR number.
+      createPatientUnique(ref, data, (ownerId, owner) => {
+        alert('EMR ' + data.emr + ' was just registered by someone else' + (owner && owner.name ? ' (' + owner.name + ')' : '') + ', so this copy was not saved. Search for the patient instead.');
+        // The optimistic Admission counts below were for a record that was never saved — take them back.
+        bumpShiftStatForPatientWard(data.ward, data.pedBedType, 'adm', -1).catch(() => {});
+        if (data.gender === 'M' || data.gender === 'F' || isOfficerArmyNumber(data.armyNumber)) {
+          bumpDemographicStatForPatientWard(data.ward, data.pedBedType, 'adm', data.militaryCivilian, data.gender, -1, { officer: isOfficerArmyNumber(data.armyNumber) }).catch(() => {});
+        }
+        setMyWardPatients((prev) => (prev ? prev.filter((p) => p.id !== ref.id) : prev));
+        navigate('/');
+      });
+    }
 
     // Shift Statistics: a brand-new registration counts as an Admission
     // on whichever ward the patient lands on, the moment it happens —
@@ -663,8 +679,8 @@ export default function Home() {
           admissionSource: 'NEW_PATIENT', admissionSourceAt: serverTimestamp()
         };
         const ref = doc(collection(db, 'patients'));
-        setDoc(ref, data).catch((e) => {
-          console.warn('Bulk patient write queued locally; will retry once back online:', e);
+        createPatientUnique(ref, data, () => {
+          console.warn('Bulk upload: EMR ' + data.emr + ' already exists — row not saved.');
         });
         // Shift Statistics — same automatic Admission bump as the single
         // Add Patient form above, one per newly-created row.

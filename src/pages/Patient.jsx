@@ -11,6 +11,7 @@ import { applyPatientStatus, admitExistingPatientToWard, setPatientParoleStatus 
 import { PAROLE_PATIENT_WARD_LABEL, todayISO } from "../lib/nurses-report-common.js";
 import { nameSearchTokens } from "../lib/patientDirectory.js";
 import { parsePatientFields } from "../lib/patientParse.js";
+import { updatePatientWithEmr, emrKeyOf } from "../lib/patientUnique.js";
 import { classifyAffiliation } from "../lib/patientAffiliation.js";
 import { STATUS_LABELS, WARD_OPTIONS } from "../lib/drugChartHelpers.js";
 import Topbar from "../components/Topbar.jsx";
@@ -244,11 +245,11 @@ export default function Patient() {
     // field here re-derives this automatically; it's never edited
     // directly.
     updates.militaryCivilian = classifyAffiliation(updates);
-    // Not awaited — same offline-hang reason as toggleAllocation above.
-    updateDoc(doc(db, 'patients', patient.id), updates).catch((e) => {
-      console.warn('Patient edit queued locally; will retry once back online:', e);
-    });
-    setPatient({ ...patient, ...updates });
+    // EMR corrections go through the EMR index so a record can never be
+    // changed to an EMR number that already belongs to another patient.
+    const res = await updatePatientWithEmr(patient.id, patient.emr, emr, updates);
+    if (!res.ok) { setEditMsg(res.message); return; }
+    setPatient({ ...patient, ...updates, emrKey: emrKeyOf(emr) });
     setShowEditForm(false);
   }
 

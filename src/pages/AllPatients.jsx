@@ -5,6 +5,7 @@ import { db } from "../firebase.js";
 import { useAuth } from "../contexts/AuthContext.jsx";
 import { useGoBack } from "../hooks/useGoBack.js";
 import Topbar from "../components/Topbar.jsx";
+import { releaseEmrIndex } from "../lib/patientUnique.js";
 
 // Every chart type and archived-admission record a patient can accumulate.
 // Firestore doesn't cascade-delete subcollections when the parent doc is
@@ -76,6 +77,7 @@ export default function AllPatients() {
       await Promise.all(snap.docs.map(d => deleteDoc(doc(db, 'patients', p.id, sub, d.id))));
     }
     await Promise.all(PATIENT_SUBCOLLECTIONS.map(deleteAllInSubcollection));
+    await releaseEmrIndex(p.id, p.emr);
     await deleteDoc(doc(db, 'patients', p.id));
   }
 

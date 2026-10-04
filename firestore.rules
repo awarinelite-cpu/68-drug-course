@@ -283,6 +283,33 @@ service cloud.firestore {
     }
 
     // ---------------------------------------------------------------
+    // One patient record per EMR number. /emrIndex/{key} has exactly one
+    // document per EMR (key = 'e_' + encodeURIComponent(lowercased EMR with
+    // no whitespace)) pointing at the patient that owns it. The app writes a
+    // new patient and its index document in ONE batch; because an index
+    // document can only be created once, a second registration of the same
+    // EMR (even from another phone at the same instant, or an offline device
+    // syncing later) makes that whole batch fail, so no second record exists.
+    // ---------------------------------------------------------------
+    match /emrIndex/{key} {
+      allow read: if isKnownUser();
+      allow create: if isKnownUser()
+        && request.resource.data.patientId is string
+        && request.resource.data.emr is string
+        && request.resource.data.key is string;
+      // Re-pointing is only allowed when the old owner no longer exists (a
+      // stale leftover) — or for an admin merging duplicates.
+      allow update: if isAdmin()
+        || (isKnownUser() && !exists(/databases/$(database)/documents/patients/$(resource.data.patientId)));
+      // Released when its patient is deleted, or when that patient's EMR has
+      // been corrected to something else in the same write.
+      allow delete: if isAdmin()
+        || (isKnownUser() && (
+             !existsAfter(/databases/$(database)/documents/patients/$(resource.data.patientId))
+             || getAfter(/databases/$(database)/documents/patients/$(resource.data.patientId)).data.get('emrKey', '') != resource.data.key));
+    }
+
+    // ---------------------------------------------------------------
     // MILITARY HOSPITAL LAGOS (MHL) app — same Firebase project as 68,
     // and the same shared /patients records (a patient's demographics
     // and every chart — drug course, vitals, blood glucose, intake &
