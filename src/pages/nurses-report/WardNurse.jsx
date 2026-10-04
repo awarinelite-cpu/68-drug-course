@@ -1338,6 +1338,27 @@ function WardPanelRest({ h, showLabel, isAdmin, navigate, includeShiftTable = tr
     updatePatientStatus, lookupPatientByEmr, selectPatientFromWard, refreshPlan, applyNursingDiagnosis,
     nightOpenIds, openNightUpdate, saveReport, submitReport, pillClass, pillText
   } = h;
+
+  // Tapping/clicking anywhere outside the open patient card closes it.
+  // Ignores clicks inside the card itself, inside any popup/modal (e.g. the
+  // patient or diagnosis pickers), and on elements React removed from the page
+  // while handling that same click (so a click on a button that disappears
+  // after it's pressed isn't mistaken for an outside click).
+  useEffect(() => {
+    if (!openPatientId) return undefined;
+    function onDocClick(e) {
+      const t = e.target;
+      if (!t || !t.closest || !document.body.contains(t)) return;
+      if (t.closest('.patient-card.open, .modal-overlay, .modal-box, [role="dialog"], [aria-modal="true"]')) return;
+      // Only close the card that was open when this listener was set up — if
+      // the same click just opened a different card (Add Patient, or another
+      // card's header), leave that one open.
+      const openedWhenArmed = openPatientId;
+      setOpenPatientId((cur) => (cur === openedWhenArmed ? null : cur));
+    }
+    document.addEventListener('click', onDocClick);
+    return () => document.removeEventListener('click', onDocClick);
+  }, [openPatientId, setOpenPatientId]);
   const hasParole = !!(paroleView && (paroleHasAny(paroleView.parole) || paroleHasAny(paroleView.dParole)));
 
   // Quick lookup only, not tied to any write-up — lets the nurse glance at
