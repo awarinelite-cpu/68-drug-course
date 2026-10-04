@@ -2008,3 +2008,20 @@ h3.ward-report-subheading, .ward-report-subheading { font-size: clamp(28px, 3.4v
   .ov-sheet table.report td .duty-name-btn { font-size: clamp(9px, .8vw, 13px); font-weight: 600; }
   .ov-sheet table.report .lock-btn { font-size: clamp(9px, .8vw, 13px); padding: 3px 6px; }
 }
+
+/* Print: make the Overall Nurse tables fit the paper instead of being cut off.
+   Compact type, wrapping headers, no side-scroll container, rows kept whole. */
+@media print {
+  .table-wrap.ov-sheet, .ov-sheet { overflow: visible !important; max-width: 100% !important; }
+  .ov-sheet table.report { width: 100% !important; table-layout: auto; border-width: 2px; }
+  .ov-sheet table.report th, .ov-sheet table.report td {
+    white-space: normal !important; padding: 3px 2px !important; font-size: 10px !important; line-height: 1.15;
+    border-width: 1px !important; overflow-wrap: anywhere; text-align: center;
+  }
+  .ov-sheet table.report thead th { font-size: 8px !important; letter-spacing: 0; overflow-wrap: normal; word-break: normal; }
+  .ov-sheet table.report tbody tr.totals-row td { font-size: 11px !important; }
+  .ov-sheet table.report td.ward-name, .ov-sheet table.report th:first-child { text-align: left; padding-left: 4px !important; white-space: nowrap !important; }
+  .ov-sheet table.report td .duty-name-btn { font-size: 8px !important; font-weight: 600; }
+  .ov-sheet table.report thead { display: table-header-group; }
+  .ov-sheet table.report tr { break-inside: avoid; page-break-inside: avoid; }
+}

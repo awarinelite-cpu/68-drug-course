@@ -287,6 +287,16 @@ export default function OverallNurse() {
   const navigate = useNavigate();
   const goBack = useGoBack('/nurses-report/role-select');
 
+  // Print this report on a landscape page (the table is wide). Scoped to this
+  // page only — the <style> is removed when the page unmounts.
+  useEffect(() => {
+    const el = document.createElement('style');
+    el.setAttribute('data-ov-print-page', '1');
+    el.textContent = '@media print { @page { size: landscape; margin: 8mm; } }';
+    document.head.appendChild(el);
+    return () => { if (el.parentNode) el.parentNode.removeChild(el); };
+  }, []);
+
   const [access, setAccess] = useState('checking'); // 'checking' | 'denied' | 'granted'
   const [deniedMsg, setDeniedMsg] = useState('');
   // Everyone can VIEW this page; only admin/subadmin/the appointed Overall
@@ -919,7 +929,7 @@ export default function OverallNurse() {
                     </th>
                   ))}
                   <th rowSpan={2}>Nurses on Duty</th>
-                  <th rowSpan={2}>Access</th>
+                  <th rowSpan={2} className="no-print">Access</th>
                 </tr>
                 <tr>{['In', 'Out', 'In', 'Out'].map((l, i) => <th key={i}>{l}</th>)}</tr>
               </thead>
@@ -949,7 +959,7 @@ export default function OverallNurse() {
                           <span className="duty-name-btn" style={{ color: '#9ca3af', textDecoration: 'none' }}>{'\u2014'}</span>
                         )}
                       </td>
-                      <td>
+                      <td className="no-print">
                         <button className={"lock-btn " + (locked ? 'locked' : 'open')} disabled={!canEdit} title={canEdit ? undefined : 'View only \u2014 only the appointed Overall Nurse can change access'} style={canEdit ? undefined : { opacity: 0.7, cursor: 'default' }} onClick={() => toggleLock(w.key)}>
                           {locked ? '\uD83D\uDD12 Locked' : '\uD83D\uDD13 Open'}
                         </button>
