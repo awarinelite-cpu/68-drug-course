@@ -1196,7 +1196,7 @@ function useWardReport(wardKey, isAdmin, profile, user) {
     addPatient, removePatient, openPatientId, setOpenPatientId, updatePatientField, updateDiagnosisField, updateVitalsSnapshotField,
     updatePatientStatus, lookupPatientByEmr, selectPatientFromWard, refreshPlan, applyNursingDiagnosis,
     openNightUpdate, saveReport, submitReport, pillClass, pillText,
-    touchedDemographicFieldsRef
+    touchedDemographicFieldsRef, wardKey, dateId
   };
 }
 
@@ -1329,6 +1329,28 @@ function WardPatientPicker({ value, options, onSelect, usedIds, columns }) {
   );
 }
 
+// ── Automatic shift ───────────────────────────────────────────────────
+// Morning shift runs 08:00–16:59, night shift 17:00–07:59 (device clock). The
+// Select Shift box pre-fills from this; a nurse's own pick always overrides it
+// and is remembered on this phone for this ward + report date.
+function autoShiftNow(now) {
+  const h = (now || new Date()).getHours();
+  return h >= 8 && h < 17 ? 'morning' : 'night';
+}
+function shiftStoreKey(wardKey, dateId) { return 'wardShift:' + wardKey + ':' + dateId; }
+function readSavedShift(wardKey, dateId) {
+  try {
+    const v = window.localStorage.getItem(shiftStoreKey(wardKey, dateId));
+    return v === 'morning' || v === 'night' ? v : '';
+  } catch (e) { return ''; }
+}
+function writeSavedShift(wardKey, dateId, value) {
+  try {
+    if (value) window.localStorage.setItem(shiftStoreKey(wardKey, dateId), value);
+    else window.localStorage.removeItem(shiftStoreKey(wardKey, dateId));
+  } catch (e) { /* storage unavailable — choice just won't survive a reload */ }
+}
+
 function WardPanelRest({ h, showLabel, isAdmin, navigate, includeShiftTable = true, includePreviousOcc = true, includeHeader = true, includeDemographics = true, onSave, onSubmit, locationOptions }) {
   const {
     w, wardDoc, topStatus, saveStatus, editable, adminEditOverride, setAdminEditOverride,
@@ -1336,7 +1358,7 @@ function WardPanelRest({ h, showLabel, isAdmin, navigate, includeShiftTable = tr
     updateWardDoc, updateShiftField, updateDuty, updateBeds, updateStartOcc,
     addPatient, removePatient, openPatientId, setOpenPatientId, updatePatientField, updateDiagnosisField, updateVitalsSnapshotField,
     updatePatientStatus, lookupPatientByEmr, selectPatientFromWard, refreshPlan, applyNursingDiagnosis,
-    nightOpenIds, openNightUpdate, saveReport, submitReport, pillClass, pillText
+    nightOpenIds, openNightUpdate, saveReport, submitReport, pillClass, pillText, wardKey, dateId
   } = h;
 
   // Tapping/clicking anywhere outside the open patient card closes it.
@@ -1371,7 +1393,19 @@ function WardPanelRest({ h, showLabel, isAdmin, navigate, includeShiftTable = tr
   // ever sees Save, so she can hand the report off for the night nurse to
   // finish; the night-shift nurse sees both Save and Submit Report, since
   // she's the one who closes the day's report out.
-  const [shiftMode, setShiftMode] = useState('');
+  // shiftChoice = what the nurse picked (''= she hasn't, so the clock decides);
+  // shiftMode = the shift actually in effect. The auto value re-checks every
+  // minute so a page left open across 08:00 / 17:00 follows the clock — until
+  // the nurse picks one herself.
+  const [shiftChoice, setShiftChoice] = useState(() => readSavedShift(wardKey, dateId));
+  const [autoShift, setAutoShift] = useState(() => autoShiftNow());
+  useEffect(() => { setShiftChoice(readSavedShift(wardKey, dateId)); }, [wardKey, dateId]);
+  useEffect(() => {
+    const t = setInterval(() => setAutoShift(autoShiftNow()), 60 * 1000);
+    return () => clearInterval(t);
+  }, []);
+  const shiftMode = shiftChoice || autoShift;
+  function setShiftMode(v) { setShiftChoice(v); writeSavedShift(wardKey, dateId, v); }
   // A nurse must pick her shift before she can add a patient write-up.
   // Tapping Add Patient with no shift chosen doesn't add anything: it flags
   // the Select Shift field and scrolls it into view instead.
@@ -1444,8 +1478,8 @@ function WardPanelRest({ h, showLabel, isAdmin, navigate, includeShiftTable = tr
                 <label>Select Shift:</label>
                 <select ref={shiftSelectRef} className={"status-select" + (shiftMode ? ' set' : '')}
                   style={shiftWarn && !shiftMode ? { borderColor: '#dc2626', boxShadow: '0 0 0 3px rgba(220,38,38,.15)' } : undefined}
-                  value={shiftMode} onChange={(e) => { setShiftMode(e.target.value); if (e.target.value) setShiftWarn(false); }}>
-                  <option value="">{'\u2014 Select shift \u2014'}</option>
+                  value={shiftChoice} onChange={(e) => { setShiftMode(e.target.value); if (e.target.value) setShiftWarn(false); }}>
+                  <option value="">{'Auto \u2014 ' + (autoShift === 'morning' ? 'Morning Shift' : 'Night Shift') + ' (by time)'}</option>
                   <option value="morning">Morning Shift</option>
                   <option value="night">Night Shift</option>
                 </select>
