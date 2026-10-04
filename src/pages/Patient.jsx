@@ -10,6 +10,7 @@ import { getDocSafe } from "../lib/firestoreOffline.js";
 import { applyPatientStatus, admitExistingPatientToWard, setPatientParoleStatus } from "../lib/patientAdmissionStatus.js";
 import { PAROLE_PATIENT_WARD_LABEL, todayISO } from "../lib/nurses-report-common.js";
 import { nameSearchTokens } from "../lib/patientDirectory.js";
+import { parsePatientFields } from "../lib/patientParse.js";
 import { classifyAffiliation } from "../lib/patientAffiliation.js";
 import { STATUS_LABELS, WARD_OPTIONS } from "../lib/drugChartHelpers.js";
 import Topbar from "../components/Topbar.jsx";
@@ -36,6 +37,7 @@ export default function Patient() {
   const [showEditForm, setShowEditForm] = useState(false);
   const [editForm, setEditForm] = useState(null);
   const [editMsg, setEditMsg] = useState('');
+  const [editNote, setEditNote] = useState('');
 
   const [allocatedToMe, setAllocatedToMe] = useState(false);
   const [allocBusy, setAllocBusy] = useState(false);
@@ -141,7 +143,50 @@ export default function Patient() {
       phone: patient.phone || '', address: patient.address || '', nextKinName: patient.nextKinName || ''
     });
     setEditMsg('');
+    setEditNote('');
     setShowEditForm(true);
+  }
+
+  // Fill the Edit Patient form from whatever the nurse just copied off the EMR
+  // page. Same parser as registration. Ward is never taken from the paste (the
+  // EMR's ward can be a stale one from a previous stay), and fields the paste
+  // doesn't contain are left as they are.
+  async function fillEditFromClipboard() {
+    setEditMsg('');
+    let text = '';
+    try {
+      text = await navigator.clipboard.readText();
+    } catch (e) {
+      setEditMsg('Could not read the clipboard. Allow clipboard access when asked, then try again.');
+      return;
+    }
+    if (!text || !text.trim()) { setEditMsg('Clipboard is empty. Copy the patient\u2019s EMR page first.'); return; }
+    const f = parsePatientFields(text);
+    const { ward: _ignoredWard, ...found } = f;
+    const foundCount = Object.values(found).filter(Boolean).length;
+    if (!foundCount) { setEditMsg('Could not find patient details in the clipboard text.'); return; }
+    if (f.emr && editForm && editForm.emr && String(f.emr).trim() !== String(editForm.emr).trim()) {
+      const ok = window.confirm('The copied EMR number (' + f.emr + ') is different from this patient\u2019s (' + editForm.emr + '). Fill the form with the copied details anyway?');
+      if (!ok) return;
+    }
+    setEditForm((cur) => ({
+      ...cur,
+      name: f.name || cur.name,
+      emr: f.emr || cur.emr,
+      diagnosis: f.diagnosis || cur.diagnosis,
+      age: f.age || cur.age,
+      hospNo: f.hospNo || cur.hospNo,
+      admissionDate: f.admissionDate || cur.admissionDate,
+      allergies: f.allergies || cur.allergies,
+      insurance: f.insurance || cur.insurance,
+      gender: f.gender || cur.gender,
+      armyNumber: f.armyNumber || cur.armyNumber,
+      phone: f.phone || cur.phone,
+      address: f.address || cur.address,
+      nextKinName: f.nextKinName || cur.nextKinName
+    }));
+    setEditMsg('');
+    setEditNote('Filled ' + foundCount + ' field(s) from the clipboard. Review, then tap Save Changes.');
   }
 
   async function saveEditPatient() {
@@ -389,7 +434,11 @@ export default function Patient() {
 
             {showEditForm && editForm && (
               <div className="card-box" style={{ marginTop: 12, boxShadow: 'none', border: '1px solid #e5e7eb' }}>
-                <h3 style={{ marginTop: 0 }}>Edit Patient Information</h3>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap', marginBottom: 8 }}>
+                  <h3 style={{ margin: 0 }}>Edit Patient Information</h3>
+                  <button type="button" className="btn btn-secondary" style={{ padding: '6px 12px', fontSize: 13 }} onClick={fillEditFromClipboard}>📋 From Clipboard</button>
+                </div>
+                {editNote && <div style={{ fontSize: 12, color: '#15803d', marginBottom: 8 }}>{editNote}</div>}
                 <PatientForm form={editForm} setForm={setEditForm} lockWard={!isAdmin} />
                 <button className="btn btn-primary" onClick={saveEditPatient}>Save Changes</button>
                 <button className="btn btn-secondary" onClick={() => setShowEditForm(false)}>Cancel</button>
