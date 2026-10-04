@@ -2201,3 +2201,9 @@ h3.ward-report-subheading, .ward-report-subheading { font-size: clamp(28px, 3.4v
   :is(table.report, table.shift, table.ward-shift):not(.rt) > :last-child > tr:last-child > :first-child { border-bottom-left-radius: 14px; }
   :is(table.report, table.shift, table.ward-shift):not(.rt) > :last-child > tr:last-child > :last-child { border-bottom-right-radius: 14px; }
 }
+
+/* NANDA picker: browse by domain and class */
+.nanda-filters { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; }
+.nanda-filters select { flex: 1 1 180px; min-width: 0; padding: 9px 10px; border: 1px solid var(--border, #d1d5db); border-radius: 10px; background: #fff; font: inherit; font-size: 15px; }
+.nanda-filters select:disabled { background: #f3f4f6; color: #9ca3af; }
+.nanda-clear { padding: 8px 12px; border: 0; border-radius: 10px; background: #e5e7eb; color: #374151; font: inherit; font-size: 14px; cursor: pointer; }
