@@ -2133,3 +2133,23 @@ h3.ward-report-subheading, .ward-report-subheading { font-size: clamp(28px, 3.4v
   .rounded-chart table.chart tbody tr:last-child > :first-child { border-bottom-left-radius: 14px; }
   .rounded-chart table.chart tbody tr:last-child > :last-child { border-bottom-right-radius: 14px; }
 }
+
+/* ── Records page tables: rounded corners (screen only) ──
+   Same technique as the Drug Course Chart: separate borders + rounded outer
+   corner cells (border-radius is ignored on collapsed-border tables). */
+.rec-sheet { --rs-line: #334155; --rs-outer: #0f172a; }
+:root[data-theme="dark"] .rec-sheet { --rs-line: #475569; --rs-outer: #64748B; }
+@media screen {
+  .rec-sheet table.entries { border-collapse: separate; border-spacing: 0; border: none; }
+  .rec-sheet table.entries th, .rec-sheet table.entries td {
+    border: none; border-right: 2px solid var(--rs-line); border-bottom: 2px solid var(--rs-line);
+  }
+  .rec-sheet table.entries tr > :first-child { border-left: 3px solid var(--rs-outer); }
+  .rec-sheet table.entries tr > :last-child { border-right: 3px solid var(--rs-outer); }
+  .rec-sheet table.entries thead tr:first-child > * { border-top: 3px solid var(--rs-outer); }
+  .rec-sheet table.entries tbody tr:last-child > * { border-bottom: 3px solid var(--rs-outer); }
+  .rec-sheet table.entries thead tr:first-child > :first-child { border-top-left-radius: 16px; }
+  .rec-sheet table.entries thead tr:first-child > :last-child { border-top-right-radius: 16px; }
+  .rec-sheet table.entries tbody tr:last-child > :first-child { border-bottom-left-radius: 16px; }
+  .rec-sheet table.entries tbody tr:last-child > :last-child { border-bottom-right-radius: 16px; }
+}
