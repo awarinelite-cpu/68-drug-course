@@ -214,7 +214,7 @@ export default function Home() {
     try {
       text = await navigator.clipboard.readText();
     } catch (e) {
-      setClipMsg('Could not read the clipboard. Allow clipboard access when asked, or use + New Patient \u2192 Paste from EMR and paste manually.');
+      setClipMsg('Could not read the clipboard. Allow clipboard access when asked, then try again.');
       return;
     }
     if (!text || !text.trim()) { setClipMsg('Clipboard is empty. Copy the patient\u2019s EMR page first.'); return; }
@@ -892,11 +892,6 @@ export default function Home() {
         {showNewForm && (
           <div className="card-box">
             <h3 style={{ marginTop: 0 }}>Register New Patient</h3>
-
-            <button className="btn btn-primary" style={{ marginBottom: 10, marginRight: 8 }} onClick={newFromClipboard}>📋 Paste from clipboard</button>
-            <button className="btn btn-secondary" style={{ marginBottom: 10 }} onClick={() => setShowEmrPaste((v) => !v)}>
-              {showEmrPaste ? 'Hide Paste from EMR' : '📋 Paste from EMR'}
-            </button>
 
             {showEmrPaste && (
               <div style={{ border: '1px solid #e5e7eb', borderRadius: 8, padding: 10, marginBottom: 14 }}>
