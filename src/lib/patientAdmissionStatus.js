@@ -448,6 +448,30 @@ export async function admitExistingPatientToWard({ patientId, currentWard, nurse
   if (onKnownWard && await hasActiveAdmissionData(patientId)) {
     return { ok: false, message: 'Patient on admission in ' + currentWard + '. You can transfer the patient to the ward if need be.' };
   }
+  // A patient registered through Register New Patient / a new Drug Course
+  // Chart is admitted to that ward automatically (and counted once in Shift
+  // Statistics + Demographics). Pressing Admit on top of that counts them a
+  // second time, even when the new admission has no chart data yet so the
+  // check above can't see it. So: someone sitting on a real ward with no exit
+  // tag (discharge / trans-out / DAMA / absconded) or parole is already
+  // admitted — refuse. Evidence of an automatic admission is the admission
+  // tag stamped at registration/transfer-in, or a record created in the last
+  // 7 days. Stale ward text on old imports has neither, so it still passes.
+  if (onKnownWard) {
+    try {
+      const ps0 = await getDoc(doc(db, 'patients', patientId));
+      const pd0 = ps0.exists() ? ps0.data() : null;
+      if (pd0 && !pd0.dischargeStatus && !pd0.paroleStatus) {
+        const createdMs = pd0.createdAt ? toMillis(pd0.createdAt) : 0;
+        const recentlyCreated = createdMs && (Date.now() - createdMs) < 7 * 24 * 60 * 60 * 1000;
+        if (pd0.admissionSource || recentlyCreated) {
+          return { ok: false, message: 'This patient is already admitted to ' + currentWard + ' (new patients are admitted automatically when registered). Use Transfer to move them to another ward — Admit would count the admission twice.' };
+        }
+      }
+    } catch (e) {
+      return { ok: false, message: 'Could not check the patient\u2019s admission: ' + (e.code || e.message || 'unknown error') };
+    }
+  }
   const nextPedBedType = nurseWard === 'PEDIATRIC/NICU WARD' ? (pedBedType || '') : '';
   try {
     await updateDoc(doc(db, 'patients', patientId), {
