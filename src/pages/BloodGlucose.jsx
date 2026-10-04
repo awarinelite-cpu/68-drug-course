@@ -247,7 +247,7 @@ export default function BloodGlucose() {
         <div style={{ fontSize: 12, color: '#555', marginTop: 8, textAlign: 'right' }}>{saveStatus}</div>
       </div>
 
-      <div className="sheet">
+      <div className="sheet rounded-chart">
         <div className="sheet-title">{CHART_DEFS[currentType].title}</div>
         <div className="unit-note">All glucose readings in mg/dL</div>
         <div className="unit-note">Normal: Fasting/Pre-meal 70–99 &nbsp;•&nbsp; 2hrs Post-meal &lt;140 &nbsp;•&nbsp; readings outside these ranges are flagged red</div>

@@ -2117,3 +2117,19 @@ h3.ward-report-subheading, .ward-report-subheading { font-size: clamp(28px, 3.4v
   .drug-chart-page table.drugs-table tbody tr:last-child > :first-child, .drug-chart-page table.chart tbody tr:last-child > :first-child { border-bottom-left-radius: 14px; }
   .drug-chart-page table.drugs-table tbody tr:last-child > :last-child, .drug-chart-page table.chart tbody tr:last-child > :last-child { border-bottom-right-radius: 14px; }
 }
+
+/* ── Blood Glucose chart: same rounded-corner grid as the Drug Course Chart ── */
+.rounded-chart { --rc-line: #0f172a; }
+:root[data-theme="dark"] .rounded-chart { --rc-line: #94a3b8; }
+@media screen {
+  .rounded-chart table.chart { border-collapse: separate; border-spacing: 0; border: none; }
+  .rounded-chart table.chart th, .rounded-chart table.chart td {
+    border: none; border-right: 2px solid var(--rc-line); border-bottom: 2px solid var(--rc-line);
+  }
+  .rounded-chart table.chart tr > :first-child { border-left: 2px solid var(--rc-line); }
+  .rounded-chart table.chart thead tr:first-child > * { border-top: 2px solid var(--rc-line); }
+  .rounded-chart table.chart thead tr:first-child > :first-child { border-top-left-radius: 14px; }
+  .rounded-chart table.chart thead tr:first-child > :last-child { border-top-right-radius: 14px; }
+  .rounded-chart table.chart tbody tr:last-child > :first-child { border-bottom-left-radius: 14px; }
+  .rounded-chart table.chart tbody tr:last-child > :last-child { border-bottom-right-radius: 14px; }
+}
