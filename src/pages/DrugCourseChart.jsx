@@ -1220,7 +1220,7 @@ export default function DrugCourseChart() {
         <div style={{ fontSize: 12, color: '#555', marginTop: 8, textAlign: 'right' }}>{saveStatus}</div>
       </div>
 
-      <div className="sheet">
+      <div className="sheet drug-chart-page">
         <div className="header"><h1>68 Nigerian Army Reference Hospital Yaba</h1></div>
         <div className="header-sub"><h2>Drugs Course Chart</h2></div>
 

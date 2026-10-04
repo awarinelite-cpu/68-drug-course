@@ -2054,3 +2054,32 @@ h3.ward-report-subheading, .ward-report-subheading { font-size: clamp(28px, 3.4v
   table.chart thead, table.drugs-table thead, table.entries thead, table.shift thead, table.ward-shift thead { display: table-header-group; }
   table.chart tr, table.drugs-table tr, table.entries tr, table.shift tr, table.ward-shift tr { break-inside: avoid; page-break-inside: avoid; }
 }
+
+/* ── Drug Course Chart: bigger, higher-contrast text (screen only — print has
+   its own compact sizing above) ── */
+.drug-chart-page { --dc-text: #000; --dc-head-bg: #dbe4f0; --dc-sub: #1f2937; }
+:root[data-theme="dark"] .drug-chart-page { --dc-text: #fff; --dc-head-bg: #1e3a6e; --dc-sub: #e5e7eb; }
+@media screen {
+  .drug-chart-page .sheet-title { font-size: clamp(22px, 1.2vw + 14px, 28px); color: var(--dc-text); }
+  .drug-chart-page .drugs-block h3 { font-size: clamp(22px, 1.2vw + 14px, 28px); color: var(--dc-text); font-weight: 800; }
+  .drug-chart-page .info-row, .drug-chart-page .info-row input, .drug-chart-page .info-row span.val {
+    font-size: clamp(19px, .6vw + 14px, 23px); color: var(--dc-text); -webkit-text-fill-color: var(--dc-text); opacity: 1;
+  }
+  .drug-chart-page .info-row label { font-weight: 800; color: var(--dc-text); }
+  .drug-chart-page .info-row span.val, .drug-chart-page .info-row input { font-weight: 600; }
+  .drug-chart-page table.drugs-table th, .drug-chart-page table.drugs-table td,
+  .drug-chart-page table.chart th, .drug-chart-page table.chart td {
+    font-size: clamp(19px, .6vw + 14px, 23px); color: var(--dc-text); font-weight: 600; border-color: #000;
+  }
+  .drug-chart-page table.drugs-table th, .drug-chart-page table.chart th {
+    background: var(--dc-head-bg); font-weight: 800; color: var(--dc-text);
+  }
+  .drug-chart-page table.drugs-table td input, .drug-chart-page table.drugs-table td select, .drug-chart-page table.drugs-table td textarea,
+  .drug-chart-page table.chart td input, .drug-chart-page table.chart td select, .drug-chart-page table.chart td textarea {
+    font-size: clamp(19px, .6vw + 14px, 23px); color: var(--dc-text); -webkit-text-fill-color: var(--dc-text); opacity: 1; font-weight: 600;
+  }
+  /* Small hard-coded labels (dose badges, notes, due-time captions) */
+  .drug-chart-page [style*="font-size: 10px"], .drug-chart-page [style*="font-size: 11px"] { font-size: 15px !important; }
+  .drug-chart-page [style*="font-size: 12px"] { font-size: 16px !important; }
+  .drug-chart-page [style*="font-size: 13px"] { font-size: 17px !important; }
+}
