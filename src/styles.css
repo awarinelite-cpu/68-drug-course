@@ -2179,3 +2179,25 @@ h3.ward-report-subheading, .ward-report-subheading { font-size: clamp(28px, 3.4v
 :root[data-theme="dark"] .req-account-card .req-intro { color: #e5e7eb !important; }
 :root[data-theme="dark"] .req-account-card input, :root[data-theme="dark"] .req-account-card select { background-color: #0B1F3A; color: #fff; border-color: #94a3b8; }
 :root[data-theme="dark"] .req-account-card input::placeholder { color: #cbd5e1; }
+
+/* ── All report tables (ward report, Overall Nurse, archive, analytics):
+   rounded corners, screen only. Same technique as the chart tables — border-
+   radius is ignored on collapsed-border tables, so the grid is drawn with
+   separate borders and the four outer corner cells are rounded. ── */
+:where(table.report, table.shift, table.ward-shift) { --rt-w: 1px; --rt-line: var(--border); --rt-ow: 2px; --rt-outer: var(--border); }
+.ov-sheet table.report { --rt-w: 2px; --rt-line: #334155; --rt-ow: 3px; --rt-outer: #0f172a; }
+@media screen {
+  :is(table.report, table.shift, table.ward-shift):not(.rt) { border-collapse: separate; border-spacing: 0; border: none; }
+  :is(table.report, table.shift, table.ward-shift):not(.rt) th,
+  :is(table.report, table.shift, table.ward-shift):not(.rt) td {
+    border: none; border-right: var(--rt-w) solid var(--rt-line); border-bottom: var(--rt-w) solid var(--rt-line);
+  }
+  :is(table.report, table.shift, table.ward-shift):not(.rt) > * > tr > :first-child { border-left: var(--rt-ow) solid var(--rt-outer); }
+  :is(table.report, table.shift, table.ward-shift):not(.rt) > * > tr > :last-child { border-right: var(--rt-ow) solid var(--rt-outer); }
+  :is(table.report, table.shift, table.ward-shift):not(.rt) > :first-child > tr:first-child > * { border-top: var(--rt-ow) solid var(--rt-outer); }
+  :is(table.report, table.shift, table.ward-shift):not(.rt) > :last-child > tr:last-child > * { border-bottom: var(--rt-ow) solid var(--rt-outer); }
+  :is(table.report, table.shift, table.ward-shift):not(.rt) > :first-child > tr:first-child > :first-child { border-top-left-radius: 14px; }
+  :is(table.report, table.shift, table.ward-shift):not(.rt) > :first-child > tr:first-child > :last-child { border-top-right-radius: 14px; }
+  :is(table.report, table.shift, table.ward-shift):not(.rt) > :last-child > tr:last-child > :first-child { border-bottom-left-radius: 14px; }
+  :is(table.report, table.shift, table.ward-shift):not(.rt) > :last-child > tr:last-child > :last-child { border-bottom-right-radius: 14px; }
+}
