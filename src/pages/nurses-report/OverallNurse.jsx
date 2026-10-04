@@ -640,8 +640,16 @@ export default function OverallNurse() {
   // report. Looks the phone number up by uid first (current data), falling
   // back to a name match for older reports submitted before uid was
   // recorded.
+  // Current profile name for whoever submitted a ward's report (so a rename by
+  // an admin shows up straight away), falling back to the name stored on the
+  // report for older reports saved before the uid was recorded.
+  function dutyNameFor(data) {
+    const live = data && data.submittedByUid ? (usersByUid[data.submittedByUid] || {}).name : '';
+    return (live && live.trim()) || (data && data.submittedBy) || '';
+  }
+
   function openNurseContact(w, data) {
-    const name = data.submittedBy;
+    const name = dutyNameFor(data);
     if (!name) return;
     let userDoc = data.submittedByUid ? usersByUid[data.submittedByUid] : null;
     if (!userDoc) {
@@ -933,9 +941,9 @@ export default function OverallNurse() {
                         <td key={c.key}>{data[c.key] || '\u2014'}</td>
                       ))}
                       <td style={{ textAlign: 'left' }}>
-                        {data.submittedBy ? (
+                        {dutyNameFor(data) ? (
                           <button type="button" className="duty-name-btn" onClick={() => openNurseContact(w, data)}>
-                            {data.submittedBy}
+                            {dutyNameFor(data)}
                           </button>
                         ) : (
                           <span className="duty-name-btn" style={{ color: '#9ca3af', textDecoration: 'none' }}>{'\u2014'}</span>
