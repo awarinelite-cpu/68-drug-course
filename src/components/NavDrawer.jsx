@@ -1,3 +1,5 @@
+import { useState } from "react";
+import StaffRegistrationCard from "./StaffRegistrationCard.jsx";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useNav } from "../contexts/NavContext.jsx";
 import { useAuth } from "../contexts/AuthContext.jsx";
@@ -16,6 +18,7 @@ export default function NavDrawer() {
   const { profile, logout } = useAuth();
   const isOverallNurse = useOverallNurseThisWeek();
   const navigate = useNavigate();
+  const [showStaffReg, setShowStaffReg] = useState(false);
   const [searchParams] = useSearchParams();
   const patientId = getActivePatientId(searchParams);
   const overviewHref = patientId ? "/charts/overview?patient=" + encodeURIComponent(patientId) : null;
@@ -87,9 +90,23 @@ export default function NavDrawer() {
           </>)}
         </div>
         <div className="gnav-drawer-foot">
+          <button className="gnav-link" onClick={() => { closeDrawer(); setShowStaffReg(true); }}><span className="gnav-icon">&#129534;</span>Staff Registration</button>
           <button className="gnav-link" onClick={handleLogout}><span className="gnav-icon">&#128682;</span>Log Out</button>
         </div>
       </div>
+      {showStaffReg && (
+        <div className="modal-overlay no-print" onClick={() => setShowStaffReg(false)}>
+          <div className="modal-box" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>Staff Registration</h3>
+              <button className="modal-close" aria-label="Close" onClick={() => setShowStaffReg(false)}>&times;</button>
+            </div>
+            <div className="modal-body">
+              <StaffRegistrationCard compact />
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }

@@ -6,7 +6,7 @@ import QRCode from "qrcode";
 // open the self-registration form (RequestAccount.jsx). Regenerates
 // whenever the page's own origin is known (client-side only, since
 // window.location isn't available during any server-side build step).
-export default function StaffRegistrationCard() {
+export default function StaffRegistrationCard({ compact = false }) {
   const canvasRef = useRef(null);
   const link = window.location.origin + '/request-account';
   const [copyMsg, setCopyMsg] = useState('');
@@ -100,12 +100,12 @@ export default function StaffRegistrationCard() {
   }
 
   return (
-    <div className="card-box">
-      <h3 style={{ marginTop: 0 }}>Staff Registration</h3>
-      <p style={{ fontSize: 12, color: '#666', marginTop: -6 }}>
-        Print this and post it on the ward. A nurse or doctor scans it with their phone camera to fill in
-        their own details and apply for an account — it lands in "Pending Account Applications" below for
-        you to approve or reject. No sign-in access until you approve it.
+    <div className={compact ? undefined : "card-box"}>
+      {!compact && <h3 style={{ marginTop: 0 }}>Staff Registration</h3>}
+      <p style={{ fontSize: 12, color: '#666', marginTop: compact ? 0 : -6 }}>
+        {compact
+          ? "Let a new nurse or doctor scan this with their phone camera, or share the link. Their application goes to an admin for approval — no sign-in access until approved."
+          : "Print this and post it on the ward. A nurse or doctor scans it with their phone camera to fill in their own details and apply for an account — it lands in \"Pending Account Applications\" below for you to approve or reject. No sign-in access until you approve it."}
       </p>
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
         <canvas ref={canvasRef} />
