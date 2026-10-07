@@ -14,6 +14,7 @@ import {
 } from "../../lib/nurses-report-common.js";
 import { patientWardAndBedTypeForReportKey, wardSelectorKeyForPatientWard } from "../../lib/wardNameMatch.js";
 import { wardHeadcount } from "../../lib/wardCensus.js";
+import { buildLiveCensus } from "../../lib/liveCensus.js";
 import { applyPatientStatus, closeOutDischargedPatient, closeOutParolePatients, readmitFromParole, activeAdmissionTag, clearAdmissionTag, ADMISSION_TAG_LABEL, ADMISSION_TAG_STATUS_STAMP } from "../../lib/patientAdmissionStatus.js";
 import Topbar from "../../components/Topbar.jsx";
 import { splitDiagnosisNote, withPatientDiagnosis } from "../../lib/diagnosisNote.js";
@@ -1385,6 +1386,43 @@ function writeSavedShift(wardKey, dateId, value) {
   } catch (e) { /* storage unavailable — choice just won't survive a reload */ }
 }
 
+// Standing count of patients on this ward right now, split Military/Civilian
+// x Male/Female. Counted from the real patient charts, so it is always
+// there (never resets with the day) and goes up when a patient is admitted
+// and down when one is discharged, dies or is BID.
+function OnWardNow({ wardKey }) {
+  const [c, setC] = useState(null);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const snap = await getDocsSafe(collection(db, 'patients'));
+        const list = [];
+        snap.forEach((d) => list.push(d.data()));
+        if (!cancelled) setC(buildLiveCensus(list)[wardKey] || {});
+      } catch (e) { if (!cancelled) setC(null); }
+    })();
+    return () => { cancelled = true; };
+  }, [wardKey]);
+  if (!c) return null;
+  const v = (k) => c[k] || 0;
+  const total = v('adm_milM') + v('adm_milF') + v('adm_civM') + v('adm_civF');
+  return (
+    <div className="table-wrap" style={{ marginTop: 8 }}>
+      <table className="shift">
+        <thead>
+          <tr><th colSpan={5}>Patients on ward now</th></tr>
+          <tr><th colSpan={2}>Military</th><th colSpan={2}>Civilian</th><th rowSpan={2}>Total</th></tr>
+          <tr><th>M</th><th>F</th><th>M</th><th>F</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>{v('adm_milM')}</td><td>{v('adm_milF')}</td><td>{v('adm_civM')}</td><td>{v('adm_civF')}</td><td>{total}</td></tr>
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 function WardPanelRest({ h, showLabel, isAdmin, navigate, includeShiftTable = true, includePreviousOcc = true, includeHeader = true, includeDemographics = true, onSave, onSubmit, locationOptions }) {
   const {
     w, wardDoc, topStatus, saveStatus, editable, adminEditOverride, setAdminEditOverride,
@@ -1495,6 +1533,7 @@ function WardPanelRest({ h, showLabel, isAdmin, navigate, includeShiftTable = tr
                       onField={(key, raw) => { touchedDemographicFieldsRef.current.add(key); const n = parseFloat(raw); updateWardDoc({ [key]: isNaN(n) ? 0 : n }); }}
                       onRemarks={(v) => updateWardDoc({ demographicsRemarks: v })} />
                   </div>
+                  <OnWardNow wardKey={wardKey} />
                 </>
               )}
               {hasParole && (

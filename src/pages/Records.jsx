@@ -6,6 +6,7 @@ import { useGoBack } from "../hooks/useGoBack.js";
 import { useNavigate } from "react-router-dom";
 import { getDocSafe, getDocsSafe } from "../lib/firestoreOffline.js";
 import { reportDateId } from "../lib/nurses-report-common.js";
+import { buildLiveCensus, applyCensusToWards } from "../lib/liveCensus.js";
 import Topbar from "../components/Topbar.jsx";
 import RecordsSheet, { RECORD_ROWS, buildSheetFromWards } from "../components/RecordsSheet.jsx";
 import usePrintOrientation from "../hooks/usePrintOrientation.js";
@@ -46,14 +47,33 @@ export default function Records() {
           snap.forEach((d) => { wardsMap[d.id] = d.data(); });
           src = Object.keys(wardsMap).length ? "live ward reports (not yet archived)" : "";
         }
-        const built = buildSheetFromWards(wardsMap);
+        // Today's table: the Admission block is the standing patient census,
+        // counted from the real patient charts, so the numbers are always
+        // there (not blank when no ward report exists) and move up/down as
+        // patients are admitted, discharged, die or are BID. Past dates keep
+        // whatever was filed/saved for them.
+        let savedArchive = null;
+        const arcSnap = await getDocSafe(doc(db, "recordArchives", date));
+        if (arcSnap.exists()) savedArchive = arcSnap.data();
+        if (date === reportDateId()) {
+          const patientsSnap = await getDocsSafe(collection(db, "patients"));
+          const patients = [];
+          patientsSnap.forEach((d) => patients.push(d.data()));
+          const allWardKeys = RECORD_ROWS.flatMap((r) => r.wards);
+          wardsMap = applyCensusToWards(wardsMap, buildLiveCensus(patients), allWardKeys);
+          src = src ? src + " + live patient census" : "live patient census";
+        }
+        // A past day that was saved to the Records Archive shows exactly the
+        // table that was saved (its frozen census), not a rebuild.
+        const built = (savedArchive && date !== reportDateId() && savedArchive.rows)
+          ? { rows: savedArchive.rows, officers: savedArchive.officers || {} }
+          : buildSheetFromWards(wardsMap);
         let rem = {};
         const saved = await getDocSafe(doc(db, "recordSummaries", date));
         if (saved.exists()) rem = saved.data().remarks || {};
-        const arc = await getDocSafe(doc(db, "recordArchives", date));
         if (!cancelled) {
           setRows(built.rows); setOfficers(built.officers); setRemarks(rem); setSource(src);
-          setSavedInfo(arc.exists() ? { at: fmtSaved(arc.data().savedAt), by: arc.data().savedByName || "" } : null);
+          setSavedInfo(savedArchive ? { at: fmtSaved(savedArchive.savedAt), by: savedArchive.savedByName || "" } : null);
         }
       } catch (e) {
         if (!cancelled) { setRows({}); setRemarks({}); setOfficers({}); setSource(""); setSavedInfo(null); setMsg({ error: true, text: "Couldn't load this date: " + (e.code || e.message) }); }
@@ -103,7 +123,7 @@ export default function Records() {
 
           {!loading && (
             <div className="field-hint no-print" style={{ marginTop: -6, marginBottom: 10 }}>
-              {source ? "Figures are taken from the ward nurses' Patient Demographics (" + source + ")." : "No ward reports found for this date."}
+              {source ? "Admission = patients on each ward now (" + source + "); Disch / Dead / BID are the day's movements from the ward nurses' Patient Demographics." : "No ward reports found for this date."}
               {savedInfo && <><br />Saved to the archive{savedInfo.at ? " on " + savedInfo.at : ""}{savedInfo.by ? " by " + savedInfo.by : ""}. Saving again replaces it.</>}
             </div>
           )}
