@@ -359,7 +359,7 @@ function DemographicsHeaderRows({ leadCell, trailingCell }) {
 // One daily total per ward, entered directly — matches the paper
 // "Summary Breakdown of Statistics" form's single row per ward, rather
 // than a per-shift entry table.
-function DemographicsTable({ wardDoc, editable, onField, onRemarks }) {
+function DemographicsTable({ wardDoc, editable, onField, onRemarks, census }) {
   return (
     <table className="shift">
       <thead>
@@ -369,8 +369,10 @@ function DemographicsTable({ wardDoc, editable, onField, onRemarks }) {
         <tr>
           {DEMOGRAPHIC_FIELDS.map((f) => (
             <td key={f.key}>
-              <input type="number" inputMode="numeric" disabled={!editable}
-                value={wardDoc[f.key]} onChange={(e) => onField(f.key, e.target.value)} />
+              {f.category === 'adm' && census
+                ? <input type="number" inputMode="numeric" disabled readOnly value={census[f.key] || 0} />
+                : <input type="number" inputMode="numeric" disabled={!editable}
+                    value={wardDoc[f.key]} onChange={(e) => onField(f.key, e.target.value)} />}
             </td>
           ))}
           <td>
@@ -1386,12 +1388,12 @@ function writeSavedShift(wardKey, dateId, value) {
   } catch (e) { /* storage unavailable — choice just won't survive a reload */ }
 }
 
-// Standing count of patients on this ward right now, split Military/Civilian
-// x Male/Female. Counted from the real patient charts, so it is always
-// there (never resets with the day) and goes up when a patient is admitted
-// and down when one is discharged, dies or is BID.
-function OnWardNow({ wardKey }) {
-  const [c, setC] = useState(null);
+// Standing patient census (counted from the real patient charts) for every
+// report ward, shown in the Admission cells of Patient Demographics so those
+// numbers are always there: they go up when a patient is admitted and down
+// when one is discharged, dies or is BID. null until loaded.
+function useLiveCensusMap() {
+  const [map, setMap] = useState(null);
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -1399,31 +1401,16 @@ function OnWardNow({ wardKey }) {
         const snap = await getDocsSafe(collection(db, 'patients'));
         const list = [];
         snap.forEach((d) => list.push(d.data()));
-        if (!cancelled) setC(buildLiveCensus(list)[wardKey] || {});
-      } catch (e) { if (!cancelled) setC(null); }
+        if (!cancelled) setMap(buildLiveCensus(list));
+      } catch (e) { if (!cancelled) setMap(null); }
     })();
     return () => { cancelled = true; };
-  }, [wardKey]);
-  if (!c) return null;
-  const v = (k) => c[k] || 0;
-  const total = v('adm_milM') + v('adm_milF') + v('adm_civM') + v('adm_civF');
-  return (
-    <div className="table-wrap" style={{ marginTop: 8 }}>
-      <table className="shift">
-        <thead>
-          <tr><th colSpan={5}>Patients on ward now</th></tr>
-          <tr><th colSpan={2}>Military</th><th colSpan={2}>Civilian</th><th rowSpan={2}>Total</th></tr>
-          <tr><th>M</th><th>F</th><th>M</th><th>F</th></tr>
-        </thead>
-        <tbody>
-          <tr><td>{v('adm_milM')}</td><td>{v('adm_milF')}</td><td>{v('adm_civM')}</td><td>{v('adm_civF')}</td><td>{total}</td></tr>
-        </tbody>
-      </table>
-    </div>
-  );
+  }, []);
+  return map;
 }
 
 function WardPanelRest({ h, showLabel, isAdmin, navigate, includeShiftTable = true, includePreviousOcc = true, includeHeader = true, includeDemographics = true, onSave, onSubmit, locationOptions }) {
+  const liveCensusMap = useLiveCensusMap();
   const {
     w, wardDoc, topStatus, saveStatus, editable, adminEditOverride, setAdminEditOverride,
     census, movementTotals, emrLookup, wardPatientOptions, paroleView, paroleLoaded, readmitParolee, readmitBusyId,
@@ -1529,11 +1516,10 @@ function WardPanelRest({ h, showLabel, isAdmin, navigate, includeShiftTable = tr
                 <>
                   <h2 style={includeShiftTable ? { marginTop: 14 } : undefined}>Patient Demographics</h2>
                   <div className="table-wrap">
-                    <DemographicsTable wardDoc={wardDoc} editable={editable}
+                    <DemographicsTable wardDoc={wardDoc} editable={editable} census={liveCensusMap ? (liveCensusMap[wardKey] || {}) : null}
                       onField={(key, raw) => { touchedDemographicFieldsRef.current.add(key); const n = parseFloat(raw); updateWardDoc({ [key]: isNaN(n) ? 0 : n }); }}
                       onRemarks={(v) => updateWardDoc({ demographicsRemarks: v })} />
                   </div>
-                  <OnWardNow wardKey={wardKey} />
                 </>
               )}
               {hasParole && (
@@ -1772,7 +1758,7 @@ function MergedShiftTable({ panels }) {
 // other ward. `panels` is one entry per member ward, each still writing
 // to its own wardDoc/Firestore record via its own onField/onRemarks
 // handler.
-function MergedDemographicsTable({ panels }) {
+function MergedDemographicsTable({ panels, censusMap }) {
   const fields = DEMOGRAPHIC_FIELDS;
   const getVal = (p, key) => (typeof p.wardDoc[key] === 'number' ? p.wardDoc[key] : 0);
 
@@ -1787,8 +1773,10 @@ function MergedDemographicsTable({ panels }) {
             <td className="shift-name">{p.w.label}</td>
             {fields.map((f) => (
               <td key={f.key}>
-                <input type="number" inputMode="numeric" disabled={!p.editable}
-                  value={getVal(p, f.key)} onChange={(e) => p.onField(f.key, e.target.value)} />
+                {f.category === 'adm' && censusMap
+                  ? <input type="number" inputMode="numeric" disabled readOnly value={(censusMap[p.w.key] || {})[f.key] || 0} />
+                  : <input type="number" inputMode="numeric" disabled={!p.editable}
+                      value={getVal(p, f.key)} onChange={(e) => p.onField(f.key, e.target.value)} />}
               </td>
             ))}
             <td>
@@ -1827,6 +1815,7 @@ function MergedDemographicsTable({ panels }) {
 function MergedWardReportPanel({ group, isAdmin, profile, user, navigate }) {
   const hA = useWardReport(group.wardKeys[0], isAdmin, profile, user);
   const hB = useWardReport(group.wardKeys[1], isAdmin, profile, user);
+  const mergedCensusMap = useLiveCensusMap();
   const hooks = [hA, hB];
   const bothLoaded = hooks.every((h) => h.wardDoc);
   const mergedDemographics = group.demographicsVariant === 'merged';
@@ -1870,7 +1859,7 @@ function MergedWardReportPanel({ group, isAdmin, profile, user, navigate }) {
                   wardDoc: h.wardDoc, editable: h.editable,
                   onField: (key, raw) => { h.touchedDemographicFieldsRef.current.add(key); const n = parseFloat(raw); h.updateWardDoc({ [key]: isNaN(n) ? 0 : n }); },
                   onRemarks: (v) => h.updateWardDoc({ demographicsRemarks: v })
-                }))} />
+                }))} censusMap={mergedCensusMap} />
               </div>
             </>
           )}
