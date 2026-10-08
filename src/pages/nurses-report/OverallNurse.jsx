@@ -19,6 +19,7 @@ import {
 } from "../../lib/nurses-report-common.js";
 import { patientWardAndBedTypeForReportKey } from "../../lib/wardNameMatch.js";
 import { wardHeadcount } from "../../lib/wardCensus.js";
+import { buildLiveCensus } from "../../lib/liveCensus.js";
 import { applyPendingStatBumps } from "../../lib/shiftStatsSync.js";
 import { loadPatientsForWardLabels } from "../../lib/patientDirectory.js";
 import { useGoBack } from "../../hooks/useGoBack.js";
@@ -314,6 +315,22 @@ export default function OverallNurse() {
   const [appointStatus, setAppointStatus] = useState({ text: '', error: false });
   const [whoLabel, setWhoLabel] = useState('');
   const [wardData, setWardData] = useState({});
+  // Standing patient census (counted from real patient charts) — shown in the
+  // Admission block of Patient Demographics so those numbers never reset daily;
+  // they rise on admission and fall on discharge / death / BID.
+  const [liveCensus, setLiveCensus] = useState({});
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const snap = await getDocsSafe(collection(db, 'patients'));
+        const list = [];
+        snap.forEach((d) => list.push(d.data()));
+        if (!cancelled) setLiveCensus(buildLiveCensus(list));
+      } catch (e) { /* leave the census empty; table falls back to the daily figures */ }
+    })();
+    return () => { cancelled = true; };
+  }, []);
   const [saveStatus, setSaveStatus] = useState({ text: '', error: false });
   const [syncBusy, setSyncBusy] = useState(false);
   const [syncStatus, setSyncStatus] = useState({ text: '', error: false });
@@ -669,11 +686,15 @@ export default function OverallNurse() {
     totals[f.key] = sum;
   });
 
+  // Admission cells = standing census; Disch/Dead/BID = the day's movements.
+  const demoValue = (wardKey, f) => {
+    if (f.category === 'adm') return (liveCensus[wardKey] && liveCensus[wardKey][f.key]) || 0;
+    const v = wardData[wardKey] ? wardData[wardKey][f.key] : undefined;
+    return typeof v === 'number' ? v : 0;
+  };
   const demoTotals = {};
   DEMOGRAPHIC_FIELDS.forEach(f => {
-    let sum = 0;
-    WARDS.forEach(w => { const v = wardData[w.key] ? wardData[w.key][f.key] : undefined; sum += typeof v === 'number' ? v : 0; });
-    demoTotals[f.key] = sum;
+    demoTotals[f.key] = WARDS.reduce((sum, w) => sum + demoValue(w.key, f), 0);
   });
 
   // Builds the Ward Reports list, merging any WARD_GROUPS members (PAED
@@ -994,7 +1015,7 @@ export default function OverallNurse() {
                   return (
                     <tr key={w.key}>
                       <td className="ward-name">{w.label}</td>
-                      {DEMOGRAPHIC_FIELDS.map((f) => <td key={f.key}>{typeof data[f.key] === 'number' ? data[f.key] : 0}</td>)}
+                      {DEMOGRAPHIC_FIELDS.map((f) => <td key={f.key}>{demoValue(w.key, f)}</td>)}
                       <td>{data.demographicsRemarks || ''}</td>
                     </tr>
                   );
