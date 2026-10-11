@@ -2312,3 +2312,27 @@ h3.ward-report-subheading, .ward-report-subheading { font-size: clamp(28px, 3.4v
   }
   .btn, .ward-heading-link { background-image: none; text-shadow: none; box-shadow: none; }
 }
+
+/* Every patient in a list gets its own capsule-tablet card */
+.search-result-item, .alloc-item {
+  background: var(--tablet-bg); border: 1px solid var(--tablet-edge);
+  border-radius: 2rem; padding: 16px 22px; margin-bottom: 14px;
+  box-shadow: var(--tablet-shadow); color: var(--card-sub); font-weight: 600;
+}
+.search-result-item:hover, .alloc-item:hover {
+  border-color: var(--primary-blue); transform: translateY(-2px);
+  box-shadow: var(--tablet-shadow), 0 6px 10px -6px rgba(15,23,42,.35);
+}
+.search-result-item:active, .alloc-item:active { transform: translateY(1px); box-shadow: var(--tablet-shadow); }
+.search-result-item b, .alloc-name { color: var(--card-title); text-shadow: var(--card-title-shadow); font-weight: 800; }
+.search-result-item .patient-bed-tag {
+  background: rgba(255,255,255,.85); border-width: 1.5px; font-weight: 800;
+}
+:root[data-theme="dark"] .search-result-item .patient-bed-tag { background: rgba(0,0,0,.28); }
+:root[data-theme="dark"] .search-result-item, :root[data-theme="dark"] .alloc-item { box-shadow: var(--tablet-shadow); }
+:root[data-theme="dark"] .search-result-item:hover, :root[data-theme="dark"] .alloc-item:hover { box-shadow: var(--tablet-shadow), 0 6px 10px -6px rgba(0,0,0,.6); }
+@media print {
+  .search-result-item, .alloc-item { background: #fff !important; box-shadow: none !important; border: 1px solid #999 !important; border-radius: 6px !important; color: #000 !important; text-shadow: none !important; }
+}
+:root[data-theme="dark"] .search-result-item .patient-bed-tag-missing { color: #fdba74; border-color: #fdba74; }
+:root[data-theme="dark"] .search-result-item .patient-bed-tag:not(.patient-bed-tag-missing) { color: #93c5fd; }
