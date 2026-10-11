@@ -48,6 +48,13 @@ export async function acceptTransfer(patientId, pendingTransfer, pedBedType) {
   updates.admissionSource = pendingTransfer.fromWard === AE_WARD_LABEL ? 'AE_TRANSFER' : 'WARD_TRANSFER';
   updates.admissionSourceAt = serverTimestamp();
   updates.transferFromWard = pendingTransfer.fromWard || '';
+  // Marker for the SENDING ward's Ward Report: lets it auto-select this
+  // patient as "INT TRANS OUT" even though `ward` has now moved on. See
+  // activeTransferOut / clearTransferOutMarker in patientAdmissionStatus.js.
+  updates.transferOutWard = pendingTransfer.fromWard || '';
+  updates.transferOutAt = serverTimestamp();
+  updates.transferOutPedBedType = priorPedBedType;
+  updates.transferOutToWard = pendingTransfer.toWard || '';
   await updateDoc(doc(db, 'patients', patientId), updates);
 
   // Shift Statistics: acceptance is the moment the patient actually

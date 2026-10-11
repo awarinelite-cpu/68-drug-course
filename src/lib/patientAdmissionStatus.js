@@ -103,7 +103,7 @@ export async function closeOutDischargedPatient(patientId) {
 // 24h-or-write-up expiry still fits: the sending nurse just needs to
 // notice it once. transferRejectedByWard (set alongside it) carries
 // which ward rejected it, for AdmissionTagBadge in Home.jsx to show.
-export const ADMISSION_TAG_LABEL = { AE_TRANSFER: 'TRANS IN from A&E', WARD_TRANSFER: 'TRANS IN', NEW_PATIENT: 'NEW PATIENT', TRANSFER_REJECTED: 'TRANSFER REJECTED', READMITTED: 'READMITTED' };
+export const ADMISSION_TAG_LABEL = { AE_TRANSFER: 'TRANS IN from A&E', WARD_TRANSFER: 'INT TRANS IN', EXT_TRANSFER: 'EXT TRANS IN', NEW_PATIENT: 'NEW PATIENT', TRANSFER_REJECTED: 'TRANSFER REJECTED', READMITTED: 'READMITTED' };
 
 // Maps an admissionTag to the matching PATIENT_STATUS_OPTIONS string (see
 // nurses-report-common.js) — these were already options on the write-up's
@@ -112,7 +112,33 @@ export const ADMISSION_TAG_LABEL = { AE_TRANSFER: 'TRANS IN from A&E', WARD_TRAN
 // same way it already does for dischargeStatus, so picking a tagged
 // patient stamps their write-up correctly without the nurse having to
 // pick it by hand.
-export const ADMISSION_TAG_STATUS_STAMP = { AE_TRANSFER: 'TRANS IN FROM A&E', WARD_TRANSFER: 'TRANS IN', NEW_PATIENT: 'NEW PATIENT' };
+export const ADMISSION_TAG_STATUS_STAMP = { AE_TRANSFER: 'TRANS IN FROM A&E', WARD_TRANSFER: 'TRANS IN', EXT_TRANSFER: 'EXT TRANS IN', NEW_PATIENT: 'NEW PATIENT' };
+
+// Internal Transfer Out: once the receiving ward accepts a transfer, the
+// patient's `ward` moves away, so the sending ward's Ward Report could no
+// longer find them to write the closing note. acceptTransfer (wardTransfer.js)
+// now leaves a marker on the patient doc (transferOutWard = the ward they left,
+// plus transferOutAt) so the sending ward's report can auto-select them as
+// "INT TRANS OUT". It is cleared when that report is submitted, and ignored
+// after this window if nobody ever submits one.
+export const TRANSFER_OUT_WINDOW_MS = 72 * 60 * 60 * 1000;
+
+export function activeTransferOut(data) {
+  if (!data || !data.transferOutWard) return false;
+  const at = toMillis(data.transferOutAt);
+  return !at || (Date.now() - at) <= TRANSFER_OUT_WINDOW_MS;
+}
+
+export async function clearTransferOutMarker(patientId) {
+  try {
+    await updateDoc(doc(db, 'patients', patientId), {
+      transferOutWard: '', transferOutAt: null, transferOutPedBedType: '', transferOutToWard: '', updatedAt: serverTimestamp()
+    });
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, message: e.code || e.message || 'unknown error' };
+  }
+}
 const ADMISSION_TAG_WINDOW_MS = 24 * 60 * 60 * 1000;
 
 function toMillis(v) {

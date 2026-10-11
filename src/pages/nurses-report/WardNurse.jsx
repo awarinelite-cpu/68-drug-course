@@ -15,7 +15,7 @@ import {
 import { patientWardAndBedTypeForReportKey, wardSelectorKeyForPatientWard } from "../../lib/wardNameMatch.js";
 import { wardHeadcount } from "../../lib/wardCensus.js";
 import { buildLiveCensus } from "../../lib/liveCensus.js";
-import { applyPatientStatus, closeOutDischargedPatient, closeOutParolePatients, readmitFromParole, activeAdmissionTag, clearAdmissionTag, ADMISSION_TAG_LABEL, ADMISSION_TAG_STATUS_STAMP } from "../../lib/patientAdmissionStatus.js";
+import { applyPatientStatus, closeOutDischargedPatient, closeOutParolePatients, readmitFromParole, activeAdmissionTag, clearAdmissionTag, activeTransferOut, clearTransferOutMarker, ADMISSION_TAG_LABEL, ADMISSION_TAG_STATUS_STAMP } from "../../lib/patientAdmissionStatus.js";
 import Topbar from "../../components/Topbar.jsx";
 import { splitDiagnosisNote, withPatientDiagnosis } from "../../lib/diagnosisNote.js";
 import DiagnosisNoteEditor, { DiagnosisHeadline } from "../../components/DiagnosisNoteEditor.jsx";
@@ -96,7 +96,53 @@ function clearedPatientWrite(p) {
   delete out.sourcePatientId; delete out.emrPatientId; delete out.vitalsSnapshot; delete out.vitalsLine;
   return out;
 }
-const SWITCH_WARNING = 'This will REPLACE everything on this write-up with the newly selected patient (notes, vital signs roll, plan, nursing process, night update and status).\n\nOK = switch patient and clear the old patient\u2019s information.\nCancel = keep the current patient.';
+// ---- Auto-selected patients ------------------------------------------------
+// A patient with any of these movements is put on the Ward Report
+// automatically (a ready-made card, details filled in) so the ward nurse only
+// has to open the card and write the report / nursing diagnosis:
+//   NEW PATIENT, DISCHARGE, DAMA, ABSC, DEATH, TRANS OUT (= EXT TRANS OUT),
+//   INT TRANS IN (incl. from A&E), INT TRANS OUT, EXT TRANS IN, PAROLE, D/PAROLE.
+// Returns the write-up Status stamp for a roster record, or '' if the patient
+// has no such movement (TRANSFER_REJECTED / READMITTED are not auto-selected).
+function statusStampForRecord(record) {
+  if (!record) return '';
+  if (record.dischargeStatus) return record.dischargeStatus;
+  if (record.transferOut) return 'INT TRANS OUT';
+  if (record.paroleStatus) return record.paroleStatus;
+  if (record.admissionTag) return ADMISSION_TAG_STATUS_STAMP[record.admissionTag] || '';
+  return '';
+}
+
+// Copies a roster record's details onto a write-up card — blank fields only,
+// so nothing the nurse typed is ever overwritten. Shared by the manual
+// "Select Patient" picker and the automatic selection above.
+function fillCardFromRecord(next, record, chartDiagnosis) {
+  if (!next.emr && record.emr) next.emr = record.emr;
+  if (!next.name && record.name) next.name = record.name;
+  if (!next.age && record.age) next.age = record.age;
+  // Sex is a free-text field on the write-up (unlike the patient record's own
+  // M/F select) — spelled out the way a nurse would type it by hand.
+  if (!next.sex && record.gender) next.sex = record.gender === 'M' ? 'Male' : record.gender === 'F' ? 'Female' : record.gender;
+  if (!next.doa && record.admissionDate) next.doa = record.admissionDate;
+  if (!next.phone && record.phone) next.phone = record.phone;
+  if (!next.address && record.address) next.address = record.address;
+  if (!next.nextKin && record.nextKinName) next.nextKin = record.nextKinName;
+  // The Drug Course Chart's diagnosis (if typed in) takes priority over the
+  // older personal-info diagnosis; it goes on the bold "Diagnosis:" line.
+  const diagnosisSource = chartDiagnosis || record.diagnosis;
+  if (diagnosisSource) next.diagnosis = withPatientDiagnosis(next.diagnosis, diagnosisSource);
+  // Pre-fill Status to match the movement, never overriding what the nurse picked.
+  if (!next.status) next.status = statusStampForRecord(record);
+  return next;
+}
+
+// True once a write-up has anything written beyond the auto-filled details.
+function hasReportWritten(p) {
+  const rest = splitDiagnosisNote(String((p && p.diagnosis) || '')).rest;
+  return !!(rest.trim() || ['npNursingDiagnosis', 'npPlanning', 'npImplementation', 'npEvaluation', 'nightUpdate'].some((k) => String((p && p[k]) || '').trim()));
+}
+
+const SWITCH_WARNING ='This will REPLACE everything on this write-up with the newly selected patient (notes, vital signs roll, plan, nursing process, night update and status).\n\nOK = switch patient and clear the old patient\u2019s information.\nCancel = keep the current patient.';
 
 // Matches the Vitals Chart's own field keys (temp/pulse/resp/bp/spo2) and
 // mirrors how a nurse writes it on paper: "T-36.8⁰c P-98b/m R-20c/m BP-
@@ -451,6 +497,19 @@ function useWardReport(wardKey, isAdmin, profile, user) {
   const [paroleReload, setParoleReload] = useState(0);
   const [readmitBusyId, setReadmitBusyId] = useState('');
   const patientCounter = useRef(0);
+  // Auto-selection of patients with a movement (see statusStampForRecord).
+  // rosterReload bumps when the tab regains focus so a transfer accepted or a
+  // patient registered while this page sat open still gets picked up.
+  // loadedForRef / optionsForRef record which ward+day the report doc and the
+  // roster currently in state belong to, so the auto-add effect never mixes
+  // one ward's roster into another ward's report while switching.
+  // autoAddedRef holds roster ids already handled this session; dismissedRef
+  // the ones whose card the nurse removed (so they don't keep reappearing).
+  const [rosterReload, setRosterReload] = useState(0);
+  const loadedForRef = useRef('');
+  const optionsForRef = useRef('');
+  const autoAddedRef = useRef(new Set());
+  const dismissedRef = useRef(new Set());
   // Which write-up card is expanded (accordion: one at a time). null = all collapsed.
   const [openPatientId, setOpenPatientId] = useState(null);
   const w = WARDS.find(x => x.key === wardKey);
@@ -478,6 +537,7 @@ function useWardReport(wardKey, isAdmin, profile, user) {
     let cancelled = false;
     (async () => {
       setOptionsLoaded(false);
+      optionsForRef.current = '';
       const info = patientWardAndBedTypeForReportKey(wardKey);
       if (!info) { setWardPatientOptions([]); return; }
       try {
@@ -503,20 +563,53 @@ function useWardReport(wardKey, isAdmin, profile, user) {
           // it's shown (blue, vs dischargeStatus's red).
           list.push({ id: d.id, phone: data.phone || '', address: data.address || '', nextKinName: data.nextKinName || '', name: data.name || '', emr: data.emr || '', age: data.age || '', admissionDate: data.admissionDate || '', diagnosis: data.diagnosis || '', gender: data.gender || '', dischargeStatus: data.dischargeStatus || '', admissionTag: activeAdmissionTag(data), paroleStatus: data.paroleStatus || '', paroleStart: data.paroleStart || '', paroleReturn: data.paroleReturn || '', paroleAt: (data.paroleAt && typeof data.paroleAt.toMillis === 'function') ? data.paroleAt.toMillis() : 0 });
         });
+        // Patients transferred OUT of this ward (accepted by the receiving
+        // ward, so `ward` has already moved on): kept on this ward's list as
+        // "INT TRANS OUT" until this ward's report is submitted. See
+        // acceptTransfer in wardTransfer.js, which leaves the marker.
+        try {
+          const tsnap = await getDocsSafe(query(collection(db, 'patients'), where('transferOutWard', '==', info.wardLabel)));
+          tsnap.forEach((d) => {
+            const data = d.data();
+            if (!activeTransferOut(data)) return;
+            if (info.bedType && (data.transferOutPedBedType || '') !== info.bedType) return;
+            if (list.some((x) => x.id === d.id)) return;
+            list.push({ id: d.id, phone: data.phone || '', address: data.address || '', nextKinName: data.nextKinName || '', name: data.name || '', emr: data.emr || '', age: data.age || '', admissionDate: data.admissionDate || '', diagnosis: data.diagnosis || '', gender: data.gender || '', dischargeStatus: '', admissionTag: '', paroleStatus: '', paroleStart: '', paroleReturn: '', paroleAt: 0, transferOut: true, transferOutToWard: data.transferOutToWard || '' });
+          });
+        } catch (e) { /* best-effort — the rest of the roster still loads */ }
         list.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
-        if (!cancelled) { setWardPatientOptions(list); setOptionsLoaded(true); }
+        if (!cancelled) { optionsForRef.current = wardKey; setWardPatientOptions(list); setOptionsLoaded(true); }
       } catch (e) {
         if (!cancelled) setWardPatientOptions([]);
       }
     })();
     return () => { cancelled = true; };
-  }, [wardKey, paroleReload]);
+  }, [wardKey, paroleReload, rosterReload]);
+
+  // Refresh the roster when the nurse comes back to this tab/app (at most once
+  // a minute), so newly registered or newly transferred patients are picked up
+  // without a manual reload.
+  useEffect(() => {
+    let last = Date.now();
+    const refresh = () => {
+      if (document.visibilityState === 'hidden') return;
+      if (Date.now() - last < 60 * 1000) return;
+      last = Date.now();
+      setRosterReload((n) => n + 1);
+    };
+    document.addEventListener('visibilitychange', refresh);
+    window.addEventListener('focus', refresh);
+    return () => { document.removeEventListener('visibilitychange', refresh); window.removeEventListener('focus', refresh); };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
       setAdminEditOverride(false); // default to read-only even for admin; they tap ✏️ per ward
       setWardDoc(null);
+      loadedForRef.current = '';
+      autoAddedRef.current = new Set();
+      dismissedRef.current = new Set();
       setTopStatus({ text: 'Loading…', error: false });
       const ref = doc(db, 'nurseReports', dateId, 'wards', wardKey);
       let snap;
@@ -614,6 +707,7 @@ function useWardReport(wardKey, isAdmin, profile, user) {
       if (cancelled) return;
       setTopStatus({ text: '', error: false });
       setNightOpenIds(new Set());
+      loadedForRef.current = wardKey + '|' + dateId;
       setWardDoc(next);
     })();
     return () => { cancelled = true; };
@@ -707,7 +801,13 @@ function useWardReport(wardKey, isAdmin, profile, user) {
     setWardDoc((d) => ({ ...d, patients: [...d.patients, blank] }));
     setOpenPatientId(id);
   }
-  function removePatient(id) { setWardDoc((d) => ({ ...d, patients: d.patients.filter(p => p.id !== id) })); setOpenPatientId((cur) => (cur === id ? null : cur)); }
+  function removePatient(id) {
+    // A card the nurse removes on purpose must not be auto-added again.
+    const gone = wardDoc && wardDoc.patients.find((p) => p.id === id);
+    if (gone && gone.sourcePatientId) dismissedRef.current.add(gone.sourcePatientId);
+    setWardDoc((d) => ({ ...d, patients: d.patients.filter(p => p.id !== id) }));
+    setOpenPatientId((cur) => (cur === id ? null : cur));
+  }
   function updatePatientField(id, key, value) { setWardDoc((d) => ({ ...d, patients: d.patients.map(p => p.id === id ? { ...p, [key]: value } : p) })); }
   function updatePatientStatus(id, value) { setWardDoc((d) => ({ ...d, patients: d.patients.map(p => p.id === id ? { ...p, status: value } : p) })); }
 
@@ -934,39 +1034,55 @@ function useWardReport(wardKey, isAdmin, profile, user) {
       patients: d.patients.map((p) => {
         if (p.id !== id) return p;
         const next = { ...(switching ? clearedPatientWrite(p) : p), sourcePatientId };
-        if (!next.emr && record.emr) next.emr = record.emr;
-        if (!next.name && record.name) next.name = record.name;
-        if (!next.age && record.age) next.age = record.age;
-        // Sex is a free-text field on the write-up (unlike the patient
-        // record's own M/F select) — spell it out the way a nurse would
-        // type it by hand, matching every other write-up already on file.
-        if (!next.sex && record.gender) next.sex = record.gender === 'M' ? 'Male' : record.gender === 'F' ? 'Female' : record.gender;
-        if (!next.doa && record.admissionDate) next.doa = record.admissionDate;
-        if (!next.phone && record.phone) next.phone = record.phone;
-        if (!next.address && record.address) next.address = record.address;
-        if (!next.nextKin && record.nextKinName) next.nextKin = record.nextKinName;
-        // The patient's diagnosis goes on the bold "Diagnosis:" line at the
-        // top of the Notes box (blank-only, existing notes are kept below it).
-        const diagnosisSource = chartDiagnosis || record.diagnosis;
-        if (diagnosisSource) next.diagnosis = withPatientDiagnosis(next.diagnosis, diagnosisSource);
-        // Picking someone already tagged DISCHARGE/TRANS OUT (see
-        // WardPatientPicker) means this write-up is their closing note —
-        // pre-fill Status to match so submitReport recognizes it and the
-        // nurse doesn't have to set it by hand, but never override
-        // something the nurse already picked themselves.
-        if (!next.status && record.dischargeStatus) next.status = record.dischargeStatus;
-        // Same idea for a patient tagged TRANS IN FROM A&E / NEW PATIENT
-        // (see admissionTag on wardPatientOptions) — pre-fill Status to
-        // the matching write-up stamp, again only if the nurse hasn't
-        // already set something themselves.
-        if (!next.status && record.admissionTag) next.status = ADMISSION_TAG_STATUS_STAMP[record.admissionTag] || '';
-        return next;
+        // Blank-only fill of the details, the diagnosis line, and the Status
+        // stamp (DISCHARGE / TRANS OUT / NEW PATIENT / transfers / parole …) so
+        // submitReport recognizes a closing note — never overriding anything the
+        // nurse already typed or picked. Same fill the automatic selection uses.
+        return fillCardFromRecord(next, record, chartDiagnosis);
       })
     }));
     setEmrLookup((s) => ({ ...s, [id]: { text: 'Filled in from ' + (record.name || 'the patient') + '\u2019s record.', error: false } }));
     fillVitalsRoll(id, sourcePatientId);
     fillPlan(id, sourcePatientId);
   }
+
+  // Automatic selection: every patient on this ward's roster with a movement
+  // (see statusStampForRecord) gets a ready-made write-up card — details filled
+  // in, Status stamped, vitals and drug plan pulled in — so when the ward nurse
+  // opens the report the patients are already there; he taps one and writes the
+  // report / nursing diagnosis. Skips anyone who already has a card (linked by
+  // sourcePatientId, e.g. from a saved draft), anyone the nurse removed, and
+  // does nothing once the report is locked or submitted.
+  useEffect(() => {
+    if (!wardDoc || !optionsLoaded || !wardPatientOptions.length) return;
+    if (!(isAdmin && adminEditOverride) && wardDoc.locked) return;
+    const key = wardKey + '|' + dateId;
+    if (loadedForRef.current !== key || optionsForRef.current !== wardKey) return;
+    const have = new Set(wardDoc.patients.map((p) => p.sourcePatientId).filter(Boolean));
+    const todo = wardPatientOptions.filter((o) => statusStampForRecord(o)
+      && !have.has(o.id) && !autoAddedRef.current.has(o.id) && !dismissedRef.current.has(o.id));
+    if (!todo.length) return;
+    todo.forEach((o) => autoAddedRef.current.add(o.id));
+    (async () => {
+      const cards = await Promise.all(todo.map(async (o) => {
+        const chartDiagnosis = await fetchChartDiagnosis(o.id).catch(() => '');
+        patientCounter.current += 1;
+        const blank = { id: 'p' + Date.now() + '_' + patientCounter.current, status: '', sourcePatientId: o.id, autoAdded: true };
+        PATIENT_FIELDS.forEach((f) => { blank[f.key] = ''; });
+        return fillCardFromRecord(blank, o, chartDiagnosis);
+      }));
+      // The nurse may have switched ward/day while the chart lookups ran.
+      if (loadedForRef.current !== key) return;
+      setWardDoc((d) => {
+        if (!d) return d;
+        const present = new Set(d.patients.map((p) => p.sourcePatientId).filter(Boolean));
+        const fresh = cards.filter((c) => !present.has(c.sourcePatientId));
+        return fresh.length ? { ...d, patients: [...d.patients, ...fresh] } : d;
+      });
+      cards.forEach((c) => { fillVitalsRoll(c.id, c.sourcePatientId); fillPlan(c.id, c.sourcePatientId); });
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [wardDoc, optionsLoaded, wardPatientOptions, wardKey, dateId, adminEditOverride]);
 
   function openNightUpdate(id) {
     if (!editable) return;
@@ -1123,6 +1239,18 @@ function useWardReport(wardKey, isAdmin, profile, user) {
     // other ward-scoped patient list. Skips anything already finalized
     // this way (so re-submitting doesn't double-archive or re-run the
     // close-out) or with no linked record.
+    // Patients the system selected for this report whose write-up is still
+    // just the auto-filled details: make sure that is on purpose, because a
+    // discharged / transferred / parole patient drops off the ward on submit.
+    const unwritten = doc_.patients.filter((p) => p.autoAdded && !hasReportWritten(p));
+    if (unwritten.length) {
+      const names = unwritten.map((p) => (p.name || p.emr || 'Unnamed') + (p.status ? ' — ' + p.status : '')).join('\n');
+      if (!window.confirm('No report has been written yet for:\n\n' + names + '\n\nSubmit anyway?')) {
+        setSaveStatus({ text: 'Submission cancelled — open the patient(s) listed above and add the report / nursing diagnosis first.', error: true });
+        return;
+      }
+    }
+
     const alreadyTaggedIds = new Set(wardPatientOptions.filter((p) => p.dischargeStatus).map((p) => p.id));
     const toFinalize = doc_.patients.filter((p) => p.sourcePatientId && !p.archivedFromReport && PATIENT_STATUS_ARCHIVE_REASON[p.status]);
     if (toFinalize.length && !navigator.onLine) {
@@ -1217,6 +1345,9 @@ function useWardReport(wardKey, isAdmin, profile, user) {
           clearAdmissionTag(p.sourcePatientId).catch(() => {});
         }
       });
+      // INT TRANS OUT patients have now had their closing report: drop the
+      // marker so they leave this ward's list (the receiving ward has them).
+      wardPatientOptions.filter((o) => o.transferOut).forEach((o) => { clearTransferOutMarker(o.id).catch(() => {}); });
     } catch (e) {
       setSaveStatus({ text: "Couldn't submit: " + (e.code || e.message || 'unknown error'), error: true });
     }
@@ -1323,7 +1454,11 @@ function WardPatientPicker({ value, options, onSelect, usedIds, columns }) {
             <div className="ward-patient-picker-tag duplicate">{'\u26A0\uFE0F Duplicate EMR \u2014 check with Overall Nurse'}</div>
           )}
           {o.dischargeStatus ? (
-            <div className="ward-patient-picker-tag">{o.dischargeStatus === 'TRANS OUT' ? 'TRANS OUT' : o.dischargeStatus === 'DEATH' ? 'Death' : o.dischargeStatus === 'DAMA' ? 'DAMA' : o.dischargeStatus === 'ABSC' ? 'Absconded' : 'Discharged'}</div>
+            <div className="ward-patient-picker-tag">{o.dischargeStatus === 'TRANS OUT' ? 'EXT TRANS OUT' : o.dischargeStatus === 'DEATH' ? 'Death' : o.dischargeStatus === 'DAMA' ? 'DAMA' : o.dischargeStatus === 'ABSC' ? 'Absconded' : 'Discharged'}</div>
+          ) : o.transferOut ? (
+            <div className="ward-patient-picker-tag">{'INT TRANS OUT' + (o.transferOutToWard ? ' to ' + o.transferOutToWard : '')}</div>
+          ) : o.paroleStatus ? (
+            <div className="ward-patient-picker-tag">{o.paroleStatus}</div>
           ) : o.admissionTag ? (
             <div className="ward-patient-picker-tag admission">{ADMISSION_TAG_LABEL[o.admissionTag] || o.admissionTag}</div>
           ) : null}
@@ -1548,7 +1683,7 @@ function WardPanelRest({ h, showLabel, isAdmin, navigate, includeShiftTable = tr
               </div>
             )}
             <h2>Patients</h2>
-            <p style={{ fontSize: 12, color: '#6b7280', marginTop: -6, marginBottom: 12 }}>Click add patient to write report</p>
+            <p style={{ fontSize: 12, color: '#6b7280', marginTop: -6, marginBottom: 12 }}>Patients who were admitted, discharged, transferred, on parole or died are added here automatically — tap one to write the report. Use add patient for anyone else.</p>
             {editable ? (
               <>
                 {wardDoc.patients.map((p, i) => {

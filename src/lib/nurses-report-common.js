@@ -536,12 +536,16 @@ export const PATIENT_FIELDS = [
 export const PATIENT_STATUS_OPTIONS = [
   'DISCHARGE',
   'TRANS OUT',
+  'INT TRANS OUT',
   'NEW PATIENT',
   'TRANS IN FROM A&E',
   'TRANS IN',
+  'EXT TRANS IN',
   'DEATH',
   'DAMA',
   'ABSC',
+  'PAROLE',
+  'D/PAROLE',
   'ONGOING RX'
 ];
 

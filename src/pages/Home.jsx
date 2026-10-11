@@ -128,7 +128,7 @@ function BedTag({ patient }) {
   );
 }
 
-const EMPTY_FORM = { name: '', emr: '', diagnosis: '', ward: '', pedBedType: '', age: '', hospNo: '', admissionDate: '', allergies: '', insurance: '', gender: '', armyNumber: '', phone: '', address: '', nextKinName: '' };
+const EMPTY_FORM = { name: '', emr: '', diagnosis: '', ward: '', pedBedType: '', age: '', hospNo: '', admissionDate: '', allergies: '', insurance: '', gender: '', armyNumber: '', phone: '', address: '', nextKinName: '', arrivalType: '' };
 
 // Wards are stored/compared in ALL CAPS (matches WARD_OPTIONS); this is
 // purely for display so headings don't shout at the reader.
@@ -445,6 +445,10 @@ export default function Home() {
     // path) can never crash the save the way it used to.
     const diagnosis = (newForm.diagnosis || '').trim();
     const ward = (newForm.ward || '').trim();
+    // Referred in from another hospital = EXT TRANS IN: counted under Ext In
+    // (not Adm) and tagged so the Ward Report auto-selects it as EXT TRANS IN.
+    const isExtIn = newForm.arrivalType === 'EXT';
+    const admStatKey = isExtIn ? 'ext' : 'adm';
     const data = {
       name, emr,
       nameLower: name.toLowerCase(), emrLower: emr.toLowerCase(), nameTokens: nameSearchTokens(name),
@@ -462,7 +466,7 @@ export default function Home() {
       // Brand-new record, no transfer involved — tags this patient "NEW
       // PATIENT" (blue) on the ward's roster picker for 24h. See
       // ADMISSION_TAG_LABEL/activeAdmissionTag in patientAdmissionStatus.js.
-      admissionSource: 'NEW_PATIENT', admissionSourceAt: serverTimestamp()
+      admissionSource: isExtIn ? 'EXT_TRANSFER' : 'NEW_PATIENT', admissionSourceAt: serverTimestamp()
     };
     // Recomputed from Insurance/Army Number above, never chosen by hand —
     // see classifyAffiliation in patientAffiliation.js. This is what
@@ -500,7 +504,7 @@ export default function Home() {
       createPatientUnique(ref, data, (ownerId, owner) => {
         alert('EMR ' + data.emr + ' was just registered by someone else' + (owner && owner.name ? ' (' + owner.name + ')' : '') + ', so this copy was not saved. Search for the patient instead.');
         // The optimistic Admission counts below were for a record that was never saved — take them back.
-        bumpShiftStatForPatientWard(data.ward, data.pedBedType, 'adm', -1).catch(() => {});
+        bumpShiftStatForPatientWard(data.ward, data.pedBedType, admStatKey, -1).catch(() => {});
         if (data.gender === 'M' || data.gender === 'F' || isOfficerArmyNumber(data.armyNumber)) {
           bumpDemographicStatForPatientWard(data.ward, data.pedBedType, 'adm', data.militaryCivilian, data.gender, -1, { officer: isOfficerArmyNumber(data.armyNumber) }).catch(() => {});
         }
@@ -519,7 +523,7 @@ export default function Home() {
     // so there's nowhere for them to be "leaving" — see
     // admitExistingPatientToWard in patientAdmissionStatus.js, which
     // this mirrors.
-    bumpShiftStatForPatientWard(data.ward, data.pedBedType, 'adm', 1).catch(() => {});
+    bumpShiftStatForPatientWard(data.ward, data.pedBedType, admStatKey, 1).catch(() => {});
 
     // Patient Demographics: the same registration, counted as one
     // Admission x Military/Civilian x Male/Female cell (see
@@ -933,7 +937,7 @@ export default function Home() {
               </div>
             )}
 
-            <PatientForm form={newForm} setForm={setNewForm} />
+            <PatientForm form={newForm} setForm={setNewForm} showArrival />
             <button className="btn btn-primary" onClick={createPatient}>Save Patient</button>
             <button className="btn btn-secondary" onClick={() => { setShowNewForm(false); clearEmrPaste(); }}>Cancel</button>
             {newMsg && <div className="error-msg">{newMsg}</div>}

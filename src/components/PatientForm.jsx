@@ -18,7 +18,11 @@ import { classifyAffiliation, AFFILIATION_LABEL } from "../lib/patientAffiliatio
 // recorded ward without it counting as a Transfer (no Transfer In/Out figure
 // on either ward's Shift Statistics, no admission-status audit trail) — see
 // the admin-only note on saveEditPatient in Patient.jsx.
-export default function PatientForm({ form, setForm, lockWard }) {
+// showArrival: true only on Register New Patient (Home.jsx). Lets the nurse mark a
+// patient who is being referred in from ANOTHER hospital, so the admission is
+// counted under Ext In (not Adm) and the Ward Report auto-selects them as
+// "EXT TRANS IN".
+export default function PatientForm({ form, setForm, lockWard, showArrival }) {
   const set = (key) => (e) => setForm({ ...form, [key]: e.target.value });
   const setWard = (e) => setForm({ ...form, ward: e.target.value, pedBedType: e.target.value === 'PEDIATRIC/NICU WARD' ? form.pedBedType : '' });
   return (
@@ -49,6 +53,15 @@ export default function PatientForm({ form, setForm, lockWard }) {
           <select value={form.pedBedType || ''} onChange={set('pedBedType')}>
             <option value="">Select…</option>
             {PED_BED_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+          </select>
+        </div>
+      )}
+      {showArrival && (
+        <div className="field">
+          <label>Arrival</label>
+          <select value={form.arrivalType || ''} onChange={set('arrivalType')}>
+            <option value="">New patient</option>
+            <option value="EXT">Referred in from another hospital (EXT TRANS IN)</option>
           </select>
         </div>
       )}
