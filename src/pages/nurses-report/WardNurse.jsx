@@ -1721,6 +1721,7 @@ function WardPanelRest({ h, showLabel, isAdmin, navigate, includeShiftTable = tr
                       <select className={"status-select" + (p.status ? ' set' : '')} value={p.status || ''} onChange={(e) => updatePatientStatus(p.id, e.target.value)}>
                         <option value="">{'\u2014 Select status \u2014'}</option>
                         {PATIENT_STATUS_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                        {p.status && !PATIENT_STATUS_OPTIONS.includes(p.status) && <option value={p.status}>{p.status}</option>}
                       </select>
                     </div>
                     <div className="patient-grid">

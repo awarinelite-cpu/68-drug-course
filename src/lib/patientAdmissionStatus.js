@@ -112,7 +112,7 @@ export const ADMISSION_TAG_LABEL = { AE_TRANSFER: 'TRANS IN from A&E', WARD_TRAN
 // same way it already does for dischargeStatus, so picking a tagged
 // patient stamps their write-up correctly without the nurse having to
 // pick it by hand.
-export const ADMISSION_TAG_STATUS_STAMP = { AE_TRANSFER: 'TRANS IN FROM A&E', WARD_TRANSFER: 'TRANS IN', EXT_TRANSFER: 'EXT TRANS IN', NEW_PATIENT: 'NEW PATIENT' };
+export const ADMISSION_TAG_STATUS_STAMP = { AE_TRANSFER: 'TRANS IN FROM A&E', WARD_TRANSFER: 'INT TRANS IN', EXT_TRANSFER: 'EXT TRANS IN', NEW_PATIENT: 'NEW PATIENT' };
 
 // Internal Transfer Out: once the receiving ward accepts a transfer, the
 // patient's `ward` moves away, so the sending ward's Ward Report could no
