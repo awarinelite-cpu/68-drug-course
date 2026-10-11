@@ -144,6 +144,18 @@ export async function saveCatalog(db, type, items) {
   catalogPromise = null;
 }
 
+// Deletes every stored entry of one catalog (admin only, per firestore.rules).
+// Other catalogs (nanda / nic / noc) are not touched.
+export async function clearCatalog(db, type) {
+  const meta = await readCatalogMeta(db);
+  const oldChunks = (meta[type] && meta[type].chunks) || 0;
+  for (let i = 0; i < oldChunks; i++) {
+    await deleteDoc(doc(db, COLLECTION, 'catalog_' + type + '_' + i));
+  }
+  await setDoc(doc(db, COLLECTION, META_DOC), { [type]: { count: 0, chunks: 0, updatedAt: serverTimestamp() } }, { merge: true });
+  catalogPromise = null;
+}
+
 // Entries with the same name (e.g. one uploaded with a code and links, another
 // with the care-plan text) are combined into one: later entries win for every
 // field they actually fill in, and blank fields never wipe out earlier values.

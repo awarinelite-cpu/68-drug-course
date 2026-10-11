@@ -4,7 +4,7 @@ import { db } from "../firebase.js";
 import { useAuth } from "../contexts/AuthContext.jsx";
 import { useGoBack } from "../hooks/useGoBack.js";
 import { downloadTextFile } from "../lib/csv.js";
-import { CATALOG_TYPES, templateCsv, parseCatalogCsv, saveCatalog, mergeIntoCatalog, readCatalogMeta } from "../lib/nursingCatalog.js";
+import { CATALOG_TYPES, templateCsv, parseCatalogCsv, saveCatalog, mergeIntoCatalog, clearCatalog, readCatalogMeta } from "../lib/nursingCatalog.js";
 import Topbar from "../components/Topbar.jsx";
 
 function CatalogCard({ type, meta, onSaved }) {
@@ -53,6 +53,23 @@ function CatalogCard({ type, meta, onSaved }) {
     setSaving(false);
   }
 
+  async function deleteAll() {
+    if (!meta || !meta.count) return;
+    if (!window.confirm('Delete ALL ' + meta.count + ' stored entries from ' + cfg.label + '? This cannot be undone. Nurses will have none to pick until you upload a new file.')) return;
+    if (!window.confirm('Are you sure? Press OK to permanently delete all ' + meta.count + ' ' + cfg.label + ' entries.')) return;
+    setSaving(true); setStatus(null);
+    try {
+      await clearCatalog(db, type);
+      setStatus({ text: 'Deleted all entries. You can now upload a new file.', error: false });
+      setParsed(null);
+      if (fileRef.current) fileRef.current.value = '';
+      onSaved();
+    } catch (err) {
+      setStatus({ text: "Couldn't delete: " + (err.code || err.message || 'unknown error'), error: true });
+    }
+    setSaving(false);
+  }
+
   const when = meta && meta.updatedAt && meta.updatedAt.toDate ? meta.updatedAt.toDate().toLocaleString() : '';
 
   return (
@@ -65,6 +82,8 @@ function CatalogCard({ type, meta, onSaved }) {
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 10 }}>
         <button className="btn btn-secondary" type="button"
           onClick={() => downloadTextFile(type + '-template.csv', templateCsv(type))}>Download template</button>
+        <button className="btn btn-secondary" type="button" disabled={saving || !(meta && meta.count)}
+          style={{ color: '#b91c1c', borderColor: '#b91c1c' }} onClick={deleteAll}>Delete all entries</button>
       </div>
       <input ref={fileRef} type="file" accept=".csv,text/csv" onChange={onFile} disabled={saving} />
       {parsed && (
