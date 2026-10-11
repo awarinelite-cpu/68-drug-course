@@ -10,7 +10,7 @@
 // functions, not components, and need to read the current format
 // synchronously when building a display string.
 import { useEffect, useState } from "react";
-import { doc, setDoc, onSnapshot, serverTimestamp } from "firebase/firestore";
+import { doc, setDoc, serverTimestamp } from "firebase/firestore";
 import { db } from "../firebase.js";
 
 export const TIME_SETTINGS_DOC_PATH = ["settings", "system"];
@@ -38,24 +38,10 @@ function setCurrentFormat(next) {
   listeners.forEach((fn) => fn(currentFormat));
 }
 
-let watching = false;
-function ensureWatching() {
-  if (watching || !db) return;
-  watching = true;
-  onSnapshot(
-    doc(db, ...TIME_SETTINGS_DOC_PATH),
-    (snap) => {
-      const val = snap.exists() ? snap.data().timeFormat : null;
-      setCurrentFormat(DEFAULT_FORMAT);
-    },
-    () => {
-      // Offline, no permission yet, doc doesn't exist, etc. — keep
-      // whatever was already cached rather than breaking every
-      // timestamp in the app.
-    }
-  );
-}
-ensureWatching();
+// No Firestore listener: the app is fixed to 12-hour AM/PM (see getCachedFormat),
+// so the old live read of settings/system never changed anything — it only cost
+// a read and an open connection per user.
+
 
 export function getTimeFormat() {
   return currentFormat;
@@ -87,7 +73,6 @@ export async function setTimeFormat(next) {
 export function useTimeFormat() {
   const [format, setFormat] = useState(currentFormat);
   useEffect(() => {
-    ensureWatching();
     return subscribeTimeFormat(setFormat);
   }, []);
   return format;

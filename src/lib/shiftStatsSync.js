@@ -1,8 +1,9 @@
-import { doc, runTransaction, serverTimestamp, collection, getDocs } from "firebase/firestore";
+import { doc, runTransaction, serverTimestamp } from "firebase/firestore";
 import { db } from "../firebase.js";
 import { WARDS, reportDateId, defaultWardDoc, DEMOGRAPHIC_SEXES, ensureWardBedsLoaded } from "./nurses-report-common.js";
 import { reportWardKeysForPatientWard, patientWardAndBedTypeForReportKey } from "./wardNameMatch.js";
 import { wardHeadcount } from "./wardCensus.js";
+import { loadPatientsForWardLabels } from "./patientDirectory.js";
 
 // Best-effort live headcount for a report ward key, used only to seed a
 // brand-new day's doc (see bumpShiftStat below) with the real starting
@@ -16,9 +17,7 @@ async function liveHeadcountForWardKey(wardKey) {
   const patientWardInfo = patientWardAndBedTypeForReportKey(wardKey);
   if (!patientWardInfo) return null;
   try {
-    const patientsSnap = await getDocs(collection(db, 'patients'));
-    const patients = [];
-    patientsSnap.forEach(d => patients.push(d.data()));
+    const patients = await loadPatientsForWardLabels([patientWardInfo.wardLabel]);
     return wardHeadcount(patients, patientWardInfo.wardLabel, patientWardInfo.bedType);
   } catch (e) {
     return null;

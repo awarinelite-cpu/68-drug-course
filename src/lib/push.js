@@ -19,16 +19,17 @@ const VAPID_KEY = "BAPXwiBktw0KdKPUWBfE4MG-399Nj-QPAvNJLbJJ5Uq5oojGI_kYARiKq_Rex
 import { app, db } from "../firebase.js";
 import { getMessaging, getToken, onMessage, isSupported } from "firebase/messaging";
 import { doc, setDoc, deleteDoc, serverTimestamp } from "firebase/firestore";
-import { DEFAULT_ALARM_SETTINGS, watchAlarmSettings } from "./alarm-settings.js";
+import { DEFAULT_ALARM_SETTINGS, loadAlarmSettings } from "./alarm-settings.js";
 
-// Admin-configured alarm policy, kept live via a Firestore listener so a
-// change the admin makes applies to already-open tabs without a reload.
+// Admin-configured alarm policy, read ONCE per page load (no live listener — a
+// change the admin makes applies the next time the app is opened/reloaded).
+// Saves a permanent Firestore connection per signed-in user.
 let currentAlarmSettings = { ...DEFAULT_ALARM_SETTINGS };
 let alarmSettingsWatchStarted = false;
 function ensureAlarmSettingsWatch() {
   if (alarmSettingsWatchStarted) return;
   alarmSettingsWatchStarted = true;
-  watchAlarmSettings(db, (settings) => { currentAlarmSettings = settings; });
+  loadAlarmSettings(db).then((settings) => { currentAlarmSettings = settings; }).catch(() => {});
 }
 
 // Ward is Africa/Lagos — UTC+1 year-round, no DST — matching the server's

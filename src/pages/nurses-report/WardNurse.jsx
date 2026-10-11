@@ -15,6 +15,7 @@ import {
 import { patientWardAndBedTypeForReportKey, wardSelectorKeyForPatientWard } from "../../lib/wardNameMatch.js";
 import { wardHeadcount } from "../../lib/wardCensus.js";
 import { buildLiveCensus } from "../../lib/liveCensus.js";
+import { loadPatientsForWardLabels, loadCensusPatients } from "../../lib/patientDirectory.js";
 import { applyPatientStatus, closeOutDischargedPatient, closeOutParolePatients, readmitFromParole, activeAdmissionTag, clearAdmissionTag, activeTransferOut, clearTransferOutMarker, ADMISSION_TAG_LABEL, ADMISSION_TAG_STATUS_STAMP } from "../../lib/patientAdmissionStatus.js";
 import Topbar from "../../components/Topbar.jsx";
 import { splitDiagnosisNote, withPatientDiagnosis } from "../../lib/diagnosisNote.js";
@@ -652,9 +653,7 @@ function useWardReport(wardKey, isAdmin, profile, user) {
         let filledFromPatients = false;
         if (patientWardInfo) {
           try {
-            const patientsSnap = await getDocs(collection(db, 'patients'));
-            const patients = [];
-            patientsSnap.forEach(d => patients.push(d.data()));
+            const patients = await loadPatientsForWardLabels([patientWardInfo.wardLabel]);
             const headcount = wardHeadcount(patients, patientWardInfo.wardLabel, patientWardInfo.bedType);
             next = { ...next, startOcc: headcount, occ: headcount, vac: (next.beds || 0) - headcount };
             filledFromPatients = true;
@@ -684,9 +683,7 @@ function useWardReport(wardKey, isAdmin, profile, user) {
         const patientWardInfo = patientWardAndBedTypeForReportKey(wardKey);
         if (patientWardInfo) {
           try {
-            const patientsSnap = await getDocs(collection(db, 'patients'));
-            const patients = [];
-            patientsSnap.forEach(d => patients.push(d.data()));
+            const patients = await loadPatientsForWardLabels([patientWardInfo.wardLabel]);
             const headcount = wardHeadcount(patients, patientWardInfo.wardLabel, patientWardInfo.bedType);
             const runningOcc = computeCensus(next).occ;
             if (headcount !== runningOcc) {
@@ -1534,9 +1531,7 @@ function useLiveCensusMap() {
     let cancelled = false;
     (async () => {
       try {
-        const snap = await getDocsSafe(collection(db, 'patients'));
-        const list = [];
-        snap.forEach((d) => list.push(d.data()));
+        const list = await loadCensusPatients();
         if (!cancelled) setMap(buildLiveCensus(list));
       } catch (e) { if (!cancelled) setMap(null); }
     })();

@@ -5,6 +5,7 @@ import { useAuth } from "../contexts/AuthContext.jsx";
 import { useGoBack } from "../hooks/useGoBack.js";
 import { useNavigate } from "react-router-dom";
 import { getDocSafe, getDocsSafe } from "../lib/firestoreOffline.js";
+import { loadCensusPatients } from "../lib/patientDirectory.js";
 import { reportDateId } from "../lib/nurses-report-common.js";
 import { buildLiveCensus, applyCensusToWards } from "../lib/liveCensus.js";
 import Topbar from "../components/Topbar.jsx";
@@ -56,9 +57,7 @@ export default function Records() {
         const arcSnap = await getDocSafe(doc(db, "recordArchives", date));
         if (arcSnap.exists()) savedArchive = arcSnap.data();
         if (date === reportDateId()) {
-          const patientsSnap = await getDocsSafe(collection(db, "patients"));
-          const patients = [];
-          patientsSnap.forEach((d) => patients.push(d.data()));
+          const patients = await loadCensusPatients();
           const allWardKeys = RECORD_ROWS.flatMap((r) => r.wards);
           wardsMap = applyCensusToWards(wardsMap, buildLiveCensus(patients), allWardKeys);
           src = src ? src + " + live patient census" : "live patient census";

@@ -21,7 +21,7 @@ import { patientWardAndBedTypeForReportKey } from "../../lib/wardNameMatch.js";
 import { wardHeadcount } from "../../lib/wardCensus.js";
 import { buildLiveCensus } from "../../lib/liveCensus.js";
 import { applyPendingStatBumps } from "../../lib/shiftStatsSync.js";
-import { loadPatientsForWardLabels } from "../../lib/patientDirectory.js";
+import { loadPatientsForWardLabels, loadCensusPatients } from "../../lib/patientDirectory.js";
 import { useGoBack } from "../../hooks/useGoBack.js";
 import Topbar from "../../components/Topbar.jsx";
 import ParoleTables, { hasAny as paroleHasAny } from "../../components/ParoleTables.jsx";
@@ -323,9 +323,7 @@ export default function OverallNurse() {
     let cancelled = false;
     (async () => {
       try {
-        const snap = await getDocsSafe(collection(db, 'patients'));
-        const list = [];
-        snap.forEach((d) => list.push(d.data()));
+        const list = await loadCensusPatients();
         if (!cancelled) setLiveCensus(buildLiveCensus(list));
       } catch (e) { /* leave the census empty; table falls back to the daily figures */ }
     })();

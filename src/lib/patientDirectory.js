@@ -24,6 +24,8 @@
 // Admin.jsx) — the only function here that still does a full collection
 // scan, and only because it has to run once.
 import { lookupEmrOwner } from "./patientUnique.js";
+import { WARD_OPTIONS } from "./drugChartHelpers.js";
+import { getDocsSafe } from "./firestoreOffline.js";
 import { collection, query, where, orderBy, limit, getDocs, writeBatch, doc as fsDoc } from "firebase/firestore";
 import { db } from "../firebase.js";
 
@@ -72,6 +74,24 @@ export async function loadPatientsForWardLabels(wardLabels) {
   const results = await Promise.all(
     uniqueLabels.map((label) =>
       getDocs(query(collection(db, "patients"), where("ward", "==", label)))
+    )
+  );
+  const out = [];
+  results.forEach((snap) => snap.forEach((d) => out.push(d.data())));
+  return out.filter((p) => !p.pendingTransfer);
+}
+
+// Every patient currently on ANY ward (the 13 WARD_OPTIONS), for the live
+// census tables. One indexed where(ward==label) query per ward instead of
+// getDocs(collection(db,'patients')): discharged/archived patients keep their
+// chart document with ward '' and used to be re-downloaded on every census
+// load only to be thrown away by buildLiveCensus (it skips patients whose ward
+// has no report key). Same offline fallback as getDocsSafe. Mid-transfer
+// patients are excluded, same rule buildLiveCensus applies.
+export async function loadCensusPatients() {
+  const results = await Promise.all(
+    WARD_OPTIONS.map((label) =>
+      getDocsSafe(query(collection(db, "patients"), where("ward", "==", label)))
     )
   );
   const out = [];
