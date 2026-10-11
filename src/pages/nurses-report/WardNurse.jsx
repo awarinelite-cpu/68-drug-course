@@ -20,6 +20,7 @@ import Topbar from "../../components/Topbar.jsx";
 import { splitDiagnosisNote, withPatientDiagnosis } from "../../lib/diagnosisNote.js";
 import DiagnosisNoteEditor, { DiagnosisHeadline } from "../../components/DiagnosisNoteEditor.jsx";
 import NursingDiagnosisPicker from "../../components/NursingDiagnosisPicker.jsx";
+import NursingDiagnosisSuggestions from '../../components/NursingDiagnosisSuggestions.jsx';
 import { buildStarterText } from "../../lib/nursingCatalog.js";
 import ParoleTables, { hasAny as paroleHasAny } from "../../components/ParoleTables.jsx";
 import wardSelectBg from "../../assets/ward-select-bg.svg";
@@ -1728,6 +1729,7 @@ function WardPanelRest({ h, showLabel, isAdmin, navigate, includeShiftTable = tr
                       {PATIENT_FIELDS.map((f) => (
                         <div className="patient-field" key={f.key} style={f.type === 'textarea' ? { gridColumn: '1 / -1' } : undefined}>
                           <label>{f.label}:</label>
+                          {f.key === 'npNursingDiagnosis' && <NursingDiagnosisSuggestions patient={p} onPick={(dx, cat) => applyNursingDiagnosis(p.id, dx, cat)} />}
                           {f.key === 'npNursingDiagnosis' && <NursingDiagnosisPicker onPick={(dx, cat) => applyNursingDiagnosis(p.id, dx, cat)} />}
                           {f.type === 'textarea'
                             ? (f.key === 'diagnosis'

@@ -2336,3 +2336,13 @@ h3.ward-report-subheading, .ward-report-subheading { font-size: clamp(28px, 3.4v
 }
 :root[data-theme="dark"] .search-result-item .patient-bed-tag-missing { color: #fdba74; border-color: #fdba74; }
 :root[data-theme="dark"] .search-result-item .patient-bed-tag:not(.patient-bed-tag-missing) { color: #93c5fd; }
+
+/* Suggested nursing diagnoses (NursingDiagnosisSuggestions) */
+.dx-suggest { margin-bottom: 8px; }
+.dx-suggest-title { font-weight: 700; margin-bottom: 6px; color: var(--text-primary); }
+.dx-suggest-title small { font-weight: 400; color: var(--text-muted, #6b7280); }
+.dx-suggest-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.dx-chip { display: flex; flex-direction: column; align-items: flex-start; text-align: left; gap: 2px; padding: 8px 12px; border: 1px solid var(--border, #d1d5db); border-radius: 12px; background: var(--surface-bg, #fff); color: var(--text-primary); font: inherit; cursor: pointer; }
+.dx-chip small { font-size: 12px; color: var(--text-muted, #6b7280); }
+.dx-chip.best { border: 2px solid #2563EB; }
+.dx-chip.applied { background: rgba(37, 99, 235, 0.12); }
