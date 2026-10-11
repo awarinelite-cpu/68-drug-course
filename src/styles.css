@@ -2209,3 +2209,106 @@ h3.ward-report-subheading, .ward-report-subheading { font-size: clamp(28px, 3.4v
 .nanda-filters select { flex: 1 1 180px; min-width: 0; padding: 9px 10px; border: 1px solid var(--border, #d1d5db); border-radius: 10px; background: #fff; font: inherit; font-size: 15px; }
 .nanda-filters select:disabled { background: #f3f4f6; color: #9ca3af; }
 .nanda-clear { padding: 8px 12px; border: 0; border-radius: 10px; background: #e5e7eb; color: #374151; font: inherit; font-size: 14px; cursor: pointer; }
+
+
+/* ═══════════════════════════════════════════════════════════════════════
+   Capsule-tablet theme: glossy rounded cards and buttons, with strong,
+   readable text on every card so entries are easy to tell apart.
+   (Kept at the end of the file so it overrides the older flat/3D styles.)
+   ═══════════════════════════════════════════════════════════════════════ */
+:root {
+  --gloss: radial-gradient(ellipse 60% 70% at 18% 0%, rgba(255,255,255,.42), rgba(255,255,255,0) 70%),
+           linear-gradient(to bottom, rgba(255,255,255,.26) 0%, rgba(255,255,255,.09) 48%, rgba(255,255,255,0) 50%, rgba(0,0,0,.14) 100%);
+  --tablet-bg: linear-gradient(to bottom, #ffffff 0%, #f6f8fb 28%, #e6ebf2 62%, #cdd6e2 100%);
+  --tablet-bg-soft: linear-gradient(to bottom, #ffffff 0%, #f8fafc 40%, #eef2f7 100%);
+  --tablet-edge: #c3ccd8;
+  --tablet-shadow: inset 0 3px 3px rgba(255,255,255,.95), inset 0 -12px 16px rgba(71,85,105,.28), inset 14px 0 18px -10px rgba(71,85,105,.2), inset -14px 0 18px -10px rgba(71,85,105,.2), 0 12px 16px -9px rgba(15,23,42,.45);
+  --tablet-shadow-soft: inset 0 3px 3px rgba(255,255,255,.95), inset 0 -8px 12px rgba(71,85,105,.14), 0 10px 18px -10px rgba(15,23,42,.35);
+  --card-title: #0f172a;
+  --card-sub: #334155;
+  --card-title-shadow: 0 1px 0 rgba(255,255,255,.9);
+}
+:root[data-theme="dark"] {
+  --tablet-bg: linear-gradient(to bottom, #475569 0%, #334155 30%, #1e293b 65%, #0f172a 100%);
+  --tablet-bg-soft: linear-gradient(to bottom, #1f3045 0%, #172637 55%, #132030 100%);
+  --tablet-edge: #475569;
+  --tablet-shadow: inset 0 3px 3px rgba(255,255,255,.28), inset 0 -12px 16px rgba(0,0,0,.45), inset 14px 0 18px -10px rgba(0,0,0,.4), inset -14px 0 18px -10px rgba(0,0,0,.4), 0 12px 16px -9px rgba(0,0,0,.75);
+  --tablet-shadow-soft: inset 0 2px 2px rgba(255,255,255,.14), inset 0 -8px 12px rgba(0,0,0,.3), 0 10px 18px -10px rgba(0,0,0,.7);
+  --card-title: #f8fafc;
+  --card-sub: #cbd5e1;
+  --card-title-shadow: 0 1px 2px rgba(0,0,0,.6);
+}
+
+/* Menu / tile cards: full capsule-tablet surface */
+.chart-card, .role-card, .archive-card, .stat-box, .patient-card, .ward-card {
+  background: var(--tablet-bg); background-color: transparent;
+  border: 1px solid var(--tablet-edge);
+  box-shadow: var(--tablet-shadow);
+  color: var(--card-title);
+}
+.chart-card { border-radius: 2rem; padding: 22px 14px; }
+.role-card { border-radius: 2.5rem; padding: 26px 24px; }
+.archive-card { border-radius: 1.75rem; padding: 16px 18px; }
+.stat-box { border-radius: 1.5rem; }
+.patient-card, .ward-card { border-radius: 1.75rem; }
+.patient-card.collapsed, .ward-card:not(.open) { border-radius: 9999px; }
+.patient-card.open, .ward-card.open { border-color: var(--textarea-focus, #2563eb); }
+.chart-card:hover, .role-card:hover, .archive-card:hover {
+  transform: translateY(-2px); border-color: var(--primary-blue);
+  box-shadow: var(--tablet-shadow), 0 6px 10px -6px rgba(15,23,42,.35);
+}
+.chart-card:active, .role-card:active { transform: translateY(1px); box-shadow: var(--tablet-shadow); }
+.patient-card.collapsed:active { box-shadow: var(--tablet-shadow); }
+.chart-card .icon { background: rgba(255,255,255,.75); }
+:root[data-theme="dark"] .chart-card .icon { background: rgba(255,255,255,.12); }
+
+/* Readable text on the cards */
+.chart-card { font-weight: 800; font-size: 16.5px; }
+.chart-card, .role-card .title, .archive-card .file-name, .stat-box .n, .stat-box .l,
+.patient-card-header .pc-name, .patient-card-header .pc-num, .ward-card-header {
+  color: var(--card-title); text-shadow: var(--card-title-shadow);
+}
+.role-card .title { font-size: 19px; font-weight: 800; }
+.archive-card .file-name { font-weight: 800; }
+.role-card .desc, .archive-card .file-meta { color: var(--card-sub); font-weight: 600; }
+.archive-card .file-meta { text-shadow: var(--card-title-shadow); }
+:root[data-theme="dark"] .role-card .title, :root[data-theme="dark"] .archive-card .file-name,
+:root[data-theme="dark"] .stat-box .n { color: var(--card-title); }
+
+/* Large content panels: softer tablet surface with big rounded corners */
+.card-box:not(.login-card) {
+  background: var(--tablet-bg-soft); border: 1px solid var(--tablet-edge);
+  border-radius: 1.75rem; box-shadow: var(--tablet-shadow-soft);
+}
+:root[data-theme="dark"] .card-box:not(.login-card) {
+  background: var(--tablet-bg-soft); border: 1px solid var(--tablet-edge); box-shadow: var(--tablet-shadow-soft);
+}
+
+/* Ward picker tiles: colored capsule tablets */
+.ward-pick-card {
+  border-radius: 9999px; padding: 20px 18px;
+  background-image: var(--gloss);
+  box-shadow: inset 0 2px 1px rgba(255,255,255,.5), inset 0 -10px 14px rgba(0,0,0,.2), 0 5px 0 var(--card-shadow, #1e4c8f), 0 8px 14px -4px rgba(0,0,0,.35);
+  text-shadow: 0 1px 2px rgba(0,0,0,.35);
+}
+.ward-pick-card:active { box-shadow: inset 0 2px 1px rgba(255,255,255,.4), inset 0 -6px 10px rgba(0,0,0,.2), 0 2px 0 var(--card-shadow, #1e4c8f); }
+
+/* Buttons: glossy capsule tablets (keeps each button's own color and 3D edge) */
+.btn, .ward-heading-link {
+  border-radius: 9999px;
+  background-image: var(--gloss);
+  text-shadow: 0 1px 1px rgba(0,0,0,.28);
+}
+.btn { padding-left: 22px; padding-right: 22px; box-shadow: inset 0 2px 1px rgba(255,255,255,.5), inset 0 -8px 12px rgba(0,0,0,.18), var(--btn-shadow, 0 3px 0 rgba(0,0,0,.28), 0 2px 3px rgba(0,0,0,.18), 0 6px 12px -4px rgba(0,0,0,.3)); }
+.btn:active { box-shadow: inset 0 2px 1px rgba(255,255,255,.35), inset 0 -6px 10px rgba(0,0,0,.18), var(--btn-shadow-active, 0 1px 0 rgba(0,0,0,.28), 0 1px 2px rgba(0,0,0,.18)); }
+.btn:disabled { box-shadow: 0 1px 0 rgba(0,0,0,.15); }
+.ward-heading-link { padding-left: 18px; padding-right: 18px; box-shadow: inset 0 2px 1px rgba(255,255,255,.5), inset 0 -8px 12px rgba(0,0,0,.18), 0 3px 0 #1e4c8f, 0 6px 12px -4px rgba(48,112,199,.55); }
+
+/* Reports and printouts stay flat and plain */
+@media print {
+  .card-box, .chart-card, .role-card, .archive-card, .stat-box, .patient-card, .ward-card {
+    background: #fff !important; box-shadow: none !important; border: 1px solid #999 !important; border-radius: 6px !important;
+    color: #000 !important; text-shadow: none !important;
+  }
+  .btn, .ward-heading-link { background-image: none; text-shadow: none; box-shadow: none; }
+}
