@@ -1,8 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import {
-  collection, deleteDoc, doc, getDoc, setDoc, onSnapshot, query, orderBy, serverTimestamp
-} from "firebase/firestore";
+import { collection, deleteDoc, doc, getDoc, setDoc, onSnapshot, query, orderBy, serverTimestamp, or, where } from "firebase/firestore";
 import { db } from "../firebase.js";
 import { useAuth } from "../contexts/AuthContext.jsx";
 import { useBackLock } from "../hooks/useBackLock.js";
@@ -154,7 +152,22 @@ function FormField({ col, value, otherValue, onChange, onOtherChange }) {
   );
 }
 
-export default function EntryChart({ title, collectionName, columns, deriveRows, summary, entryNoun = 'Entry', sortOrder = 'desc' }) {
+// Start of the window a live chart reads by default: the 6:00 AM start of the
+// current 24-hour period (same convention as the I&O periods), minus the
+// previous (recentDays - 1) days. Every period inside the window is loaded in
+// full, so period balances and 24-hour totals are exactly what a full read would
+// give; older entries load only when the nurse taps "Show earlier entries".
+function recentWindowStart(days) {
+  const d = new Date();
+  if (d.getHours() < 6) d.setDate(d.getDate() - 1);
+  d.setHours(6, 0, 0, 0);
+  d.setDate(d.getDate() - Math.max(days - 1, 0));
+  const p = (n) => String(n).padStart(2, '0');
+  const date = d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate());
+  return { date, key: date + 'T06:00' };
+}
+
+export default function EntryChart({ title, collectionName, columns, deriveRows, summary, entryNoun = 'Entry', sortOrder = 'desc', recentDays = 3 }) {
   usePrintOrientation('landscape');
   const { profile } = useAuth();
   const [searchParams] = useSearchParams();
@@ -189,6 +202,7 @@ export default function EntryChart({ title, collectionName, columns, deriveRows,
   const [entryOtherValues, setEntryOtherValues] = useState({});
 
   const [rawRows, setRawRows] = useState([]);
+  const [showAll, setShowAll] = useState(false); // false = only the last `recentDays` days are read
   const [loadedArchive, setLoadedArchive] = useState(false);
   const [archiveMeta, setArchiveMeta] = useState(null);
   const [archiveRows, setArchiveRows] = useState([]);
@@ -204,7 +218,16 @@ export default function EntryChart({ title, collectionName, columns, deriveRows,
   // Live subscription (non-archived only)
   useEffect(() => {
     if (isArchived || !patientId) return;
-    const q = query(collection(db, 'patients', patientId, collectionName), orderBy('time', 'desc'));
+    const col = collection(db, 'patients', patientId, collectionName);
+    // Default: read only the recent window. `date` is the YYYY-MM-DD entry date
+    // on every current row; older rows saved before Date/Time were split carry a
+    // combined `time` ("YYYY-MM-DDTHH:MM") instead, so the OR also matches those
+    // — a superset of the window, trimmed exactly on screen below. No orderBy:
+    // rows are sorted client-side anyway.
+    const win = recentWindowStart(recentDays);
+    const q = showAll
+      ? query(col, orderBy('time', 'desc'))
+      : query(col, or(where('date', '>=', win.date), where('time', '>=', win.key)));
     const unsub = onSnapshot(q, (snap) => {
       const rows = [];
       snap.forEach(d => rows.push(normalizeRow({ id: d.id, ...d.data() })));
@@ -212,7 +235,7 @@ export default function EntryChart({ title, collectionName, columns, deriveRows,
     });
     return unsub;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [patientId, isArchived, collectionName]);
+  }, [patientId, isArchived, collectionName, showAll, recentDays]);
 
   // Archived load
   useEffect(() => {
@@ -353,7 +376,8 @@ export default function EntryChart({ title, collectionName, columns, deriveRows,
 
   const displayRows = isArchived
     ? withDerivedRows(archiveRows, deriveRows, sortOrder, closeContext)
-    : withDerivedRows(rawRows, deriveRows, sortOrder, null);
+    : withDerivedRows(showAll ? rawRows : rawRows.filter((r) => sortKeyOf(r) >= recentWindowStart(recentDays).key), deriveRows, sortOrder, null);
+  const windowed = !isArchived && !showAll;
 
   return (
     <>
@@ -399,6 +423,12 @@ export default function EntryChart({ title, collectionName, columns, deriveRows,
 
         <div className="card-box">
           <h3 style={{ marginTop: 0 }}>{entryNoun === 'Reading' ? 'Readings' : 'Entries'}</h3>
+          {windowed && (
+            <div style={{ background: '#eff6ff', border: '1px solid #93c5fd', color: '#1e3a8a', padding: '8px 12px', borderRadius: 6, marginBottom: 10, fontSize: 13, display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8, justifyContent: 'space-between' }}>
+              <span>Showing the last {recentDays} days. Earlier entries are not loaded.</span>
+              <button type="button" className="btn btn-secondary" style={{ padding: '6px 12px' }} onClick={() => setShowAll(true)}>Show earlier entries</button>
+            </div>
+          )}
           <div className="table-wrap">
           <table className="entries">
             <thead>
@@ -411,8 +441,8 @@ export default function EntryChart({ title, collectionName, columns, deriveRows,
               {isArchived && loadedArchive && displayRows.length === 0 && (
                 <tr><td colSpan={displayColumns.length} style={{ color: '#777' }}>No entries recorded for this admission.</td></tr>
               )}
-              {!isArchived && rawRows.length === 0 && (
-                <tr><td colSpan={displayColumns.length + 1} style={{ color: '#777' }}>No entries yet.</td></tr>
+              {!isArchived && displayRows.length === 0 && (
+                <tr><td colSpan={displayColumns.length + 1} style={{ color: '#777' }}>{windowed ? 'No entries in the last ' + recentDays + ' days.' : 'No entries yet.'}</td></tr>
               )}
               {displayRows.map((row, idx) => {
                 if (row.isPeriodSummary) {
