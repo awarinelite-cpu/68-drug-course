@@ -337,13 +337,16 @@ export default function DrugCourseChart() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loaded]);
 
-  // --- Cross-device sync polling ---
-  // Reads this doc every 30s and pulls in newer data, as long as nobody is
-  // mid-edit on this device (so we never clobber unsaved typing) and no
-  // field on the page is actively focused.
+  // --- Cross-device sync ---
+  // No background polling (it re-read this doc on a timer all shift).
+  // Newer data from another device is pulled in when the nurse returns to
+  // the app (tab/app becomes visible), as long as nobody is mid-edit on
+  // this device (so we never clobber unsaved typing) and no field on the
+  // page is actively focused.
   useEffect(() => {
     if (isArchived) return;
-    const poll = setInterval(async () => {
+    const pullRemote = async () => {
+      if (document.visibilityState !== 'visible') return;
       if (!chartRefPath.current || chartEditMode || drugsEditMode) return;
       const active = document.activeElement;
       if (active && /^(INPUT|TEXTAREA|SELECT)$/.test(active.tagName)) return;
@@ -368,9 +371,10 @@ export default function DrugCourseChart() {
           setCareInstructions(data.careInstructions || []);
           setAuditLog(data.auditLog || []);
         }
-      } catch (e) { /* silent — just try again on the next cycle */ }
-    }, 90000);
-    return () => clearInterval(poll);
+      } catch (e) { /* silent — next return to the app tries again */ }
+    };
+    document.addEventListener('visibilitychange', pullRemote);
+    return () => document.removeEventListener('visibilitychange', pullRemote);
   }, [isArchived, chartEditMode, drugsEditMode]);
 
   // --- Save -----------------------------------------------------------------

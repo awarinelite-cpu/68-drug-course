@@ -239,27 +239,18 @@ export default function Home() {
   }, []);
 
   // Ward-to-ward transfers, new admissions, etc. are written by other
-  // devices, so a plain load-on-mount only shows what existed when this
-  // page opened. Poll quietly in the background so an incoming transfer
-  // (or any other change) shows up within 30s without a manual reload.
-  // Paused while the tab/app is backgrounded so it doesn't burn reads for
-  // a screen nobody's looking at, and skipped while a form is open so a
-  // background refresh can't blow away unsaved input.
+  // devices. There is no background polling (it cost a ward's worth of
+  // reads every cycle); the list refreshes when the page opens, when the
+  // nurse returns to the app (tab/app becomes visible), or when she taps
+  // Refresh.
   useEffect(() => {
-    const POLL_MS = 90000;
-    const pollTimer = setInterval(() => {
+    const onVisible = () => {
       if (document.visibilityState !== 'visible') return;
       if (showNewForm || showBulkUpload || showEmrPaste) return;
       loadWardData(true);
-    }, POLL_MS);
-    const onVisible = () => {
-      if (document.visibilityState === 'visible') loadWardData(true);
     };
     document.addEventListener('visibilitychange', onVisible);
-    return () => {
-      clearInterval(pollTimer);
-      document.removeEventListener('visibilitychange', onVisible);
-    };
+    return () => document.removeEventListener('visibilitychange', onVisible);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showNewForm, showBulkUpload, showEmrPaste]);
 
@@ -797,6 +788,7 @@ export default function Home() {
           <a href="/admin" className="btn btn-purple" style={{ padding: '6px 12px' }} onClick={(e) => { e.preventDefault(); navigate('/admin'); }}>Admin</a>
         )}
         <a href="/my-patients" className="btn btn-secondary" style={{ padding: '6px 12px' }} onClick={(e) => { e.preventDefault(); navigate('/my-patients'); }}>My Patients</a>
+        <a href="#" className="btn btn-secondary" style={{ padding: '6px 12px' }} onClick={(e) => { e.preventDefault(); loadWardData(true); }}>{'↻'} Refresh</a>
         {myWard && (
           <a href="#" className="btn btn-secondary notif-bell-btn" style={{ padding: '6px 12px' }} onClick={(e) => { e.preventDefault(); setShowTransfers(true); }}>
             🔔 New Patient
