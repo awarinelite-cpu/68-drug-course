@@ -43,13 +43,9 @@ jobs:
           GOOGLE_APPLICATION_CREDENTIALS: /tmp/firebase-sa.json
 
       - name: Deploy Cloud Functions
-        # --force: required because onNewMessage sets minInstances: 1 (an
-        # always-warm instance for near-instant chat pushes — see the
-        # comment above that export in functions/index.js), which increases
-        # the project's minimum bill. Firebase CLI normally prompts to
-        # confirm that interactively; --non-interactive has no one to
-        # prompt, so it hard-fails with "Pass the --force option..." without
-        # this flag.
+        # --force: lets a non-interactive deploy delete functions that were
+        # removed from the code (Firebase CLI otherwise prompts for
+        # confirmation, and --non-interactive has no one to answer).
         run: npx firebase-tools deploy --only functions --project gen-lang-client-0406053716 --non-interactive --force
         env:
           GOOGLE_APPLICATION_CREDENTIALS: /tmp/firebase-sa.json

@@ -23,7 +23,7 @@
 // of the old static .html pages.
 
 const { onCall, HttpsError, onRequest } = require('firebase-functions/v2/https');
-const { onDocumentCreated, onDocumentUpdated, onDocumentWritten } = require('firebase-functions/v2/firestore');
+const { onDocumentUpdated, onDocumentWritten } = require('firebase-functions/v2/firestore');
 const admin = require('firebase-admin');
 const {
   INTERVAL_HOURS,
@@ -621,95 +621,6 @@ exports.sendDoseAlert = onRequest({ region: 'us-central1' }, async (req, res) =>
   console.log(`sendDoseAlert: chart ${chartId} — ${sent ? 'alert sent' : 'no recipients'}, repeat scheduled: ${!!newTaskName}`);
   return res.status(200).send(sent ? 'alert sent, repeat scheduled' : 'no recipients, repeat scheduled');
 });
-
-// -- New message alerts -------------------------------------------------
-//
-// Unlike the dose/glucose checks above (which poll on a schedule because
-// "due" is a moving target computed from elapsed time), a chat message is
-// itself the trigger — so this fires straight off the Firestore write
-// (js/messages.html's send handlers, both text and image) instead of
-// polling. Sends to every OTHER participant's registered device(s); the
-// sender never gets a push for her own message. Uses the same
-// pushTokens subcollection as the dose/glucose alerts, so a nurse who has
-// ever enabled "Alerts On" (js/push.js) gets message pushes automatically
-// too — there's no separate opt-in toggle for chat.
-exports.onNewMessage = onDocumentCreated(
-  // minInstances: 1 keeps one instance warm so a message push never waits on
-  // a cold start (2nd-gen functions scale to zero by default, and a cold
-  // start here was adding several seconds before the recipient's phone saw
-  // anything — the whole point of a chat push is that it's near-instant).
-  { document: 'conversations/{convoId}/messages/{messageId}', region: 'us-central1', minInstances: 1 },
-  async (event) => {
-    const snap = event.data;
-    if (!snap) return;
-    const msg = snap.data();
-    const convoId = event.params.convoId;
-    const senderUid = msg.senderUid;
-    if (!senderUid) return;
-
-    const convoSnap = await db.collection('conversations').doc(convoId).get();
-    if (!convoSnap.exists) return;
-    const convo = convoSnap.data();
-    const participants = Array.isArray(convo.participants) ? convo.participants : [];
-    const recipients = participants.filter((uid) => uid !== senderUid);
-    if (recipients.length === 0) return;
-
-    const tokenEntries = [];
-    await Promise.all(
-      recipients.map(async (uid) => {
-        const tokensSnap = await db.collection('users').doc(uid).collection('pushTokens').get();
-        tokensSnap.forEach((t) => {
-          if (t.data().token) tokenEntries.push({ token: t.data().token, ref: t.ref });
-        });
-      })
-    );
-    if (tokenEntries.length === 0) return;
-
-    // Group chats show the sender's name so it's clear who spoke; a DM's
-    // recipient already knows who it's with from the thread itself, so the
-    // conversation title (participantNames) covers that case, matching how
-    // the in-app chat list already labels DMs by the other nurse's name.
-    const senderName = (convo.participantNames && convo.participantNames[senderUid]) || 'A nurse';
-    const title = convo.type === 'group'
-      ? `${senderName}${convo.groupName ? ' — ' + convo.groupName : ''}`
-      : senderName;
-    const bodyRaw = msg.text || (msg.imageUrl ? '📷 Photo' : 'New message');
-    const body = bodyRaw.length > 120 ? bodyRaw.slice(0, 117) + '…' : bodyRaw;
-
-    const tokens = tokenEntries.map((t) => t.token);
-    const resp = await messaging.sendEachForMulticast({
-      tokens,
-      // Data-only — see the drug-due send above for why.
-      data: {
-        title,
-        body,
-        // NOTE: this app hasn't got a /messages route yet — the
-        // nurse-to-nurse messaging system (old repo's messages.html) hasn't
-        // been ported to React. This trigger is otherwise harmless (it just
-        // never fires — nothing ever writes to conversations/*/messages
-        // until that port happens) but update this path when it is.
-        link: `/messages?convo=${convoId}`,
-        tag: `msg-${convoId}`
-      },
-      android: {
-        priority: 'high',
-        notification: { channelId: 'dose-due-alerts', sound: 'default' }
-      }
-    });
-
-    const cleanup = [];
-    resp.responses.forEach((r, idx) => {
-      if (r.success) return;
-      const code = r.error?.code || '';
-      if (code.includes('registration-token-not-registered') || code.includes('invalid-argument')) {
-        cleanup.push(tokenEntries[idx].ref.delete());
-      }
-    });
-    await Promise.all(cleanup);
-
-    console.log(`Sent message alert for conversation ${convoId} to ${tokens.length} device(s).`);
-  }
-);
 
 // -- Overall Nurse appointment alert -----------------------------------
 //
