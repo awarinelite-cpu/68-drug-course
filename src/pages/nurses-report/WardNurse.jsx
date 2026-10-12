@@ -17,6 +17,7 @@ import { wardHeadcount } from "../../lib/wardCensus.js";
 import { buildLiveCensus } from "../../lib/liveCensus.js";
 import { loadPatientsForWardLabels, loadCensusPatients } from "../../lib/patientDirectory.js";
 import { applyPatientStatus, closeOutDischargedPatient, closeOutParolePatients, readmitFromParole, activeAdmissionTag, clearAdmissionTag, activeTransferOut, clearTransferOutMarker, ADMISSION_TAG_LABEL, ADMISSION_TAG_STATUS_STAMP } from "../../lib/patientAdmissionStatus.js";
+import useArchiveSweep from "../../hooks/useArchiveSweep.js";
 import Topbar from "../../components/Topbar.jsx";
 import { splitDiagnosisNote, withPatientDiagnosis } from "../../lib/diagnosisNote.js";
 import DiagnosisNoteEditor, { DiagnosisHeadline } from "../../components/DiagnosisNoteEditor.jsx";
@@ -2009,6 +2010,7 @@ function MergedWardReportPanel({ group, isAdmin, profile, user, navigate }) {
 
 export default function WardNurse() {
   const { user, profile } = useAuth();
+  useArchiveSweep(user);
   const navigate = useNavigate();
   const goBack = useGoBack('/nurses-report/role-select');
 

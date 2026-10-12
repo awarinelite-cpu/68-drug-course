@@ -23,6 +23,7 @@ import { buildLiveCensus } from "../../lib/liveCensus.js";
 import { applyPendingStatBumps } from "../../lib/shiftStatsSync.js";
 import { loadPatientsForWardLabels, loadCensusPatients } from "../../lib/patientDirectory.js";
 import { useGoBack } from "../../hooks/useGoBack.js";
+import useArchiveSweep from "../../hooks/useArchiveSweep.js";
 import Topbar from "../../components/Topbar.jsx";
 import ParoleTables, { hasAny as paroleHasAny } from "../../components/ParoleTables.jsx";
 import { splitDiagnosisNote } from "../../lib/diagnosisNote.js";
@@ -286,6 +287,7 @@ function PatientBlock({ p, n = 1, total = 1 }) {
 
 export default function OverallNurse() {
   const { user, profile } = useAuth();
+  useArchiveSweep(user);
   const navigate = useNavigate();
   const goBack = useGoBack('/nurses-report/role-select');
 

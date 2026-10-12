@@ -22,7 +22,6 @@
 // React Router routes (e.g. /charts/drug-course-chart?patient=...) instead
 // of the old static .html pages.
 
-const { onSchedule } = require('firebase-functions/v2/scheduler');
 const { onCall, HttpsError, onRequest } = require('firebase-functions/v2/https');
 const { onDocumentCreated, onDocumentUpdated, onDocumentWritten } = require('firebase-functions/v2/firestore');
 const admin = require('firebase-admin');
@@ -830,13 +829,12 @@ function defaultWardDoc(w, startOcc) {
   };
 }
 
-// Runs once a day, shortly after the 0900 ward-day rollover, so it's
+// Used to run on a daily cron; now run on demand by sweepClosedReports below. Looks back at the period that just closed after the 0900 ward-day rollover, so it's
 // always looking back at the period that JUST closed (never the one still
 // in progress). 09:05 rather than exactly 09:00 to give any nurse's own
 // last-second manual archive click a moment to land first.
-exports.autoArchiveWardReports = onSchedule(
-  { schedule: '5 9 * * *', timeZone: 'Africa/Lagos', region: 'us-central1' },
-  async () => {
+async function runAutoArchiveWardReports() {
+  {
     const now = new Date();
     const closedDateId = dateIdMinusOneDay(reportDateId(now));
     const wid = weekIdFor(now);
@@ -874,7 +872,7 @@ exports.autoArchiveWardReports = onSchedule(
       ? `Auto-archived ${archived.length} ward report(s) for ${closedDateId}: ${archived.join(', ')}`
       : `No leftover submitted+locked ward reports to auto-archive for ${closedDateId}.`);
   }
-);
+}
 
 // Runs 5 minutes after autoArchiveWardReports (09:05), so by the time this
 // reads anything, every ward that was submitted+locked for the closed
@@ -892,9 +890,8 @@ exports.autoArchiveWardReports = onSchedule(
 // submitted+locked that period has no such doc (autoArchiveWardReports
 // skips it, leaving the live doc untouched), so falls back to reading that
 // live doc directly.
-exports.autoArchiveOverallReport = onSchedule(
-  { schedule: '10 9 * * *', timeZone: 'Africa/Lagos', region: 'us-central1' },
-  async () => {
+async function runAutoArchiveOverallReport() {
+  {
     const now = new Date();
     const closedDateId = dateIdMinusOneDay(reportDateId(now));
     const wid = weekIdFor(now);
@@ -932,7 +929,19 @@ exports.autoArchiveOverallReport = onSchedule(
 
     console.log(`Auto-archived overall report for ${closedDateId}.`);
   }
-);
+}
+
+// No cron any more: nothing runs unless a signed-in user does something.
+// The client calls this once when a nurse opens a report page; it files any
+// leftover submitted+locked ward reports and the overall report for the
+// period that just closed. Both steps are idempotent (they skip anything
+// already archived), so repeat calls are harmless no-ops.
+exports.sweepClosedReports = onCall({ region: 'us-central1' }, async (request) => {
+  if (!request.auth) throw new HttpsError('unauthenticated', 'Sign in required.');
+  await runAutoArchiveWardReports();
+  await runAutoArchiveOverallReport();
+  return { ok: true };
+});
 
 // Callable from admin.html's "All Users" delete button. Deleting the
 // users/{uid} Firestore doc alone (which the client can already do directly
