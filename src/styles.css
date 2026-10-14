@@ -2288,3 +2288,14 @@ h3.ward-report-subheading, .ward-report-subheading { font-size: clamp(28px, 3.4v
 .dx-chip small { font-size: 12px; color: var(--text-muted, #6b7280); }
 .dx-chip.best { border: 2px solid #2563EB; }
 .dx-chip.applied { background: rgba(37, 99, 235, 0.12); }
+
+/* Vital Signs Roll editor (bolds the chart note); mirrors .patient-field textarea.big */
+.vitals-roll-editor {
+  width: 100%; box-sizing: border-box; min-height: 120px; padding: 12px; line-height: 1.5;
+  font-size: 16px; font-family: inherit; white-space: pre-wrap; overflow-wrap: anywhere;
+  border: 2px solid var(--textarea-border); border-radius: 8px; background-color: var(--textarea-bg);
+  box-shadow: 0 1px 4px rgba(15,23,42,.12); color: var(--text-primary);
+  resize: vertical; overflow: auto;
+}
+.vitals-roll-editor:focus { outline: none; border-color: var(--textarea-focus); box-shadow: 0 0 0 3px rgba(37,99,235,.25); }
+.vitals-roll-editor strong { font-weight: 800; }

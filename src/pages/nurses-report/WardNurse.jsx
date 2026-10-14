@@ -22,6 +22,7 @@ import Topbar from "../../components/Topbar.jsx";
 import { splitDiagnosisNote, withPatientDiagnosis } from "../../lib/diagnosisNote.js";
 import DiagnosisNoteEditor, { DiagnosisHeadline } from "../../components/DiagnosisNoteEditor.jsx";
 import VitalsNoteText from "../../components/VitalsNoteText.jsx";
+import VitalsRollEditor from "../../components/VitalsRollEditor.jsx";
 import NursingDiagnosisPicker from "../../components/NursingDiagnosisPicker.jsx";
 import NursingDiagnosisSuggestions from '../../components/NursingDiagnosisSuggestions.jsx';
 import { buildStarterText } from "../../lib/nursingCatalog.js";
@@ -1770,8 +1771,10 @@ function WardPanelRest({ h, showLabel, isAdmin, navigate, includeShiftTable = tr
                           {f.type === 'textarea'
                             ? (f.key === 'diagnosis'
                                 ? <DiagnosisNoteEditor value={p.diagnosis || ''} onChange={(v) => updateDiagnosisField(p.id, v)} />
-                                : <textarea className={f.big ? 'big' : ''} value={p[f.key] || ''}
-                                    onChange={(e) => updatePatientField(p.id, f.key, e.target.value)} />)
+                                : f.key === 'npAssessment'
+                                  ? <VitalsRollEditor value={p[f.key] || ''} onChange={(v) => updatePatientField(p.id, f.key, v)} />
+                                  : <textarea className={f.big ? 'big' : ''} value={p[f.key] || ''}
+                                      onChange={(e) => updatePatientField(p.id, f.key, e.target.value)} />)
                             : <input type="text" value={p[f.key] || ''} onChange={(e) => updatePatientField(p.id, f.key, e.target.value)}
                                 onBlur={f.key === 'emr' ? (e) => lookupPatientByEmr(p.id, e.target.value) : undefined} />}
                           {f.key === 'diagnosis' && p.vitalsSnapshot && (

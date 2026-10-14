@@ -14,6 +14,7 @@ import ParoleTables, { hasAny as paroleHasAny } from "../../components/ParoleTab
 import { splitDiagnosisNote } from "../../lib/diagnosisNote.js";
 import DiagnosisNoteEditor, { DiagnosisHeadline } from "../../components/DiagnosisNoteEditor.jsx";
 import VitalsNoteText from "../../components/VitalsNoteText.jsx";
+import VitalsRollEditor from "../../components/VitalsRollEditor.jsx";
 import usePrintOrientation from "../../hooks/usePrintOrientation.js";
 
 const movementFields = SHIFT_STAT_FIELDS;
@@ -287,7 +288,9 @@ function PatientCardEdit({ p, onChange, onRemove }) {
             {f.type === 'textarea'
               ? (f.key === 'diagnosis'
                   ? <DiagnosisNoteEditor value={p.diagnosis || ''} onChange={(v) => onChange({ ...p, diagnosis: v })} />
-                  : <textarea value={p[f.key] || ''} onChange={(e) => onChange({ ...p, [f.key]: e.target.value })} />)
+                  : f.key === 'npAssessment'
+                    ? <VitalsRollEditor value={p[f.key] || ''} onChange={(v) => onChange({ ...p, [f.key]: v })} />
+                    : <textarea value={p[f.key] || ''} onChange={(e) => onChange({ ...p, [f.key]: e.target.value })} />)
               : <input type="text" value={p[f.key] || ''} onChange={(e) => onChange({ ...p, [f.key]: e.target.value })} />}
           </div>
         ))}
