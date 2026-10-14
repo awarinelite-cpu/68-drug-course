@@ -22,6 +22,7 @@ import Topbar from "../../components/Topbar.jsx";
 import { splitDiagnosisNote, withPatientDiagnosis } from "../../lib/diagnosisNote.js";
 import DiagnosisNoteEditor, { DiagnosisHeadline } from "../../components/DiagnosisNoteEditor.jsx";
 import VitalsNoteText from "../../components/VitalsNoteText.jsx";
+import FitTitle from "../../components/FitTitle.jsx";
 import ReportContactModal from "../../components/ReportContactModal.jsx";
 import { useOverallNurseContact } from "../../hooks/useOverallNurseContact.js";
 import VitalsRollEditor from "../../components/VitalsRollEditor.jsx";
@@ -1695,7 +1696,7 @@ function WardPanelRest({ h, showLabel, isAdmin, navigate, includeShiftTable = tr
               )}
               {includeShiftTable && (
                 <div className="table-wrap">
-                  <div className="ward-report-title">24 HOURS WARD REPORT WEF 0900HRS OF 26/09/26 TO 0900HRS OF 27/09/26</div>
+                  <FitTitle>24 HOURS WARD REPORT WEF 0900HRS OF 26/09/26 TO 0900HRS OF 27/09/26</FitTitle>
                   <ShiftTable wardDoc={wardDoc} census={census} movementTotals={movementTotals} editable={editable}
                     onBeds={updateBeds} onField={updateShiftField} onDuty={updateDuty} parole={paroleView} />
                 </div>
@@ -2036,7 +2037,7 @@ function MergedWardReportPanel({ group, isAdmin, profile, user, navigate }) {
             </button>
           </div>
           <div className="table-wrap">
-            <div className="ward-report-title">{group.label} {'\u2014'} 24 HOURS WARD REPORT WEF 0900HRS OF 26/09/26 TO 0900HRS OF 27/09/26</div>
+            <FitTitle>{group.label} {'\u2014'} 24 HOURS WARD REPORT WEF 0900HRS OF 26/09/26 TO 0900HRS OF 27/09/26</FitTitle>
             <MergedShiftTable panels={hooks.map((h) => ({
               w: h.w, wardDoc: h.wardDoc, census: h.census, movementTotals: h.movementTotals,
               editable: h.editable, updateBeds: h.updateBeds, updateShiftField: h.updateShiftField, updateDuty: h.updateDuty
