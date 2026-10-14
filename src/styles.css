@@ -2299,3 +2299,9 @@ h3.ward-report-subheading, .ward-report-subheading { font-size: clamp(28px, 3.4v
 }
 .vitals-roll-editor:focus { outline: none; border-color: var(--textarea-focus); box-shadow: 0 0 0 3px rgba(37,99,235,.25); }
 .vitals-roll-editor strong { font-weight: 800; }
+
+/* Overall Nurse name inside the locked-report notice (tap for call/WhatsApp) */
+.locked-notice .overall-nurse-link {
+  background: none; border: none; padding: 0; margin: 0; font: inherit; font-weight: 800;
+  color: #1d4ed8; text-decoration: underline; cursor: pointer;
+}

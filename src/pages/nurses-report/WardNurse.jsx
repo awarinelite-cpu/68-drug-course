@@ -22,6 +22,8 @@ import Topbar from "../../components/Topbar.jsx";
 import { splitDiagnosisNote, withPatientDiagnosis } from "../../lib/diagnosisNote.js";
 import DiagnosisNoteEditor, { DiagnosisHeadline } from "../../components/DiagnosisNoteEditor.jsx";
 import VitalsNoteText from "../../components/VitalsNoteText.jsx";
+import ReportContactModal from "../../components/ReportContactModal.jsx";
+import { useOverallNurseContact } from "../../hooks/useOverallNurseContact.js";
 import VitalsRollEditor from "../../components/VitalsRollEditor.jsx";
 import NursingDiagnosisPicker from "../../components/NursingDiagnosisPicker.jsx";
 import NursingDiagnosisSuggestions from '../../components/NursingDiagnosisSuggestions.jsx';
@@ -1642,6 +1644,8 @@ function WardPanelRest({ h, showLabel, isAdmin, navigate, includeShiftTable = tr
   // Tapping Add Patient with no shift chosen doesn't add anything: it flags
   // the Select Shift field and scrolls it into view instead.
   const [shiftWarn, setShiftWarn] = useState(false);
+  const overallContact = useOverallNurseContact();
+  const [overallModal, setOverallModal] = useState(false);
   const shiftSelectRef = useRef(null);
   function handleAddPatient() {
     if (!shiftMode) {
@@ -1663,9 +1667,20 @@ function WardPanelRest({ h, showLabel, isAdmin, navigate, includeShiftTable = tr
         <>
           {wardDoc.locked && (
             <div className="locked-notice">
-              {isAdmin ? "This ward's report is locked." : "This ward's report is locked. Ask the Overall Nurse to grant access before editing."}
+              {isAdmin ? "This ward's report is locked." : (
+                <>
+                  {"This ward's report is locked. Ask the Overall Nurse"}
+                  {overallContact && (
+                    <>{' '}<button type="button" className="overall-nurse-link" onClick={() => setOverallModal(true)}>{overallContact.name}</button></>
+                  )}
+                  {' to grant access before editing.'}
+                </>
+              )}
               {isAdmin && !adminEditOverride && <button className="admin-edit-btn" onClick={() => setAdminEditOverride(true)}>{'\u270F\uFE0F'}</button>}
             </div>
+          )}
+          {overallModal && overallContact && (
+            <ReportContactModal nurse={overallContact} title="Overall Nurse" onClose={() => setOverallModal(false)} />
           )}
 
           {(includeShiftTable || includeDemographics || hasParole) && (

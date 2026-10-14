@@ -17,7 +17,7 @@ export function normalizePhone(raw) {
 // call-or-WhatsApp chooser once the phone number itself is tapped.
 // `nurse` is { name, phone, wardLabel } — phone may be missing if the
 // nurse hasn't filled it in on her Profile page yet.
-export default function ReportContactModal({ nurse, onClose }) {
+export default function ReportContactModal({ nurse, onClose, title }) {
   const [showChooser, setShowChooser] = useState(false);
   if (!nurse) return null;
 
@@ -27,7 +27,7 @@ export default function ReportContactModal({ nurse, onClose }) {
     <div className="modal-overlay no-print" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div className="modal-box" style={{ maxWidth: 340 }}>
         <div className="modal-header">
-          <h3>{nurse.wardLabel ? nurse.wardLabel + ' — Nurse on Duty' : 'Nurse on Duty'}</h3>
+          <h3>{title || (nurse.wardLabel ? nurse.wardLabel + ' — Nurse on Duty' : 'Nurse on Duty')}</h3>
           <button className="modal-close" onClick={onClose}>&times;</button>
         </div>
         <div className="modal-body">
