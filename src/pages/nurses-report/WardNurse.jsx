@@ -1696,8 +1696,7 @@ function WardPanelRest({ h, showLabel, isAdmin, navigate, includeShiftTable = tr
               )}
               {includeShiftTable && (
                 <div className="table-wrap">
-                  <div className="ward-name-corner">{w.label}</div>
-                  <FitTitle>24 HOURS WARD REPORT WEF 0900HRS OF 26/09/26 TO 0900HRS OF 27/09/26</FitTitle>
+                  <FitTitle label={w.label}>24 HOURS WARD REPORT WEF 0900HRS OF 26/09/26 TO 0900HRS OF 27/09/26</FitTitle>
                   <ShiftTable wardDoc={wardDoc} census={census} movementTotals={movementTotals} editable={editable}
                     onBeds={updateBeds} onField={updateShiftField} onDuty={updateDuty} parole={paroleView} />
                 </div>
@@ -2038,8 +2037,7 @@ function MergedWardReportPanel({ group, isAdmin, profile, user, navigate }) {
             </button>
           </div>
           <div className="table-wrap">
-            <div className="ward-name-corner">{group.label}</div>
-            <FitTitle>24 HOURS WARD REPORT WEF 0900HRS OF 26/09/26 TO 0900HRS OF 27/09/26</FitTitle>
+            <FitTitle label={group.label}>24 HOURS WARD REPORT WEF 0900HRS OF 26/09/26 TO 0900HRS OF 27/09/26</FitTitle>
             <MergedShiftTable panels={hooks.map((h) => ({
               w: h.w, wardDoc: h.wardDoc, census: h.census, movementTotals: h.movementTotals,
               editable: h.editable, updateBeds: h.updateBeds, updateShiftField: h.updateShiftField, updateDuty: h.updateDuty
