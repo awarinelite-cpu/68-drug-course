@@ -2325,3 +2325,20 @@ h3.ward-report-subheading, .ward-report-subheading { font-size: clamp(28px, 3.4v
   .archive-report-box { padding-left: 8px; padding-right: 8px; }
   .archive-report-box > h2, .archive-report-box .ward-report-heading { padding-left: 14px; padding-right: 14px; }
 }
+
+/* Widen patient write-ups on every page that shows them (Ward Nurse, Overall
+   Nurse, Archive): trim the side gaps so the blue patient-block borders run
+   almost up to the outer card border. */
+@media (max-width: 700px) {
+  .ward-nurse-box { padding-left: 3px; padding-right: 3px; }
+  .ward-nurse-box > h2 { padding: 0 10px; }
+  .ward-nurse-box .patient-block { --pb-pad: 8px; }
+  .ward-reports-box { padding-left: 2px; padding-right: 2px; }
+  .ward-reports-box .ward-card { margin-left: 0; margin-right: 0; }
+  .ward-reports-box .ward-card-body { padding: 0 2px 12px; }
+  .ward-reports-box .patient-block { --pb-pad: 8px; }
+}
+@media (min-width: 701px) {
+  .ward-nurse-box, .ward-reports-box { padding-left: 8px; padding-right: 8px; }
+  .ward-reports-box .ward-card-body { padding: 0 6px 14px; }
+}
