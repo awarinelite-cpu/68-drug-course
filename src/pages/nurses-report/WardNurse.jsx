@@ -153,7 +153,10 @@ const SWITCH_WARNING ='This will REPLACE everything on this write-up with the ne
 // being silently dropped, so it's obvious a reading is incomplete.
 function formatVitalsLine(v) {
   const val = (x) => (x === undefined || x === null || x === '') ? '\u2014' : x;
-  return `T-${val(v.temp)}\u2070c P-${val(v.pulse)}b/m R-${val(v.resp)}c/m BP- ${val(v.bp)}mmHg SPO2- ${val(v.spo2)}%.`;
+  const base = `T-${val(v.temp)}\u2070c P-${val(v.pulse)}b/m R-${val(v.resp)}c/m BP- ${val(v.bp)}mmHg SPO2- ${val(v.spo2)}%.`;
+  const note = (v.notes || '').toString().trim();
+  // Any note typed on the Vital Signs Chart always travels with the reading.
+  return note ? `${note}: ${base}` : base;
 }
 
 async function fetchLatestVitals(patientId) {
@@ -161,6 +164,37 @@ async function fetchLatestVitals(patientId) {
   const snap = await getDocsSafe(q);
   if (snap.empty) return null;
   return snap.docs[0].data();
+}
+
+// Sort key matching the Vitals Chart (separate date + time, or legacy
+// combined "YYYY-MM-DDTHH:MM" in time).
+function vitalsKey(r) {
+  return r.date ? (r.date + 'T' + (r.time || '')) : (r.time || '');
+}
+
+// Readings for the Vital Signs Roll, oldest first. Normally just the latest
+// reading. If the latest is a POST- reading (e.g. post-transfusion) and an
+// earlier PRE- reading (e.g. pre-transfusion) was taken within 24h, both are
+// returned so the roll shows pre and post together, each with its note.
+async function fetchVitalsForRoll(patientId) {
+  const q = query(collection(db, 'patients', patientId, 'vitals'), orderBy('time', 'desc'), limit(15));
+  const snap = await getDocsSafe(q);
+  if (snap.empty) return [];
+  const rows = snap.docs.map((d) => d.data()).sort((a, b) => (vitalsKey(b) < vitalsKey(a) ? -1 : vitalsKey(b) > vitalsKey(a) ? 1 : 0));
+  const latest = rows[0];
+  const out = [latest];
+  const isPost = (n) => /\bpost\b/i.test(n || '');
+  const isPre = (n) => /\bpre\b/i.test(n || '');
+  if (isPost(latest.notes)) {
+    const latestMs = Date.parse(vitalsKey(latest));
+    const pre = rows.slice(1).find((r) => {
+      if (!isPre(r.notes)) return false;
+      const ms = Date.parse(vitalsKey(r));
+      return isNaN(latestMs) || isNaN(ms) || (latestMs - ms) <= 24 * 3600 * 1000;
+    });
+    if (pre) out.unshift(pre);
+  }
+  return out;
 }
 
 // The patient's current drugs from their Drug Course Chart, one per line as
@@ -861,7 +895,7 @@ function useWardReport(wardKey, isAdmin, profile, user) {
     try {
       const latest = await fetchLatestVitals(patientId);
       if (!latest) return;
-      const snapshot = { temp: latest.temp || '', pulse: latest.pulse || '', resp: latest.resp || '', bp: latest.bp || '', spo2: latest.spo2 || '' };
+      const snapshot = { temp: latest.temp || '', pulse: latest.pulse || '', resp: latest.resp || '', bp: latest.bp || '', spo2: latest.spo2 || '', notes: latest.notes || '' };
       const vitalsLine = formatVitalsLine(snapshot);
       setWardDoc((d) => ({
         ...d,
@@ -907,9 +941,9 @@ function useWardReport(wardKey, isAdmin, profile, user) {
   async function fillVitalsRoll(id, patientId) {
     if (!patientId) return;
     try {
-      const latest = await fetchLatestVitals(patientId);
-      if (!latest) return;
-      const line = formatVitalsLine({ temp: latest.temp || '', pulse: latest.pulse || '', resp: latest.resp || '', bp: latest.bp || '', spo2: latest.spo2 || '' });
+      const readings = await fetchVitalsForRoll(patientId);
+      if (!readings.length) return;
+      const line = readings.map((r) => formatVitalsLine({ temp: r.temp || '', pulse: r.pulse || '', resp: r.resp || '', bp: r.bp || '', spo2: r.spo2 || '', notes: r.notes || '' })).join('\n');
       setWardDoc((d) => ({
         ...d,
         patients: d.patients.map((p) => (p.id === id && !p.npAssessment && linkedPatientIdFor(p) === patientId) ? { ...p, npAssessment: line } : p)
