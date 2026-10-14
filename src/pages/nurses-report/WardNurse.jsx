@@ -185,10 +185,15 @@ async function fetchVitalsForRoll(patientId) {
   const out = [latest];
   const isPost = (n) => /\bpost\b/i.test(n || '');
   const isPre = (n) => /\bpre\b/i.test(n || '');
+  // Which event the note belongs to, so POST-TRANSFUSION only pairs with
+  // PRE-TRANSFUSION and POST-OP only with PRE-OP.
+  const kindOf = (n) => /transfus/i.test(n || '') ? 'transfusion' : /\bop\b|operative|surg/i.test(n || '') ? 'op' : '';
   if (isPost(latest.notes)) {
     const latestMs = Date.parse(vitalsKey(latest));
+    const kind = kindOf(latest.notes);
     const pre = rows.slice(1).find((r) => {
       if (!isPre(r.notes)) return false;
+      if (kind && kindOf(r.notes) && kindOf(r.notes) !== kind) return false;
       const ms = Date.parse(vitalsKey(r));
       return isNaN(latestMs) || isNaN(ms) || (latestMs - ms) <= 24 * 3600 * 1000;
     });
