@@ -695,7 +695,7 @@ export default function ArchiveView() {
           </div>
         )}
 
-        <div className="card-box">
+        <div className="card-box archive-report-box">
           <h2>{'Ward Report' + (isOverallType ? 's' : '')}</h2>
           {wardsMeta.map((w) => {
             const data = wardsMap[w.key] || {};
