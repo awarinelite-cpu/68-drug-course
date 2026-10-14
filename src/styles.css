@@ -2305,3 +2305,9 @@ h3.ward-report-subheading, .ward-report-subheading { font-size: clamp(28px, 3.4v
   background: none; border: none; padding: 0; margin: 0; font: inherit; font-weight: 800;
   color: #1d4ed8; text-decoration: underline; cursor: pointer;
 }
+
+/* Ward name, top-left above the 24 HOURS WARD REPORT heading */
+.ward-name-corner {
+  text-align: left; font-weight: 800; text-transform: uppercase; letter-spacing: .03em;
+  font-size: clamp(16px, 2vw, 24px); line-height: 1.2; margin: 0 0 4px; color: inherit;
+}
