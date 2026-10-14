@@ -21,6 +21,7 @@ import useArchiveSweep from "../../hooks/useArchiveSweep.js";
 import Topbar from "../../components/Topbar.jsx";
 import { splitDiagnosisNote, withPatientDiagnosis } from "../../lib/diagnosisNote.js";
 import DiagnosisNoteEditor, { DiagnosisHeadline } from "../../components/DiagnosisNoteEditor.jsx";
+import VitalsNoteText from "../../components/VitalsNoteText.jsx";
 import NursingDiagnosisPicker from "../../components/NursingDiagnosisPicker.jsx";
 import NursingDiagnosisSuggestions from '../../components/NursingDiagnosisSuggestions.jsx';
 import { buildStarterText } from "../../lib/nursingCatalog.js";
@@ -303,7 +304,7 @@ function isNoteHeadingLine(line) {
   const letters = t.replace(/[^A-Za-z]/g, '');
   return letters.length > 0 && letters === letters.toUpperCase();
 }
-function NoteLines({ text, withDiagnosis }) {
+function NoteLines({ text, withDiagnosis, withVitals }) {
   let body = String(text);
   let head = null;
   if (withDiagnosis) {
@@ -321,7 +322,7 @@ function NoteLines({ text, withDiagnosis }) {
   flushPara();
   return <>{head}{blocks.map((b, i) => b.type === 'h'
     ? <h4 className="patient-note-subheading" key={i}>{b.text}</h4>
-    : <p className="patient-note-text" key={i}>{b.text}</p>)}</>;
+    : <p className="patient-note-text" key={i}>{withVitals ? <VitalsNoteText text={b.text} /> : b.text}</p>)}</>;
 }
 
 function PatientBlockView({ p, n = 1, total = 1 }) {
@@ -338,7 +339,7 @@ function PatientBlockView({ p, n = 1, total = 1 }) {
       {textFields.map(f => p[f.key] ? (
         <div key={f.key}>
           <h3 className="patient-note-label">{f.label}:</h3>
-          <NoteLines text={p[f.key]} withDiagnosis={f.key === 'diagnosis'} />
+          <NoteLines text={p[f.key]} withDiagnosis={f.key === 'diagnosis'} withVitals={f.key === 'npAssessment'} />
         </div>
       ) : null)}
       {p.nightUpdate && (

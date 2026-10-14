@@ -28,6 +28,7 @@ import Topbar from "../../components/Topbar.jsx";
 import ParoleTables, { hasAny as paroleHasAny } from "../../components/ParoleTables.jsx";
 import { splitDiagnosisNote } from "../../lib/diagnosisNote.js";
 import { DiagnosisHeadline } from "../../components/DiagnosisNoteEditor.jsx";
+import VitalsNoteText from "../../components/VitalsNoteText.jsx";
 import usePrintOrientation from "../../hooks/usePrintOrientation.js";
 
 const movementFields = SHIFT_STAT_FIELDS;
@@ -44,7 +45,7 @@ function isNoteHeadingLine(line) {
   const letters = t.replace(/[^A-Za-z]/g, '');
   return letters.length > 0 && letters === letters.toUpperCase();
 }
-function NoteLines({ text, withDiagnosis }) {
+function NoteLines({ text, withDiagnosis, withVitals }) {
   let body = String(text);
   let head = null;
   if (withDiagnosis) {
@@ -62,7 +63,7 @@ function NoteLines({ text, withDiagnosis }) {
   flushPara();
   return <>{head}{blocks.map((b, i) => b.type === 'h'
     ? <h4 className="patient-note-subheading" key={i}>{b.text}</h4>
-    : <p className="patient-note-text" key={i}>{b.text}</p>)}</>;
+    : <p className="patient-note-text" key={i}>{withVitals ? <VitalsNoteText text={b.text} /> : b.text}</p>)}</>;
 }
 
 const PAROLE_COLS = [{ key: 'parole', label: 'Parole' }, { key: 'dParole', label: 'D/Parole' }];
@@ -272,7 +273,7 @@ function PatientBlock({ p, n = 1, total = 1 }) {
       {textFields.map(f => p[f.key] ? (
         <div key={f.key}>
           <h3 className="patient-note-label">{f.label}:</h3>
-          <NoteLines text={p[f.key]} withDiagnosis={f.key === 'diagnosis'} />
+          <NoteLines text={p[f.key]} withDiagnosis={f.key === 'diagnosis'} withVitals={f.key === 'npAssessment'} />
         </div>
       ) : null)}
       {p.nightUpdate && (
