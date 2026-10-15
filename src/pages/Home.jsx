@@ -788,7 +788,6 @@ export default function Home() {
           <a href="/admin" className="btn btn-purple" style={{ padding: '6px 12px' }} onClick={(e) => { e.preventDefault(); navigate('/admin'); }}>Admin</a>
         )}
         <a href="/my-patients" className="btn btn-secondary" style={{ padding: '6px 12px' }} onClick={(e) => { e.preventDefault(); navigate('/my-patients'); }}>My Patients</a>
-        <a href="#" className="btn btn-secondary" style={{ padding: '6px 12px' }} onClick={(e) => { e.preventDefault(); loadWardData(true); }}>{'↻'} Refresh</a>
         {myWard && (
           <a href="#" className="btn btn-secondary notif-bell-btn" style={{ padding: '6px 12px' }} onClick={(e) => { e.preventDefault(); setShowTransfers(true); }}>
             🔔 New Patient
