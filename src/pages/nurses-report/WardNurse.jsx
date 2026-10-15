@@ -361,7 +361,7 @@ function PatientBlockView({ p, n = 1, total = 1 }) {
 // the Parole / D/Parole tables and are never summed into anything.
 const PAROLE_COLS = [{ key: 'parole', label: 'Parole' }, { key: 'dParole', label: 'D/Parole' }];
 
-function ShiftTable({ wardKey, wardDoc, census, movementTotals, editable, onBeds, onField, onDuty, parole }) {
+function ShiftTable({ wardKey, wardDoc, census, movementTotals, editable, statsEditable, onBeds, onField, onDuty, parole }) {
   const showDel = wardShowsDel(wardKey);
   const afterCols = showDel ? SOLO_AFTER : SOLO_AFTER.filter(f => f.key !== 'del');
   const moveCols = showDel ? ORDERED_MOVEMENT : ORDERED_MOVEMENT.filter(f => f.key !== 'del');
@@ -389,7 +389,7 @@ function ShiftTable({ wardKey, wardDoc, census, movementTotals, editable, onBeds
             <td className="shift-name">{s.label}</td>
             <td className={"stat-beds" + (s.key === 'am' ? '' : ' mirrored')}>
               {s.key === 'am'
-                ? <input type="number" inputMode="numeric" disabled={!editable} value={wardDoc.beds} onChange={(e) => onBeds(e.target.value)} />
+                ? <input type="number" inputMode="numeric" disabled={!statsEditable} value={wardDoc.beds} onChange={(e) => onBeds(e.target.value)} />
                 : census.beds}
             </td>
             <td className="computed stat-occ">{census.perShiftOcc[s.key]}</td>
@@ -397,7 +397,7 @@ function ShiftTable({ wardKey, wardDoc, census, movementTotals, editable, onBeds
             {moveCols.map((f) => (
               <Fragment key={f.key}>
                 <td className={movementColorClass(f.key)}>
-                  <input type="number" inputMode="numeric" disabled={!editable}
+                  <input type="number" inputMode="numeric" disabled={!statsEditable}
                     value={wardDoc.shifts[s.key][f.key]} onChange={(e) => onField(s.key, f.key, e.target.value)} />
                 </td>
                 {f.key === 'bid' && parole && PAROLE_COLS.map(c => <td key={c.key} className="computed">{parole[c.key].length}</td>)}
@@ -455,7 +455,7 @@ function DemographicsHeaderRows({ leadCell, trailingCell }) {
 // One daily total per ward, entered directly — matches the paper
 // "Summary Breakdown of Statistics" form's single row per ward, rather
 // than a per-shift entry table.
-function DemographicsTable({ wardDoc, editable, onField, onRemarks, census }) {
+function DemographicsTable({ wardDoc, editable, statsEditable, onField, onRemarks, census }) {
   return (
     <table className="shift">
       <thead>
@@ -467,12 +467,12 @@ function DemographicsTable({ wardDoc, editable, onField, onRemarks, census }) {
             <td key={f.key}>
               {f.category === 'adm' && census
                 ? <input type="number" inputMode="numeric" disabled readOnly value={census[f.key] || 0} />
-                : <input type="number" inputMode="numeric" disabled={!editable}
+                : <input type="number" inputMode="numeric" disabled={!statsEditable}
                     value={wardDoc[f.key]} onChange={(e) => onField(f.key, e.target.value)} />}
             </td>
           ))}
           <td>
-            <input type="text" disabled={!editable}
+            <input type="text" disabled={!statsEditable}
               value={wardDoc.demographicsRemarks || ''} onChange={(e) => onRemarks(e.target.value)} />
           </td>
         </tr>
@@ -1700,7 +1700,7 @@ function WardPanelRest({ h, showLabel, isAdmin, navigate, includeShiftTable = tr
               {includeShiftTable && (
                 <div className="table-wrap">
                   <FitTitle label={w.label}>24 HOURS WARD REPORT WEF 0900HRS OF 26/09/26 TO 0900HRS OF 27/09/26</FitTitle>
-                  <ShiftTable wardKey={w.key} wardDoc={wardDoc} census={census} movementTotals={movementTotals} editable={editable}
+                  <ShiftTable wardKey={w.key} wardDoc={wardDoc} census={census} movementTotals={movementTotals} editable={editable} statsEditable={isAdmin && editable}
                     onBeds={updateBeds} onField={updateShiftField} onDuty={updateDuty} parole={paroleView} />
                 </div>
               )}
@@ -1708,7 +1708,7 @@ function WardPanelRest({ h, showLabel, isAdmin, navigate, includeShiftTable = tr
                 <>
                   <h2 style={includeShiftTable ? { marginTop: 14 } : undefined}>Patient Demographics</h2>
                   <div className="table-wrap">
-                    <DemographicsTable wardDoc={wardDoc} editable={editable} census={liveCensusMap ? (liveCensusMap[wardKey] || {}) : null}
+                    <DemographicsTable wardDoc={wardDoc} editable={editable} statsEditable={isAdmin && editable} census={liveCensusMap ? (liveCensusMap[wardKey] || {}) : null}
                       onField={(key, raw) => { touchedDemographicFieldsRef.current.add(key); const n = parseFloat(raw); updateWardDoc({ [key]: isNaN(n) ? 0 : n }); }}
                       onRemarks={(v) => updateWardDoc({ demographicsRemarks: v })} />
                   </div>
@@ -1917,14 +1917,14 @@ function MergedShiftTable({ panels }) {
                 <td className="shift-name">{p.w.label}</td>
                 <td className={"stat-beds" + (s.key === 'am' ? '' : ' mirrored')}>
                   {s.key === 'am'
-                    ? <input type="number" inputMode="numeric" disabled={!p.editable} value={p.wardDoc.beds} onChange={(e) => p.updateBeds(e.target.value)} />
+                    ? <input type="number" inputMode="numeric" disabled={!p.statsEditable} value={p.wardDoc.beds} onChange={(e) => p.updateBeds(e.target.value)} />
                     : p.census.beds}
                 </td>
                 <td className="computed stat-occ">{p.census.perShiftOcc[s.key]}</td>
                 <td className="computed stat-vac">{p.census.beds - p.census.perShiftOcc[s.key]}</td>
                 {moveCols.map((f) => (
                   <td key={f.key} className={movementColorClass(f.key)}>
-                    <input type="number" inputMode="numeric" disabled={!p.editable}
+                    <input type="number" inputMode="numeric" disabled={!p.statsEditable}
                       value={p.wardDoc.shifts[s.key][f.key]} onChange={(e) => p.updateShiftField(s.key, f.key, e.target.value)} />
                   </td>
                 ))}
@@ -1974,12 +1974,12 @@ function MergedDemographicsTable({ panels, censusMap }) {
               <td key={f.key}>
                 {f.category === 'adm' && censusMap
                   ? <input type="number" inputMode="numeric" disabled readOnly value={(censusMap[p.w.key] || {})[f.key] || 0} />
-                  : <input type="number" inputMode="numeric" disabled={!p.editable}
+                  : <input type="number" inputMode="numeric" disabled={!p.statsEditable}
                       value={getVal(p, f.key)} onChange={(e) => p.onField(f.key, e.target.value)} />}
               </td>
             ))}
             <td>
-              <input type="text" disabled={!p.editable}
+              <input type="text" disabled={!p.statsEditable}
                 value={p.wardDoc.demographicsRemarks || ''} onChange={(e) => p.onRemarks(e.target.value)} />
             </td>
           </tr>
@@ -2046,7 +2046,7 @@ function MergedWardReportPanel({ group, isAdmin, profile, user, navigate }) {
             <FitTitle label={group.label}>24 HOURS WARD REPORT WEF 0900HRS OF 26/09/26 TO 0900HRS OF 27/09/26</FitTitle>
             <MergedShiftTable panels={hooks.map((h) => ({
               w: h.w, wardDoc: h.wardDoc, census: h.census, movementTotals: h.movementTotals,
-              editable: h.editable, updateBeds: h.updateBeds, updateShiftField: h.updateShiftField, updateDuty: h.updateDuty
+              editable: h.editable, statsEditable: isAdmin && h.editable, updateBeds: h.updateBeds, updateShiftField: h.updateShiftField, updateDuty: h.updateDuty
             }))} />
           </div>
           {mergedDemographics && (
@@ -2055,7 +2055,7 @@ function MergedWardReportPanel({ group, isAdmin, profile, user, navigate }) {
               <div className="table-wrap">
                 <MergedDemographicsTable panels={hooks.map((h) => ({
                   w: { ...h.w, label: DEMOGRAPHICS_ROW_LABEL[h.w.key] || h.w.label },
-                  wardDoc: h.wardDoc, editable: h.editable,
+                  wardDoc: h.wardDoc, editable: h.editable, statsEditable: isAdmin && h.editable,
                   onField: (key, raw) => { h.touchedDemographicFieldsRef.current.add(key); const n = parseFloat(raw); h.updateWardDoc({ [key]: isNaN(n) ? 0 : n }); },
                   onRemarks: (v) => h.updateWardDoc({ demographicsRemarks: v })
                 }))} censusMap={mergedCensusMap} />
