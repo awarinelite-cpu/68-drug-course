@@ -42,7 +42,7 @@ const DEMOGRAPHICS_ROW_LABEL = { matbed: 'MAT BED', matcot: 'MAT COT' };
 const movementFields = SHIFT_STAT_FIELDS;
 const byKey = k => movementFields.find(f => f.key === k);
 const SOLO_BEFORE = ['adm', 'disch', 'dama'].map(byKey);
-const SOLO_AFTER = ['sc', 'vsc', 'absc', 'bid', 'death'].map(byKey);
+const SOLO_AFTER = ['del', 'sc', 'vsc', 'absc', 'bid', 'death'].map(byKey);
 const TRANSFER_PAIR = [byKey('transferIn'), byKey('transferOut')];
 const EXT_PAIR = [byKey('ext'), byKey('extOut')];
 const ORDERED_MOVEMENT = [...SOLO_BEFORE, ...TRANSFER_PAIR, ...EXT_PAIR, ...SOLO_AFTER];

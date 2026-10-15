@@ -185,6 +185,10 @@ export const STAT_FIELDS = [
   { key: 'transferOut', label: 'Transfer Out' },
   { key: 'ext',         label: 'Ext In' },
   { key: 'extOut',      label: 'Ext Out' },
+  // DEL sits right after Ext Out. A plain per-shift count that is summed
+  // like BID/S/C: it is NOT in OCC_INCREASE_KEYS / OCC_DECREASE_KEYS, so it
+  // never changes Occ, Vac or the number of patients.
+  { key: 'del',         label: 'DEL' },
   { key: 'sc',          label: 'S/C' },
   { key: 'vsc',         label: 'VS/C' },
   { key: 'absc',        label: 'Absc' },
