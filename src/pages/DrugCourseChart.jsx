@@ -1004,17 +1004,18 @@ export default function DrugCourseChart() {
       return;
     }
 
-    // "Not admitted": undoes the automatic ADM, deletes this admission's
-    // charts (nothing goes to Overview) and moves the patient file to the
-    // Patient Archive. No saveChart() flush — the chart is being deleted.
+    // "Not admitted": undoes the automatic ADM, archives this admission's
+    // charts (kept in Overview) and moves the patient file to the
+    // Patient Archive. 
     if (reason === 'notAdmitted') {
       if (!navigator.onLine) {
-        setStatusMsg({ color: '#dc2626', text: 'This needs an internet connection — it removes the admission and its charts. Please try again once online.' });
+        setStatusMsg({ color: '#dc2626', text: 'This needs an internet connection — it archives the patient's charts. Please try again once online.' });
         return;
       }
-      if (!confirm('Confirm: Not admitted?\n\nThis patient was never truly admitted. The ADM count will be reversed, this admission and all its charts (drug chart, vitals, glycemic, intake & output, seizure) will be DELETED, and the patient file will move to the Archive.')) return;
+      if (!confirm('Confirm: Not admitted?\n\nThis patient was never truly admitted. The ADM count will be reversed and the patient file will move to the Archive. Nothing is deleted — all charts are kept in Overview.')) return;
       setStatusApplying(true);
-      setStatusMsg({ color: '#555', text: 'Removing admission…' });
+      setStatusMsg({ color: '#555', text: 'Moving patient to Archive…' });
+      await saveChart(); // flush latest drug-chart edits so they're archived
       const result = await markPatientNotAdmitted({ patientId });
       if (!result.ok) {
         setStatusMsg({ color: '#dc2626', text: result.message });

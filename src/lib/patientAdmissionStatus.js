@@ -391,16 +391,17 @@ export async function applyPatientStatus({ patientId, reason, transferWard, from
 
 // "Not admitted": a patient who was registered / given a Drug Course Chart
 // (and so auto-counted as an ADM on the ward) but, after observation, was
-// never truly admitted. This undoes the admission instead of exiting it:
+// never truly admitted. Nothing is deleted:
+//  - the admission's charts are archived exactly like any other exit
+//    (applyPatientStatus saves them as an `admissions` record, so they stay
+//    viewable in Overview, labelled "Not admitted");
 //  - the automatic Admission count (Shift Statistics ADM, or Ext In for an
 //    external arrival, plus the Patient Demographics Admission cell) is
-//    reversed, and nothing is counted as a Discharge;
-//  - NO `admissions` record is written, so nothing shows in Overview — the
-//    admission is deleted, and every chart (drug course, glycemic, vitals,
-//    I&O, seizure) is wiped blank;
-//  - `ward` is cleared, which is what puts the patient file in the Patient
-//    Archive (see PatientArchive.jsx). No DISCHARGE tag / closing ward
-//    report is needed since they were never on the ward's books.
+//    reversed, and nothing is counted as a Discharge (EXIT_STAT_KEY has no
+//    'notAdmitted' entry);
+//  - `ward` is cleared straight away (no DISCHARGE tag / closing ward
+//    report, since they were never on the ward's books), which is what puts
+//    the patient file in the Patient Archive (see PatientArchive.jsx).
 // Transfer-ins and readmits are refused: those patients really were
 // admitted somewhere, so "not admitted" doesn't apply.
 export async function markPatientNotAdmitted({ patientId }) {
@@ -417,49 +418,34 @@ export async function markPatientNotAdmitted({ patientId }) {
     return { ok: false, message: 'This patient was transferred in or readmitted, so they can\u2019t be marked Not admitted. Use Transfer or Discharge instead.' };
   }
 
-  await releaseParoleOnExit(patientId);
-
   const ward = pdata.ward || '';
   const pedBedType = pdata.pedBedType || '';
   const statKey = pdata.admissionSource === 'EXT_TRANSFER' ? 'ext' : 'adm';
   const officer = isOfficerArmyNumber(pdata.armyNumber);
 
-  // Reverse the automatic counts made at registration (see createPatient
-  // in Home.jsx). Best-effort, same as every other stat bump — a no-op if
-  // that day's report was already submitted.
+  // Archive every chart first (also clears allocations/parole and blanks the
+  // live charts so the next admission starts clean).
+  const archived = await applyPatientStatus({ patientId, reason: 'notAdmitted', transferWard: '', fromWard: ward, transferredByName: '' });
+  if (!archived.ok && !archived.archived) return archived;
+
+  // Reverse the automatic counts made at registration (see createPatient in
+  // Home.jsx). Best-effort, same as every other stat bump — a no-op if that
+  // day's report was already submitted.
   bumpShiftStatForPatientWard(ward, pedBedType, statKey, -1).catch(() => {});
   if (pdata.gender === 'M' || pdata.gender === 'F' || officer) {
     bumpDemographicStatForPatientWard(ward, pedBedType, 'adm', classifyAffiliation(pdata), pdata.gender, -1, { officer }).catch(() => {});
   }
 
-  async function clearEntries(collName) {
-    const snap = await getDocs(collection(db, 'patients', patientId, collName));
-    await Promise.all(snap.docs.map(d => deleteDoc(doc(db, 'patients', patientId, collName, d.id))));
-  }
   try {
-    await Promise.all([
-      setDoc(doc(db, 'patients', patientId, 'drugCourseChart', 'main'), {
-        f_admission: '', f_discharge: '', f_diagnosis: '',
-        rows: blankChartRows(), drugs: blankDrugs(),
-        verbalOrders: [], careInstructions: [], auditLog: [],
-        updatedAt: serverTimestamp()
-      }),
-      setDoc(doc(db, 'patients', patientId, 'bloodGlucose', 'main'), { chartType: '6point', rows6: [], rows3: [], updatedAt: serverTimestamp() }),
-      setDoc(doc(db, 'patients', patientId, 'intakeOutputSummary', 'current'), { intake: 0, output: 0, balance: 0, periodDate: new Date().toISOString().slice(0, 10), updatedAt: serverTimestamp() }),
-      clearEntries('vitals'), clearEntries('intakeOutput'), clearEntries('seizure')
-    ]);
     await updateDoc(doc(db, 'patients', patientId), {
       ward: '', pedBedType: '',
       dischargeStatus: '', dischargeStatusAt: null, dischargeStatShiftRef: null, dischargeStatDemographicRef: null,
       admissionSource: '', admissionSourceAt: null, transferRejectedByWard: '',
-      pendingTransfer: null,
-      paroleStatus: '', paroleAt: null, paroleWard: '', paroleStart: '', paroleReturn: '',
       updatedAt: serverTimestamp()
     });
   } catch (e) {
-    return { ok: false, message: 'Could not fully remove the admission: ' + (e.code || e.message || 'unknown error') };
+    return { ok: false, message: 'Archived, but could not move the patient file to the Archive: ' + (e.code || e.message || 'unknown error') };
   }
-  clearAllocationsForPatient(patientId).catch((err) => console.warn('Could not clear allocations after Not admitted:', err));
   return { ok: true, label: STATUS_LABELS.notAdmitted };
 }
 
