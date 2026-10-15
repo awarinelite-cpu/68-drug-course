@@ -322,7 +322,7 @@ export default function Patient() {
     // Patient Archive. See markPatientNotAdmitted.
     if (reason === 'notAdmitted') {
       if (!navigator.onLine) {
-        setStatusMsg({ color: '#dc2626', text: 'This needs an internet connection — it archives the patient's charts. Please try again once online.' });
+        setStatusMsg({ color: '#dc2626', text: 'This needs an internet connection — it archives the patient\u2019s charts. Please try again once online.' });
         return;
       }
       if (!confirm('Confirm: Not admitted?\n\nThis patient was never truly admitted. The ADM count will be reversed and the patient file will move to the Archive. Nothing is deleted — all charts are kept in Overview.')) return;
