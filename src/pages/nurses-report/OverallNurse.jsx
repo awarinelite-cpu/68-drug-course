@@ -15,7 +15,7 @@ import {
   loadWardNameOverrides, saveWardNameOverride, loadWardBedOverrides,
   loadHeaderLabelOverrides, saveHeaderLabelOverride, headerLabel, GROUP_LABEL_IDS,
   CUSTOM_TEXT_COLUMNS, loadCustomColumns, addCustomColumn, renameCustomColumn, removeCustomColumn,
-  isWardDocUntouched, PAROLE_WARD_KEY
+  isWardDocUntouched, PAROLE_WARD_KEY, wardShowsDel
 } from "../../lib/nurses-report-common.js";
 import { patientWardAndBedTypeForReportKey } from "../../lib/wardNameMatch.js";
 import { wardHeadcount } from "../../lib/wardCensus.js";
@@ -69,6 +69,9 @@ function NoteLines({ text, withDiagnosis, withVitals }) {
 const PAROLE_COLS = [{ key: 'parole', label: 'Parole' }, { key: 'dParole', label: 'D/Parole' }];
 
 function WardShiftTable({ w, data }) {
+  const showDel = wardShowsDel(w.key);
+  const afterCols = showDel ? SOLO_AFTER : SOLO_AFTER.filter(f => f.key !== 'del');
+  const moveCols = showDel ? ORDERED_MOVEMENT : ORDERED_MOVEMENT.filter(f => f.key !== 'del');
   const shifts = data.shifts || {};
   const beds = typeof data.beds === 'number' ? data.beds : (w.beds || 0);
   const startOcc = typeof data.startOcc === 'number' ? data.startOcc : 0;
@@ -94,7 +97,7 @@ function WardShiftTable({ w, data }) {
           {SOLO_BEFORE.map(f => <th key={f.key} rowSpan={2}>{f.label}</th>)}
           <th colSpan={2}>Int. Transfer</th>
           <th colSpan={2}>Ext. Transfer</th>
-          {SOLO_AFTER.map(f => (
+          {afterCols.map(f => (
             <Fragment key={f.key}>
               <th rowSpan={2}>{f.label}</th>
               {f.key === 'bid' && isParoleWard && PAROLE_COLS.map(c => <th key={c.key} rowSpan={2}>{c.label}</th>)}
@@ -113,7 +116,7 @@ function WardShiftTable({ w, data }) {
               <td className="stat-beds">{beds}</td>
               <td className="stat-occ">{perShiftOcc[s.key]}</td>
               <td className="stat-vac">{beds - perShiftOcc[s.key]}</td>
-              {ORDERED_MOVEMENT.map(f => (
+              {moveCols.map(f => (
                 <Fragment key={f.key}>
                   <td className={movementColorClass(f.key)}>{typeof sData[f.key] === 'number' ? sData[f.key] : 0}</td>
                   {f.key === 'bid' && isParoleWard && PAROLE_COLS.map(c => <td key={c.key}>{paroleCount(c.key)}</td>)}
@@ -128,7 +131,7 @@ function WardShiftTable({ w, data }) {
           <td className="stat-beds">{beds}</td>
           <td className="stat-occ">{finalOcc}</td>
           <td className="stat-vac">{beds - finalOcc}</td>
-          {ORDERED_MOVEMENT.map(f => (
+          {moveCols.map(f => (
             <Fragment key={f.key}>
               <td className={movementColorClass(f.key)}>{typeof data[f.key] === 'number' ? data[f.key] : 0}</td>
               {f.key === 'bid' && isParoleWard && PAROLE_COLS.map(c => <td key={c.key}>{paroleCount(c.key)}</td>)}
@@ -168,6 +171,9 @@ function WardStatsSection({ w, data, labeled }) {
 // by every other grouped ward) keeps each member as its own separate
 // table instead — this is Maternity-specific.
 function GroupedWardShiftTable({ group, wardData }) {
+  const showDel = group.wardKeys.some(wardShowsDel);
+  const afterCols = showDel ? SOLO_AFTER : SOLO_AFTER.filter(f => f.key !== 'del');
+  const moveCols = showDel ? ORDERED_MOVEMENT : ORDERED_MOVEMENT.filter(f => f.key !== 'del');
   const members = group.wardKeys.map((k) => {
     const w = WARDS.find((x) => x.key === k);
     const data = wardData[k] || {};
@@ -188,11 +194,11 @@ function GroupedWardShiftTable({ group, wardData }) {
   const totalBeds = members.reduce((s, m) => s + m.beds, 0);
   const totalOcc = members.reduce((s, m) => s + m.finalOcc, 0);
   const totalMovement = {};
-  ORDERED_MOVEMENT.forEach((f) => {
+  moveCols.forEach((f) => {
     totalMovement[f.key] = members.reduce((s, m) => s + (typeof m.data[f.key] === 'number' ? m.data[f.key] : 0), 0);
   });
   const dutyNames = members.map((m) => (m.shifts.pm || {}).nurseOnDuty).filter(Boolean).join(', ');
-  const colSpanAll = 4 + ORDERED_MOVEMENT.length + 1;
+  const colSpanAll = 4 + moveCols.length + 1;
 
   return (
     <table className="ward-shift">
@@ -202,7 +208,7 @@ function GroupedWardShiftTable({ group, wardData }) {
           {SOLO_BEFORE.map(f => <th key={f.key} rowSpan={2}>{f.label}</th>)}
           <th colSpan={2}>Int. Transfer</th>
           <th colSpan={2}>Ext. Transfer</th>
-          {SOLO_AFTER.map(f => <th key={f.key} rowSpan={2}>{f.label}</th>)}
+          {afterCols.map(f => <th key={f.key} rowSpan={2}>{f.label}</th>)}
           <th rowSpan={2}>Nurses on Duty</th>
         </tr>
         <tr>{['In', 'Out', 'In', 'Out'].map((l, i) => <th key={i}>{l}</th>)}</tr>
@@ -219,7 +225,7 @@ function GroupedWardShiftTable({ group, wardData }) {
                   <td className="stat-beds">{beds}</td>
                   <td className="stat-occ">{perShiftOcc[s.key]}</td>
                   <td className="stat-vac">{beds - perShiftOcc[s.key]}</td>
-                  {ORDERED_MOVEMENT.map(f => <td key={f.key} className={movementColorClass(f.key)}>{typeof sData[f.key] === 'number' ? sData[f.key] : 0}</td>)}
+                  {moveCols.map(f => <td key={f.key} className={movementColorClass(f.key)}>{typeof sData[f.key] === 'number' ? sData[f.key] : 0}</td>)}
                   <td style={{ textAlign: 'left' }}>{sData.nurseOnDuty || '\u2014'}</td>
                 </tr>
               );
@@ -231,7 +237,7 @@ function GroupedWardShiftTable({ group, wardData }) {
           <td className="stat-beds">{totalBeds}</td>
           <td className="stat-occ">{totalOcc}</td>
           <td className="stat-vac">{totalBeds - totalOcc}</td>
-          {ORDERED_MOVEMENT.map(f => <td key={f.key} className={movementColorClass(f.key)}>{totalMovement[f.key]}</td>)}
+          {moveCols.map(f => <td key={f.key} className={movementColorClass(f.key)}>{totalMovement[f.key]}</td>)}
           <td style={{ textAlign: 'left' }}>{dutyNames || '\u2014'}</td>
         </tr>
       </tbody>

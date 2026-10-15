@@ -10,7 +10,7 @@ import {
   PATIENT_STATUS_ARCHIVE_REASON,
   DEMOGRAPHIC_FIELDS, DEMOGRAPHIC_CATEGORIES, DEMOGRAPHIC_AFFILIATIONS, movementColorClass,
   reportDateId, occDelta, blankShift, defaultWardDoc, wardSelectorOptions, ensureWardBedsLoaded,
-  isWardDocUntouched, PAROLE_WARD_KEY, PAROLE_STATUS, PAROLE_OUT_KEY, isParoleActive
+  isWardDocUntouched, PAROLE_WARD_KEY, PAROLE_STATUS, PAROLE_OUT_KEY, isParoleActive, wardShowsDel
 } from "../../lib/nurses-report-common.js";
 import { patientWardAndBedTypeForReportKey, wardSelectorKeyForPatientWard } from "../../lib/wardNameMatch.js";
 import { wardHeadcount } from "../../lib/wardCensus.js";
@@ -361,7 +361,10 @@ function PatientBlockView({ p, n = 1, total = 1 }) {
 // the Parole / D/Parole tables and are never summed into anything.
 const PAROLE_COLS = [{ key: 'parole', label: 'Parole' }, { key: 'dParole', label: 'D/Parole' }];
 
-function ShiftTable({ wardDoc, census, movementTotals, editable, onBeds, onField, onDuty, parole }) {
+function ShiftTable({ wardKey, wardDoc, census, movementTotals, editable, onBeds, onField, onDuty, parole }) {
+  const showDel = wardShowsDel(wardKey);
+  const afterCols = showDel ? SOLO_AFTER : SOLO_AFTER.filter(f => f.key !== 'del');
+  const moveCols = showDel ? ORDERED_MOVEMENT : ORDERED_MOVEMENT.filter(f => f.key !== 'del');
   return (
     <table className="shift">
       <thead>
@@ -370,7 +373,7 @@ function ShiftTable({ wardDoc, census, movementTotals, editable, onBeds, onField
           {SOLO_BEFORE.map(f => <th key={f.key} rowSpan={2}>{f.label}</th>)}
           <th colSpan={2}>Int. Transfer</th>
           <th colSpan={2}>Ext. Transfer</th>
-          {SOLO_AFTER.map(f => (
+          {afterCols.map(f => (
             <Fragment key={f.key}>
               <th rowSpan={2}>{f.label}</th>
               {f.key === 'bid' && parole && PAROLE_COLS.map(c => <th key={c.key} rowSpan={2}>{c.label}</th>)}
@@ -391,7 +394,7 @@ function ShiftTable({ wardDoc, census, movementTotals, editable, onBeds, onField
             </td>
             <td className="computed stat-occ">{census.perShiftOcc[s.key]}</td>
             <td className="computed stat-vac">{census.beds - census.perShiftOcc[s.key]}</td>
-            {ORDERED_MOVEMENT.map((f) => (
+            {moveCols.map((f) => (
               <Fragment key={f.key}>
                 <td className={movementColorClass(f.key)}>
                   <input type="number" inputMode="numeric" disabled={!editable}
@@ -411,7 +414,7 @@ function ShiftTable({ wardDoc, census, movementTotals, editable, onBeds, onField
           <td className="stat-beds">{census.beds}</td>
           <td className="stat-occ">{census.occ}</td>
           <td className="stat-vac">{census.vac}</td>
-          {ORDERED_MOVEMENT.map((f) => (
+          {moveCols.map((f) => (
             <Fragment key={f.key}>
               <td className={movementColorClass(f.key)}>{movementTotals[f.key]}</td>
               {f.key === 'bid' && parole && PAROLE_COLS.map(c => <td key={c.key} className="computed">{parole[c.key].length}</td>)}
@@ -1697,7 +1700,7 @@ function WardPanelRest({ h, showLabel, isAdmin, navigate, includeShiftTable = tr
               {includeShiftTable && (
                 <div className="table-wrap">
                   <FitTitle label={w.label}>24 HOURS WARD REPORT WEF 0900HRS OF 26/09/26 TO 0900HRS OF 27/09/26</FitTitle>
-                  <ShiftTable wardDoc={wardDoc} census={census} movementTotals={movementTotals} editable={editable}
+                  <ShiftTable wardKey={w.key} wardDoc={wardDoc} census={census} movementTotals={movementTotals} editable={editable}
                     onBeds={updateBeds} onField={updateShiftField} onDuty={updateDuty} parole={paroleView} />
                 </div>
               )}
@@ -1879,15 +1882,18 @@ function WardReportPanel({ wardKey, showLabel, isAdmin, profile, user, navigate 
 // Firestore record via its own handlers — this table only combines how
 // they're displayed and totalled, never the underlying data.
 function MergedShiftTable({ panels }) {
+  const showDel = panels.some((p) => wardShowsDel(p.w.key));
+  const afterCols = showDel ? SOLO_AFTER : SOLO_AFTER.filter(f => f.key !== 'del');
+  const moveCols = showDel ? ORDERED_MOVEMENT : ORDERED_MOVEMENT.filter(f => f.key !== 'del');
   const totalBeds = panels.reduce((s, p) => s + p.census.beds, 0);
   const totalOcc = panels.reduce((s, p) => s + p.census.occ, 0);
   const totalVac = panels.reduce((s, p) => s + p.census.vac, 0);
   const totalMovement = {};
-  ORDERED_MOVEMENT.forEach((f) => {
+  moveCols.forEach((f) => {
     totalMovement[f.key] = panels.reduce((s, p) => s + (typeof p.movementTotals[f.key] === 'number' ? p.movementTotals[f.key] : 0), 0);
   });
   const dutyNames = panels.map((p) => p.wardDoc.shifts.pm.nurseOnDuty).filter(Boolean).join(', ');
-  const colSpanAll = 4 + ORDERED_MOVEMENT.length + 1;
+  const colSpanAll = 4 + moveCols.length + 1;
 
   return (
     <table className="shift">
@@ -1897,7 +1903,7 @@ function MergedShiftTable({ panels }) {
           {SOLO_BEFORE.map(f => <th key={f.key} rowSpan={2}>{f.label}</th>)}
           <th colSpan={2}>Int. Transfer</th>
           <th colSpan={2}>Ext. Transfer</th>
-          {SOLO_AFTER.map(f => <th key={f.key} rowSpan={2}>{f.label}</th>)}
+          {afterCols.map(f => <th key={f.key} rowSpan={2}>{f.label}</th>)}
           <th rowSpan={2}>Nurses on Duty</th>
         </tr>
         <tr>{['In', 'Out', 'In', 'Out'].map((l, i) => <th key={i}>{l}</th>)}</tr>
@@ -1916,7 +1922,7 @@ function MergedShiftTable({ panels }) {
                 </td>
                 <td className="computed stat-occ">{p.census.perShiftOcc[s.key]}</td>
                 <td className="computed stat-vac">{p.census.beds - p.census.perShiftOcc[s.key]}</td>
-                {ORDERED_MOVEMENT.map((f) => (
+                {moveCols.map((f) => (
                   <td key={f.key} className={movementColorClass(f.key)}>
                     <input type="number" inputMode="numeric" disabled={!p.editable}
                       value={p.wardDoc.shifts[s.key][f.key]} onChange={(e) => p.updateShiftField(s.key, f.key, e.target.value)} />
@@ -1935,7 +1941,7 @@ function MergedShiftTable({ panels }) {
           <td className="stat-beds">{totalBeds}</td>
           <td className="stat-occ">{totalOcc}</td>
           <td className="stat-vac">{totalVac}</td>
-          {ORDERED_MOVEMENT.map((f) => <td key={f.key} className={movementColorClass(f.key)}>{totalMovement[f.key]}</td>)}
+          {moveCols.map((f) => <td key={f.key} className={movementColorClass(f.key)}>{totalMovement[f.key]}</td>)}
           <td style={{ textAlign: 'left' }}>{dutyNames || '\u2014'}</td>
         </tr>
       </tbody>

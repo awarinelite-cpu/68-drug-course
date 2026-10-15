@@ -205,6 +205,12 @@ export const STAT_FIELDS = [
   { key: 'death',       label: 'Death' }
 ];
 
+// DEL is only reported by the Maternity ward (Mothers + Cots). It appears on
+// the All Wards statistics table and on the Maternity ward's own tables, and
+// on no other ward's table.
+export const DEL_WARD_KEYS = ['matbed', 'matcot'];
+export const wardShowsDel = (wardKey) => DEL_WARD_KEYS.includes(wardKey);
+
 export const PAROLE_STAT_KEYS = ['parole', 'dParole'];
 // Only A Ward tracks parole. `award` is the report-ward key; the patient
 // chart ward label is '"A" WARD' (see WARD_OPTIONS in drugChartHelpers.js).

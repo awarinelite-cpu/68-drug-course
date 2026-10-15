@@ -6,7 +6,7 @@ import { useAuth } from "../../contexts/AuthContext.jsx";
 import { useGoBack } from "../../hooks/useGoBack.js";
 import {
   WARDS, STAT_FIELDS, SHIFT_STAT_FIELDS, SHIFTS, PATIENT_FIELDS, PATIENT_STATUS_OPTIONS,
-  DEMOGRAPHIC_FIELDS, DEMOGRAPHIC_CATEGORIES, DEMOGRAPHIC_AFFILIATIONS, occDelta, movementColorClass, PAROLE_WARD_KEY
+  DEMOGRAPHIC_FIELDS, DEMOGRAPHIC_CATEGORIES, DEMOGRAPHIC_AFFILIATIONS, occDelta, movementColorClass, PAROLE_WARD_KEY, wardShowsDel
 } from "../../lib/nurses-report-common.js";
 import { useTimeFormat, formatDateTime } from "../../lib/time-format.js";
 import Topbar from "../../components/Topbar.jsx";
@@ -101,6 +101,9 @@ function computeWardCensus(w, data) {
 const PAROLE_COLS = [{ key: 'parole', label: 'Parole' }, { key: 'dParole', label: 'D/Parole' }];
 
 function WardShiftTableView({ w, data }) {
+  const showDel = wardShowsDel(w.key);
+  const afterCols = showDel ? SOLO_AFTER : SOLO_AFTER.filter(f => f.key !== 'del');
+  const moveCols = showDel ? ORDERED_MOVEMENT : ORDERED_MOVEMENT.filter(f => f.key !== 'del');
   const { beds, perShiftOcc, finalOcc } = computeWardCensus(w, data);
   const shifts = data.shifts || {};
   const pmDuty = (shifts.pm || {}).nurseOnDuty;
@@ -113,7 +116,7 @@ function WardShiftTableView({ w, data }) {
           <th rowSpan={2}>Shift</th><th rowSpan={2}>Beds</th><th rowSpan={2}>Occ</th><th rowSpan={2}>Vac</th>
           {SOLO_BEFORE.map(f => <th key={f.key} rowSpan={2}>{f.label}</th>)}
           <th colSpan={2}>Int. Transfer</th><th colSpan={2}>Ext. Transfer</th>
-          {SOLO_AFTER.map(f => (
+          {afterCols.map(f => (
             <Fragment key={f.key}>
               <th rowSpan={2}>{f.label}</th>
               {f.key === 'bid' && isParoleWard && PAROLE_COLS.map(c => <th key={c.key} rowSpan={2}>{c.label}</th>)}
@@ -130,7 +133,7 @@ function WardShiftTableView({ w, data }) {
             <tr key={s.key}>
               <td className="shift-name">{s.label}</td>
               <td className="stat-beds">{beds}</td><td className="stat-occ">{perShiftOcc[s.key]}</td><td className="stat-vac">{beds - perShiftOcc[s.key]}</td>
-              {ORDERED_MOVEMENT.map(f => (
+              {moveCols.map(f => (
                 <Fragment key={f.key}>
                   <td className={movementColorClass(f.key)}>{typeof sData[f.key] === 'number' ? sData[f.key] : 0}</td>
                   {f.key === 'bid' && isParoleWard && PAROLE_COLS.map(c => <td key={c.key}>{paroleCount(c.key)}</td>)}
@@ -143,7 +146,7 @@ function WardShiftTableView({ w, data }) {
         <tr className="total-row">
           <td className="shift-name">Total</td>
           <td className="stat-beds">{beds}</td><td className="stat-occ">{finalOcc}</td><td className="stat-vac">{beds - finalOcc}</td>
-          {ORDERED_MOVEMENT.map(f => (
+          {moveCols.map(f => (
             <Fragment key={f.key}>
               <td className={movementColorClass(f.key)}>{typeof data[f.key] === 'number' ? data[f.key] : 0}</td>
               {f.key === 'bid' && isParoleWard && PAROLE_COLS.map(c => <td key={c.key}>{paroleCount(c.key)}</td>)}
@@ -157,6 +160,9 @@ function WardShiftTableView({ w, data }) {
 }
 
 function WardShiftTableEdit({ w, data, onChange }) {
+  const showDel = wardShowsDel(w.key);
+  const afterCols = showDel ? SOLO_AFTER : SOLO_AFTER.filter(f => f.key !== 'del');
+  const moveCols = showDel ? ORDERED_MOVEMENT : ORDERED_MOVEMENT.filter(f => f.key !== 'del');
   const { beds, perShiftOcc } = computeWardCensus(w, data);
   const shifts = data.shifts || {};
   function setBeds(raw) { const n = parseFloat(raw); onChange({ ...data, beds: isNaN(n) ? 0 : n }); }
@@ -174,7 +180,7 @@ function WardShiftTableEdit({ w, data, onChange }) {
           <th rowSpan={2}>Shift</th><th rowSpan={2}>Beds</th><th rowSpan={2}>Occ</th><th rowSpan={2}>Vac</th>
           {SOLO_BEFORE.map(f => <th key={f.key} rowSpan={2}>{f.label}</th>)}
           <th colSpan={2}>Int. Transfer</th><th colSpan={2}>Ext. Transfer</th>
-          {SOLO_AFTER.map(f => <th key={f.key} rowSpan={2}>{f.label}</th>)}
+          {afterCols.map(f => <th key={f.key} rowSpan={2}>{f.label}</th>)}
           <th rowSpan={2}>Nurses on Duty</th>
         </tr>
         <tr>{['In', 'Out', 'In', 'Out'].map((l, i) => <th key={i}>{l}</th>)}</tr>
@@ -186,7 +192,7 @@ function WardShiftTableEdit({ w, data, onChange }) {
             <td className="stat-beds">{s.key === 'am' ? <input type="number" inputMode="numeric" value={data.beds || 0} onChange={(e) => setBeds(e.target.value)} /> : beds}</td>
             <td className="stat-occ">{perShiftOcc[s.key]}</td>
             <td className="stat-vac">{beds - perShiftOcc[s.key]}</td>
-            {ORDERED_MOVEMENT.map((f) => (
+            {moveCols.map((f) => (
               <td key={f.key} className={movementColorClass(f.key)}>
                 <input type="number" inputMode="numeric" value={(shifts[s.key] || {})[f.key] || 0} onChange={(e) => setField(s.key, f.key, e.target.value)} />
               </td>
