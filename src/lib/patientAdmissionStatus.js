@@ -389,6 +389,80 @@ export async function applyPatientStatus({ patientId, reason, transferWard, from
   return { ok: true, label, wardChosen };
 }
 
+// "Not admitted": a patient who was registered / given a Drug Course Chart
+// (and so auto-counted as an ADM on the ward) but, after observation, was
+// never truly admitted. This undoes the admission instead of exiting it:
+//  - the automatic Admission count (Shift Statistics ADM, or Ext In for an
+//    external arrival, plus the Patient Demographics Admission cell) is
+//    reversed, and nothing is counted as a Discharge;
+//  - NO `admissions` record is written, so nothing shows in Overview — the
+//    admission is deleted, and every chart (drug course, glycemic, vitals,
+//    I&O, seizure) is wiped blank;
+//  - `ward` is cleared, which is what puts the patient file in the Patient
+//    Archive (see PatientArchive.jsx). No DISCHARGE tag / closing ward
+//    report is needed since they were never on the ward's books.
+// Transfer-ins and readmits are refused: those patients really were
+// admitted somewhere, so "not admitted" doesn't apply.
+export async function markPatientNotAdmitted({ patientId }) {
+  let pdata;
+  try {
+    const snap = await getDoc(doc(db, 'patients', patientId));
+    if (!snap.exists()) return { ok: false, message: 'Patient record not found.' };
+    pdata = snap.data();
+  } catch (e) {
+    return { ok: false, message: 'Could not look up the patient: ' + (e.code || e.message || 'unknown error') };
+  }
+  if (!pdata.ward) return { ok: false, message: 'This patient is not on a ward, so there is no admission to remove.' };
+  if (['AE_TRANSFER', 'WARD_TRANSFER', 'READMITTED'].includes(pdata.admissionSource)) {
+    return { ok: false, message: 'This patient was transferred in or readmitted, so they can\u2019t be marked Not admitted. Use Transfer or Discharge instead.' };
+  }
+
+  await releaseParoleOnExit(patientId);
+
+  const ward = pdata.ward || '';
+  const pedBedType = pdata.pedBedType || '';
+  const statKey = pdata.admissionSource === 'EXT_TRANSFER' ? 'ext' : 'adm';
+  const officer = isOfficerArmyNumber(pdata.armyNumber);
+
+  // Reverse the automatic counts made at registration (see createPatient
+  // in Home.jsx). Best-effort, same as every other stat bump — a no-op if
+  // that day's report was already submitted.
+  bumpShiftStatForPatientWard(ward, pedBedType, statKey, -1).catch(() => {});
+  if (pdata.gender === 'M' || pdata.gender === 'F' || officer) {
+    bumpDemographicStatForPatientWard(ward, pedBedType, 'adm', classifyAffiliation(pdata), pdata.gender, -1, { officer }).catch(() => {});
+  }
+
+  async function clearEntries(collName) {
+    const snap = await getDocs(collection(db, 'patients', patientId, collName));
+    await Promise.all(snap.docs.map(d => deleteDoc(doc(db, 'patients', patientId, collName, d.id))));
+  }
+  try {
+    await Promise.all([
+      setDoc(doc(db, 'patients', patientId, 'drugCourseChart', 'main'), {
+        f_admission: '', f_discharge: '', f_diagnosis: '',
+        rows: blankChartRows(), drugs: blankDrugs(),
+        verbalOrders: [], careInstructions: [], auditLog: [],
+        updatedAt: serverTimestamp()
+      }),
+      setDoc(doc(db, 'patients', patientId, 'bloodGlucose', 'main'), { chartType: '6point', rows6: [], rows3: [], updatedAt: serverTimestamp() }),
+      setDoc(doc(db, 'patients', patientId, 'intakeOutputSummary', 'current'), { intake: 0, output: 0, balance: 0, periodDate: new Date().toISOString().slice(0, 10), updatedAt: serverTimestamp() }),
+      clearEntries('vitals'), clearEntries('intakeOutput'), clearEntries('seizure')
+    ]);
+    await updateDoc(doc(db, 'patients', patientId), {
+      ward: '', pedBedType: '',
+      dischargeStatus: '', dischargeStatusAt: null, dischargeStatShiftRef: null, dischargeStatDemographicRef: null,
+      admissionSource: '', admissionSourceAt: null, transferRejectedByWard: '',
+      pendingTransfer: null,
+      paroleStatus: '', paroleAt: null, paroleWard: '', paroleStart: '', paroleReturn: '',
+      updatedAt: serverTimestamp()
+    });
+  } catch (e) {
+    return { ok: false, message: 'Could not fully remove the admission: ' + (e.code || e.message || 'unknown error') };
+  }
+  clearAllocationsForPatient(patientId).catch((err) => console.warn('Could not clear allocations after Not admitted:', err));
+  return { ok: true, label: STATUS_LABELS.notAdmitted };
+}
+
 // Exit reasons a nurse can walk back via Readmit — the patient's stay
 // continues, so the archived chart data is restorable. 'died' is
 // permanent, and 'transferred' never archives anything in the first

@@ -7,7 +7,7 @@ import { useGoBack } from "../hooks/useGoBack.js";
 import { useBackLock } from "../hooks/useBackLock.js";
 import { usePatientHeader } from "../hooks/usePatientHeader.js";
 import { getDocSafe } from "../lib/firestoreOffline.js";
-import { applyPatientStatus, admitExistingPatientToWard, setPatientParoleStatus } from "../lib/patientAdmissionStatus.js";
+import { applyPatientStatus, admitExistingPatientToWard, setPatientParoleStatus, markPatientNotAdmitted } from "../lib/patientAdmissionStatus.js";
 import { PAROLE_PATIENT_WARD_LABEL, todayISO } from "../lib/nurses-report-common.js";
 import { nameSearchTokens } from "../lib/patientDirectory.js";
 import { parsePatientFields } from "../lib/patientParse.js";
@@ -317,6 +317,28 @@ export default function Patient() {
       return;
     }
 
+    // "Not admitted": undoes the automatic ADM, deletes the admission's
+    // charts (nothing goes to Overview) and moves the patient file to the
+    // Patient Archive. See markPatientNotAdmitted.
+    if (reason === 'notAdmitted') {
+      if (!navigator.onLine) {
+        setStatusMsg({ color: '#dc2626', text: 'This needs an internet connection — it removes the admission and its charts. Please try again once online.' });
+        return;
+      }
+      if (!confirm('Confirm: Not admitted?\n\nThis patient was never truly admitted. The ADM count will be reversed, this admission and all its charts (drug chart, vitals, glycemic, intake & output, seizure) will be DELETED, and the patient file will move to the Archive.')) return;
+      setStatusApplying(true);
+      setStatusMsg({ color: '#555', text: 'Removing admission…' });
+      const result = await markPatientNotAdmitted({ patientId: patient.id });
+      if (!result.ok) {
+        setStatusMsg({ color: '#dc2626', text: result.message });
+        setStatusApplying(false);
+        return;
+      }
+      setStatusMsg({ color: '#16a34a', text: 'Marked Not admitted — patient moved to Archive. Redirecting…' });
+      setTimeout(() => navigate('/'), 900);
+      return;
+    }
+
     // Same as the Drug Course Chart's own Patient Status control: discharging
     // or referring reads across five collections and then deletes the live
     // entries once archived, so those two are blocked until back online
@@ -401,6 +423,7 @@ export default function Patient() {
                   <select style={{ width: 'auto', minWidth: 220 }} value={statusAction} onChange={(e) => setStatusAction(e.target.value)}>
                     <option value="">Select action…</option>
                     <option value="admitted">{STATUS_LABELS.admitted}</option>
+                    <option value="notAdmitted">{STATUS_LABELS.notAdmitted}</option>
                     <option value="discharged">{STATUS_LABELS.discharged}</option>
                     <option value="transferred">{STATUS_LABELS.transferred}</option>
                     <option value="referred">{STATUS_LABELS.referred}</option>

@@ -17,7 +17,7 @@ import {
   autoDurationForFrequency, buildSnoSegments, buildSnoText, abbreviateReason,
   parseWeeklyFrequency, weeklyDosesGivenThisWeek, formatHHMM12
 } from "../lib/drugChartHelpers.js";
-import { ROSTER_TAG_FOR_REASON, clearAllocationsForPatient, EXIT_STAT_KEY, EXIT_DEMOGRAPHIC_CATEGORY, setPatientParoleStatus, releaseParoleOnExit } from "../lib/patientAdmissionStatus.js";
+import { ROSTER_TAG_FOR_REASON, clearAllocationsForPatient, EXIT_STAT_KEY, EXIT_DEMOGRAPHIC_CATEGORY, setPatientParoleStatus, releaseParoleOnExit, markPatientNotAdmitted } from "../lib/patientAdmissionStatus.js";
 import { PAROLE_PATIENT_WARD_LABEL, todayISO } from "../lib/nurses-report-common.js";
 import { bumpShiftStatForPatientWard, bumpDemographicStatForPatientWard } from "../lib/shiftStatsSync.js";
 import { classifyAffiliation, isOfficerArmyNumber } from "../lib/patientAffiliation.js";
@@ -1004,6 +1004,28 @@ export default function DrugCourseChart() {
       return;
     }
 
+    // "Not admitted": undoes the automatic ADM, deletes this admission's
+    // charts (nothing goes to Overview) and moves the patient file to the
+    // Patient Archive. No saveChart() flush — the chart is being deleted.
+    if (reason === 'notAdmitted') {
+      if (!navigator.onLine) {
+        setStatusMsg({ color: '#dc2626', text: 'This needs an internet connection — it removes the admission and its charts. Please try again once online.' });
+        return;
+      }
+      if (!confirm('Confirm: Not admitted?\n\nThis patient was never truly admitted. The ADM count will be reversed, this admission and all its charts (drug chart, vitals, glycemic, intake & output, seizure) will be DELETED, and the patient file will move to the Archive.')) return;
+      setStatusApplying(true);
+      setStatusMsg({ color: '#555', text: 'Removing admission…' });
+      const result = await markPatientNotAdmitted({ patientId });
+      if (!result.ok) {
+        setStatusMsg({ color: '#dc2626', text: result.message });
+        setStatusApplying(false);
+        return;
+      }
+      setStatusMsg({ color: '#16a34a', text: 'Marked Not admitted — patient moved to Archive. Redirecting…' });
+      setTimeout(() => navigate('/'), 900);
+      return;
+    }
+
     // Discharging or referring reads across five collections (vitals,
     // glycemic, intake & output, seizure, plus this chart) and then DELETES
     // the live entries once archived. Getting that sequence right needs the
@@ -1458,6 +1480,7 @@ export default function DrugCourseChart() {
                 <option value="">Select action…</option>
                 <option value="referred">Referred to another hospital</option>
                 <option value="transferred">Transferred to another ward</option>
+                <option value="notAdmitted">Not admitted</option>
                 <option value="discharged">Discharged</option>
                 <option value="died">Death</option>
                 <option value="dama">Discharged Against Medical Advice (DAMA)</option>
