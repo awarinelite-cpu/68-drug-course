@@ -2343,3 +2343,42 @@ h3.ward-report-subheading, .ward-report-subheading { font-size: clamp(28px, 3.4v
   .ward-nurse-box, .ward-reports-box { padding-left: 8px; padding-right: 8px; }
   .ward-reports-box .ward-card-body { padding: 0 6px 14px; }
 }
+
+/* ═══════════════════════════════════════════════════════════════════════
+   Glassy, shining report tables (ward report, Overall Nurse, archive,
+   analytics). Same glossy look as the cards and buttons, done purely with
+   translucent highlight/shade layers painted OVER the existing cell colors,
+   so no color in the app changes. Screen only; printouts stay flat.
+   ═══════════════════════════════════════════════════════════════════════ */
+:root {
+  --tbl-gloss-head: radial-gradient(ellipse 70% 90% at 20% 0%, rgba(255,255,255,.34), rgba(255,255,255,0) 70%),
+                    linear-gradient(to bottom, rgba(255,255,255,.28) 0%, rgba(255,255,255,.08) 48%, rgba(255,255,255,0) 50%, rgba(0,0,0,.18) 100%);
+  --tbl-gloss-cell: linear-gradient(to bottom, rgba(255,255,255,.62) 0%, rgba(255,255,255,.18) 42%, rgba(255,255,255,0) 52%, rgba(71,85,105,.10) 100%);
+  --tbl-shadow: 0 14px 18px -10px rgba(15,23,42,.45), 0 2px 0 rgba(255,255,255,.6) inset;
+  --tbl-input-shadow: inset 0 2px 2px rgba(255,255,255,.95), inset 0 -4px 6px rgba(71,85,105,.18), 0 2px 4px -2px rgba(15,23,42,.35);
+}
+:root[data-theme="dark"] {
+  --tbl-gloss-cell: linear-gradient(to bottom, rgba(255,255,255,.16) 0%, rgba(255,255,255,.05) 42%, rgba(255,255,255,0) 52%, rgba(0,0,0,.22) 100%);
+  --tbl-shadow: 0 14px 18px -10px rgba(0,0,0,.75), 0 2px 0 rgba(255,255,255,.14) inset;
+  --tbl-input-shadow: inset 0 2px 2px rgba(255,255,255,.55), inset 0 -4px 6px rgba(71,85,105,.25), 0 2px 4px -2px rgba(0,0,0,.6);
+}
+@media screen {
+  :is(table.report, table.shift, table.ward-shift) {
+    border-radius: 14px; box-shadow: var(--tbl-shadow);
+  }
+  /* body cells: glass sheen over whatever color the cell already has */
+  :is(table.report, table.shift, table.ward-shift) td {
+    background-image: var(--tbl-gloss-cell) !important;
+  }
+  /* column headings: full gloss over the navy */
+  :is(table.report, table.shift, table.ward-shift) thead th {
+    background-image: var(--tbl-gloss-head) !important;
+    text-shadow: 0 1px 2px rgba(0,0,0,.45);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.35);
+  }
+  /* the input boxes inside the tables get a glossy tablet look too */
+  :is(table.report, table.shift, table.ward-shift) input {
+    background-image: linear-gradient(to bottom, rgba(255,255,255,.7) 0%, rgba(255,255,255,0) 55%, rgba(71,85,105,.08) 100%);
+    box-shadow: var(--tbl-input-shadow);
+  }
+}
