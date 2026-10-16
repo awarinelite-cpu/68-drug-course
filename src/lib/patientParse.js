@@ -102,13 +102,24 @@ export function parseEncounterEntries(text) {
 // are checked first since they're the least ambiguous when present. The
 // captured text itself is taken verbatim — short abbreviations like "CKD",
 // "COPD", "OCD" are valid diagnoses on their own and need no expansion.
+// A diagnosis runs to the end of its sentence/line, but a full stop that is
+// directly followed by a bracketed qualifier belongs to the diagnosis: e.g.
+// "HYPERTENSIVE EMERGENCY. (Confirmed-Unclassified)" is ONE diagnosis, so the
+// capture must not stop at the "." after EMERGENCY.
+const DX_END = String.raw`(?:\.(?!\s*\()|\n|$)`;
+// A value line that is really the next field's label ("Allergies: ...") means
+// the diagnosis was blank, so it must never be captured as the diagnosis.
+const NOT_A_LABEL = String.raw`(?![A-Za-z][A-Za-z /]{0,30}:)`;
 const DIAGNOSIS_PATTERNS = [
-  /^(?:Medical\s+)?Diagnosis\s*:\s*(.+?)(?:[.\n]|$)/im,
-  /^Ass(?:essment)?\s*(?:[-\u2010-\u2015]+|:)\s*(.+?)(?:[.\n]|$)/im,
-  /\bmanaged as a (?:known )?case of\s+(.+?)(?:[.\n]|$)/i,
-  /\b(?:known )?case of\s+(.+?)(?:[.\n]|$)/i,
-  /^Ass(?:essment)?\s*\n\s*\??\s*(.+?)(?:[.\n]|$)/im,
-  /^\?\s*([A-Z].+?)(?:[.\n]|$)/m
+  new RegExp(String.raw`^(?:Medical\s+)?Diagnosis\s*:\s*(.+?)` + DX_END, 'im'),
+  // "Diagnosis" heading / table column on its own line (or tab-separated),
+  // value on the next line: "Diagnosis\nHYPERTENSIVE EMERGENCY. (Confirmed-Unclassified)"
+  new RegExp(String.raw`^[ \t]*(?:Medical\s+)?Diagnosis[ \t]*(?:\t|\n)[ \t\n]*` + NOT_A_LABEL + String.raw`(.+?)` + DX_END, 'im'),
+  new RegExp(String.raw`^Ass(?:essment)?\s*(?:[-\u2010-\u2015]+|:)\s*(.+?)` + DX_END, 'im'),
+  new RegExp(String.raw`\bmanaged as a (?:known )?case of\s+(.+?)` + DX_END, 'i'),
+  new RegExp(String.raw`\b(?:known )?case of\s+(.+?)` + DX_END, 'i'),
+  new RegExp(String.raw`^Ass(?:essment)?\s*\n\s*\??\s*(.+?)` + DX_END, 'im'),
+  new RegExp(String.raw`^\?\s*([A-Z].+?)` + DX_END, 'm')
 ];
 
 // Scans "Notes" entries from an Encounters-style paste for the most recent
@@ -313,6 +324,12 @@ export function parsePatientFields(text) {
   // structured assessment form with one "Diagnosis:" line).
   out.diagnosis = extractLatestDiagnosis(norm);
   if (!out.diagnosis) out.diagnosis = grabLabel(norm, ['Medical Diagnosis', 'Diagnosis', 'Ass(?:essment)?']);
+  // Patient-information paste where "Diagnosis" is a column/heading on its own
+  // line (or tab-separated) with the value beneath/after it and no colon.
+  if (!out.diagnosis) {
+    const dm = norm.match(DIAGNOSIS_PATTERNS[1]);
+    if (dm && dm[1] && dm[1].trim()) out.diagnosis = dm[1].trim().replace(/\s+/g, ' ');
+  }
 
   // --- Allergies -----------------------------------------------------------
   let allergies = grabLabel(norm, ['Allergies']);
