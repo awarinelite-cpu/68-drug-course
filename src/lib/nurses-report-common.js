@@ -358,7 +358,12 @@ export const SHIFT_STAT_FIELDS = STAT_FIELDS.filter(
 // the ward: Adm, (internal) Transfer In, and (external) Ext In increase the
 // census; Disch, Dama, Transfer Out, Ext Out, and Death decrease it. S/C,
 // VS/C, and BID do not change Occ.
-export const OCC_INCREASE_KEYS = ['adm', 'transferIn', 'ext'];
+// 'oldIn' is a hidden movement figure (never shown as a column): +1 for each
+// Old patient (already on the ward before the app went live) registered or
+// converted via Patient Status. It raises Occ and the patient list but is NOT
+// an admission, so the Adm column stays untouched.
+export const OLD_IN_KEY = 'oldIn';
+export const OCC_INCREASE_KEYS = ['adm', 'transferIn', 'ext', OLD_IN_KEY];
 // 'paroleOut' is a hidden movement figure (never shown as a column): +1 each
 // time an A Ward patient is placed on Parole / D/Parole, so Occ drops the
 // moment they leave the ward; undone (-1) if the tag is cancelled while the
@@ -416,6 +421,7 @@ export function isWardDocUntouched(wardDoc) {
     const shift = shifts[s.key] || {};
     if (shift.nurseOnDuty) return false;
     if (shift[PAROLE_OUT_KEY]) return false;
+    if (shift[OLD_IN_KEY]) return false;
     return SHIFT_STAT_FIELDS.every(f => !shift[f.key]);
   });
   // Demographics are entered directly on the ward doc (one daily total per

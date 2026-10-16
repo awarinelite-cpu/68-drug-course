@@ -10,7 +10,7 @@ import {
   PATIENT_STATUS_ARCHIVE_REASON,
   DEMOGRAPHIC_FIELDS, DEMOGRAPHIC_CATEGORIES, DEMOGRAPHIC_AFFILIATIONS, movementColorClass,
   reportDateId, occDelta, blankShift, defaultWardDoc, wardSelectorOptions, ensureWardBedsLoaded,
-  isWardDocUntouched, PAROLE_WARD_KEY, PAROLE_STATUS, PAROLE_OUT_KEY, isParoleActive, wardShowsDel
+  isWardDocUntouched, PAROLE_WARD_KEY, PAROLE_STATUS, PAROLE_OUT_KEY, OLD_IN_KEY, isParoleActive, wardShowsDel
 } from "../../lib/nurses-report-common.js";
 import { patientWardAndBedTypeForReportKey, wardSelectorKeyForPatientWard } from "../../lib/wardNameMatch.js";
 import { wardHeadcount } from "../../lib/wardCensus.js";
@@ -812,6 +812,9 @@ function useWardReport(wardKey, isAdmin, profile, user) {
       // keep the live value.
       const liveOut = (liveShifts[s.key] || {})[PAROLE_OUT_KEY];
       if (typeof liveOut === 'number') merged[s.key][PAROLE_OUT_KEY] = liveOut;
+      // Same for the hidden Old-patient-in figure (changed only in the background).
+      const liveOld = (liveShifts[s.key] || {})[OLD_IN_KEY];
+      if (typeof liveOld === 'number') merged[s.key][OLD_IN_KEY] = liveOld;
     });
     return merged;
   }

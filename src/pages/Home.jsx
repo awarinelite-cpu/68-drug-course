@@ -13,7 +13,7 @@ import { parsePatientFields } from "../lib/patientParse.js";
 import { takePendingEmrImport, stashEmrText } from "../lib/emrBridge.js";
 import { wardHeadcount } from "../lib/wardCensus.js";
 import { reportWardKeysForPatientWard, patientWardAndBedTypeForReportKey } from "../lib/wardNameMatch.js";
-import { WARDS } from "../lib/nurses-report-common.js";
+import { WARDS, OLD_IN_KEY } from "../lib/nurses-report-common.js";
 import { loadWardPatients, loadIncomingTransfers, searchPatients, findPatientByEmrExact, nameSearchTokens } from "../lib/patientDirectory.js";
 import { activeAdmissionTag, ADMISSION_TAG_LABEL, clearAdmissionTag, readmitLatestAdmission, READMIT_ELIGIBLE_TAGS, hasActiveAdmissionData } from "../lib/patientAdmissionStatus.js";
 import { bumpShiftStatForPatientWard, bumpDemographicStatForPatientWard } from "../lib/shiftStatsSync.js";
@@ -433,7 +433,7 @@ export default function Home() {
     // NEW PATIENT tag: admissionSourceAt is left null so activeAdmissionTag()
     // returns '' straight away.
     const isOldPatient = newForm.arrivalType === 'OLD';
-    const admStatKey = isExtIn ? 'ext' : 'adm';
+    const admStatKey = isExtIn ? 'ext' : (isOldPatient ? OLD_IN_KEY : 'adm');
     const data = {
       name, emr,
       nameLower: name.toLowerCase(), emrLower: emr.toLowerCase(), nameTokens: nameSearchTokens(name),
@@ -491,7 +491,7 @@ export default function Home() {
         alert('EMR ' + data.emr + ' was just registered by someone else' + (owner && owner.name ? ' (' + owner.name + ')' : '') + ', so this copy was not saved. Search for the patient instead.');
         // The optimistic Admission counts below were for a record that was never saved — take them back.
         bumpShiftStatForPatientWard(data.ward, data.pedBedType, admStatKey, -1).catch(() => {});
-        if (data.gender === 'M' || data.gender === 'F' || isOfficerArmyNumber(data.armyNumber)) {
+        if (!isOldPatient && (data.gender === 'M' || data.gender === 'F' || isOfficerArmyNumber(data.armyNumber))) {
           bumpDemographicStatForPatientWard(data.ward, data.pedBedType, 'adm', data.militaryCivilian, data.gender, -1, { officer: isOfficerArmyNumber(data.armyNumber) }).catch(() => {});
         }
         setMyWardPatients((prev) => (prev ? prev.filter((p) => p.id !== ref.id) : prev));
@@ -517,7 +517,8 @@ export default function Home() {
     // in by hand — only when a gender was actually recorded, since
     // there's no cell to bump otherwise.
     const officer = isOfficerArmyNumber(data.armyNumber);
-    if (data.gender === 'M' || data.gender === 'F' || officer) {
+    // Old patients are not admissions: no Admission demographics cell either.
+    if (!isOldPatient && (data.gender === 'M' || data.gender === 'F' || officer)) {
       bumpDemographicStatForPatientWard(data.ward, data.pedBedType, 'adm', data.militaryCivilian, data.gender, 1, { officer }).catch(() => {});
     }
 

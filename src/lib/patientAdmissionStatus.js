@@ -4,7 +4,7 @@ import { STATUS_LABELS, WARD_OPTIONS, defaultRow } from "./drugChartHelpers.js";
 import { formatDateTime } from "./time-format.js";
 import { bumpShiftStat, bumpShiftStatForPatientWard, bumpDemographicStat, bumpDemographicStatForPatientWard } from "./shiftStatsSync.js";
 import { classifyAffiliation, isOfficerArmyNumber } from "./patientAffiliation.js";
-import { PAROLE_STATUS, PAROLE_OUT_KEY, PAROLE_WARD_KEY, PAROLE_PATIENT_WARD_LABEL, isParoleActive } from "./nurses-report-common.js";
+import { PAROLE_STATUS, PAROLE_OUT_KEY, OLD_IN_KEY, PAROLE_WARD_KEY, PAROLE_PATIENT_WARD_LABEL, isParoleActive } from "./nurses-report-common.js";
 
 // Which Shift Statistics column each exit reason feeds — 'referred' is
 // an external hand-off to another hospital, so it counts as Ext Out, not
@@ -421,7 +421,8 @@ export async function markPatientNotAdmitted({ patientId }) {
 
   const ward = pdata.ward || '';
   const pedBedType = pdata.pedBedType || '';
-  const statKey = pdata.admissionSource === 'EXT_TRANSFER' ? 'ext' : 'adm';
+  const isOld = pdata.admissionSource === 'OLD_PATIENT';
+  const statKey = pdata.admissionSource === 'EXT_TRANSFER' ? 'ext' : (isOld ? OLD_IN_KEY : 'adm');
   const officer = isOfficerArmyNumber(pdata.armyNumber);
 
   // Archive every chart first (also clears allocations/parole and blanks the
@@ -433,7 +434,7 @@ export async function markPatientNotAdmitted({ patientId }) {
   // Home.jsx). Best-effort, same as every other stat bump — a no-op if that
   // day's report was already submitted.
   bumpShiftStatForPatientWard(ward, pedBedType, statKey, -1).catch(() => {});
-  if (pdata.gender === 'M' || pdata.gender === 'F' || officer) {
+  if (!isOld && (pdata.gender === 'M' || pdata.gender === 'F' || officer)) {
     bumpDemographicStatForPatientWard(ward, pedBedType, 'adm', classifyAffiliation(pdata), pdata.gender, -1, { officer }).catch(() => {});
   }
 
@@ -455,8 +456,9 @@ export async function markPatientNotAdmitted({ patientId }) {
 // to exactly what registering them as an Old patient would have produced:
 // admissionSource 'OLD_PATIENT' with no timestamp, so the NEW PATIENT tag
 // (and the Ward Report's NEW PATIENT status stamp) disappears. Nothing is
-// recounted — a new registration and an old-patient registration both bump
-// Adm/Occ and Demographics once, so Shift Statistics stay as they are.
+// recounted except that the Adm (and Admission demographics) count made at
+// registration is taken back and moved to the hidden old-patient figure, so
+// Occ stays the same and Adm drops.
 // Transfer-ins and readmits are refused: those really were arrivals.
 export async function markPatientOldPatient({ patientId }) {
   let pdata;
@@ -479,6 +481,18 @@ export async function markPatientOldPatient({ patientId }) {
     });
   } catch (e) {
     return { ok: false, message: 'Could not update the patient: ' + (e.code || e.message || 'unknown error') };
+  }
+  // The registration counted this patient as an Admission. An old patient is
+  // not an admission, so move that count off Adm (and the Admission
+  // demographics cell) onto the hidden old-patient figure: Occ stays exactly
+  // where it was, only Adm drops. Best-effort, like every other stat bump.
+  const ward = pdata.ward || '';
+  const pedBedType = pdata.pedBedType || '';
+  const officer = isOfficerArmyNumber(pdata.armyNumber);
+  bumpShiftStatForPatientWard(ward, pedBedType, 'adm', -1).catch(() => {});
+  bumpShiftStatForPatientWard(ward, pedBedType, OLD_IN_KEY, 1).catch(() => {});
+  if (pdata.gender === 'M' || pdata.gender === 'F' || officer) {
+    bumpDemographicStatForPatientWard(ward, pedBedType, 'adm', classifyAffiliation(pdata), pdata.gender, -1, { officer }).catch(() => {});
   }
   return { ok: true };
 }
