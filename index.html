@@ -6,6 +6,13 @@
     <link rel="apple-touch-icon" href="/icons/icon-192.png" />
     <link rel="manifest" href="/manifest.json" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <script>
+      try {
+        if (localStorage.getItem('wardcharts-view-mode') === 'desktop') {
+          document.querySelector('meta[name="viewport"]').setAttribute('content', 'width=1100, minimum-scale=0.1, maximum-scale=5.0, user-scalable=yes');
+        }
+      } catch (e) {}
+    </script>
     <meta name="theme-color" content="#111827" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
