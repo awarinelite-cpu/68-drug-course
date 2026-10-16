@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { collection, getDoc, doc, setDoc, serverTimestamp } from "firebase/firestore";
+import { collection, doc, setDoc, serverTimestamp } from "firebase/firestore";
 import { db } from "../firebase.js";
 import { useAuth } from "../contexts/AuthContext.jsx";
 import { useExitOnDoubleBack } from "../hooks/useExitOnDoubleBack.js";
@@ -11,7 +11,6 @@ import PatientForm from "../components/PatientForm.jsx";
 import NewPatientTransfersModal from "../components/NewPatientTransfersModal.jsx";
 import { parsePatientFields } from "../lib/patientParse.js";
 import { takePendingEmrImport, stashEmrText } from "../lib/emrBridge.js";
-import { generateCsvTemplate, parsePatientCsv } from "../lib/patientCsv.js";
 import { wardHeadcount } from "../lib/wardCensus.js";
 import { reportWardKeysForPatientWard, patientWardAndBedTypeForReportKey } from "../lib/wardNameMatch.js";
 import { WARDS } from "../lib/nurses-report-common.js";
@@ -23,7 +22,6 @@ import { classifyAffiliation, isOfficerArmyNumber } from "../lib/patientAffiliat
 import { formatShortNameTag } from "../lib/roles.js";
 import { createPatientUnique } from '../lib/patientUnique.js';
 
-function normEmr(emr) { return (emr || '').trim().toLowerCase(); }
 
 // Ward-list status badge for patients tagged DISCHARGE/TRANS OUT/DEATH/
 // DAMA/ABSC by applyPatientStatus (see patientAdmissionStatus.js) but
@@ -151,10 +149,6 @@ export default function Home() {
   // empty (the patient list below falls back to myWardPatients then).
   const [searchResults, setSearchResults] = useState(null);
   const [searching, setSearching] = useState(false);
-  // EMR -> matched existing patient, resolved once per parsed bulk-upload
-  // file (see handleBulkFile) instead of re-querying per row on every
-  // render or during the actual save.
-  const [bulkEmrMatches, setBulkEmrMatches] = useState(new Map());
 
   const [showNewForm, setShowNewForm] = useState(false);
   const [newForm, setNewForm] = useState(EMPTY_FORM);
@@ -167,12 +161,6 @@ export default function Home() {
 
   const [showTransfers, setShowTransfers] = useState(false);
 
-  const [showBulkUpload, setShowBulkUpload] = useState(false);
-  const [bulkFileName, setBulkFileName] = useState('');
-  const [bulkRows, setBulkRows] = useState(null); // null = no file parsed yet
-  const [bulkMsg, setBulkMsg] = useState('');
-  const [bulkSaving, setBulkSaving] = useState(false);
-  const [bulkOldPatients, setBulkOldPatients] = useState(false); // true = rows are existing ward patients (no NEW PATIENT tag)
 
   const showExitToast = useExitOnDoubleBack();
 
@@ -247,13 +235,13 @@ export default function Home() {
   useEffect(() => {
     const onVisible = () => {
       if (document.visibilityState !== 'visible') return;
-      if (showNewForm || showBulkUpload || showEmrPaste) return;
+      if (showNewForm || showEmrPaste) return;
       loadWardData(true);
     };
     document.addEventListener('visibilitychange', onVisible);
     return () => document.removeEventListener('visibilitychange', onVisible);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [showNewForm, showBulkUpload, showEmrPaste]);
+  }, [showNewForm, showEmrPaste]);
 
   // Replaces the old getDocs(collection(db,'patients')) full-hospital
   // scan with two targeted queries scoped to just this nurse's ward (see
@@ -554,170 +542,6 @@ export default function Home() {
     }
   }
 
-  // --- Bulk upload (CSV) --------------------------------------------------
-  function downloadCsvTemplate() {
-    const blob = new Blob([generateCsvTemplate()], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'patient-bulk-upload-template.csv';
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
-  }
-
-  function handleBulkFile(e) {
-    const file = e.target.files && e.target.files[0];
-    e.target.value = ''; // allow re-selecting the same file after a fix
-    if (!file) return;
-    setBulkFileName(file.name);
-    setBulkMsg('');
-    setBulkRows(null);
-    setBulkEmrMatches(new Map());
-    const reader = new FileReader();
-    reader.onload = () => {
-      const { headerOk, rows } = parsePatientCsv(String(reader.result || ''));
-      if (!headerOk) {
-        setBulkMsg('Couldn\u2019t read that file \u2014 make sure it has "Name" and "EMR Number" columns (download the template below if unsure).');
-        setBulkRows([]);
-        return;
-      }
-      if (!rows.length) {
-        setBulkMsg('No patient rows found in that file.');
-        setBulkRows([]);
-        return;
-      }
-      setBulkRows(rows);
-      const errorCount = rows.filter(r => r.errors.length).length;
-      setBulkMsg(
-        rows.length + ' row(s) found' +
-        (errorCount ? ', ' + errorCount + ' with errors \u2014 fix or they\u2019ll be skipped.' : ', all look good.')
-      );
-      // Resolve every row's EMR against Firestore once, up front — one
-      // indexed lookup per row instead of the old in-memory scan of a
-      // fully-downloaded patient list. Both the preview table below and
-      // saveBulkPatients read from this same resolved map, so a given
-      // EMR is only looked up once per file, not once per render.
-      const validRows = rows.filter(r => r.errors.length === 0 && r.data.emr);
-      Promise.all(validRows.map((r) => findPatientByEmrExact(r.data.emr).then((p) => [normEmr(r.data.emr), p])))
-        .then((pairs) => setBulkEmrMatches(new Map(pairs.filter(([, p]) => p))));
-    };
-    reader.onerror = () => setBulkMsg('Could not read that file.');
-    reader.readAsText(file);
-  }
-
-
-  // Adds a CSV row's parsed drugs onto a patient's Drug Course Chart —
-  // creating the chart doc if the patient doesn't have one yet, or
-  // appending onto its existing `drugs` array (skipping anything that's an
-  // exact name+route+frequency+duration repeat of a drug already on the
-  // chart, so re-uploading the same CSV twice doesn't double up the list).
-  async function addDrugsToChart(patientId, drugsParsed) {
-    if (!drugsParsed || !drugsParsed.length) return 0;
-    const ref = doc(db, 'patients', patientId, 'drugCourseChart', 'main');
-    let existingDrugs = [];
-    try {
-      const snap = await getDoc(ref);
-      if (snap.exists()) existingDrugs = Array.isArray(snap.data().drugs) ? snap.data().drugs : [];
-    } catch (e) {
-      console.warn('Could not read existing drug chart before merging bulk-uploaded drugs:', e);
-    }
-    const key = (d) => [d.name, d.route, d.frequency, d.duration].map(v => (v || '').trim().toLowerCase()).join('|');
-    const existingKeys = new Set(existingDrugs.map(key));
-    const dupOf = new Map(); // parsed id -> id of the identical drug already on the chart
-    const existingByKey = new Map();
-    let existingList = existingDrugs;
-    existingDrugs.forEach((d, idx) => existingByKey.set(key(d), idx));
-    drugsParsed.forEach(d => {
-      if (!d.id || !existingKeys.has(key(d))) return;
-      const idx = existingByKey.get(key(d));
-      if (!existingList[idx].id) { existingList = existingList.slice(); existingList[idx] = { ...existingList[idx], id: d.id }; }
-      dupOf.set(d.id, existingList[idx].id);
-    });
-    // A follow-on row whose predecessor was skipped as a duplicate must
-    // point at the copy already on the chart, not the discarded one.
-    const toAdd = drugsParsed
-      .filter(d => !existingKeys.has(key(d)))
-      .map(d => (d.startsAfterId && dupOf.has(d.startsAfterId)) ? { ...d, startsAfterId: dupOf.get(d.startsAfterId) } : d);
-    if (!toAdd.length) return 0;
-    const merged = [...existingList, ...toAdd];
-    setDoc(ref, { drugs: merged, updatedAt: serverTimestamp() }, { merge: true }).catch((e) => {
-      console.warn('Bulk-uploaded drugs write queued locally; will retry once back online:', e);
-    });
-    return toAdd.length;
-  }
-
-  async function saveBulkPatients() {
-    if (profile?.role !== 'admin') { setBulkMsg('Only an admin can bulk upload patients.'); return; }
-    const validRows = (bulkRows || []).filter(r => r.errors.length === 0);
-    if (!validRows.length) { setBulkMsg('No valid rows to upload.'); return; }
-    setBulkSaving(true);
-    const created = [];
-    let newCount = 0, updatedCount = 0, drugCount = 0;
-    for (const r of validRows) {
-      const existing = bulkEmrMatches.get(normEmr(r.data.emr));
-      let patientId;
-      if (existing) {
-        // Same EMR Number as a patient already on file — recognized as the
-        // same patient, so no duplicate patient record is created here.
-        // Per the CSV note, a re-upload like this is treated as "drugs
-        // only": the existing patient's own fields are left untouched.
-        patientId = existing.id;
-        updatedCount++;
-      } else {
-        const data = {
-          name: r.data.name, emr: r.data.emr,
-          nameLower: (r.data.name || '').trim().toLowerCase(), emrLower: (r.data.emr || '').trim().toLowerCase(), nameTokens: nameSearchTokens(r.data.name),
-          diagnosis: r.data.diagnosis,
-          ward: r.data.ward, pedBedType: r.data.ward === 'PEDIATRIC/NICU WARD' ? r.data.pedBedType : '',
-          age: r.data.age, hospNo: r.data.hospNo, admissionDate: r.data.admissionDate,
-          allergies: r.data.allergies, insurance: r.data.insurance,
-          createdAt: serverTimestamp(), createdBy: user ? user.uid : null,
-          // Same "NEW PATIENT" admission tag as the single Add Patient
-          // form — only for rows creating a brand-new record; a row that
-          // matched an existing patient by EMR (the `existing` branch
-          // above) isn't a new admission and gets no tag.
-          admissionSource: bulkOldPatients ? 'OLD_PATIENT' : 'NEW_PATIENT',
-          admissionSourceAt: bulkOldPatients ? null : serverTimestamp()
-        };
-        const ref = doc(collection(db, 'patients'));
-        createPatientUnique(ref, data, () => {
-          console.warn('Bulk upload: EMR ' + data.emr + ' already exists — row not saved.');
-        });
-        // Shift Statistics — same automatic Admission bump as the single
-        // Add Patient form above, one per newly-created row.
-        bumpShiftStatForPatientWard(data.ward, data.pedBedType, 'adm', 1).catch(() => {});
-        created.push({ id: ref.id, ...data });
-        patientId = ref.id;
-        newCount++;
-      }
-      if (r.data.drugsParsed && r.data.drugsParsed.length) {
-        drugCount += await addDrugsToChart(patientId, r.data.drugsParsed);
-      }
-    }
-    // Only the ones landing on the ward currently in view need adding to
-    // myWardPatients directly — the rest will show up next time that
-    // ward's own list loads.
-    const myWard = profile?.ward || '';
-    const onMyWard = created.filter((p) => p.ward === myWard);
-    if (onMyWard.length) setMyWardPatients((prev) => prev ? [...prev, ...onMyWard] : onMyWard);
-    setBulkSaving(false);
-    setBulkMsg(
-      newCount + ' new patient(s) created, ' + updatedCount + ' existing patient(s) matched by EMR' +
-      (drugCount ? ', ' + drugCount + ' drug(s) added to their charts.' : '.')
-    );
-    setBulkRows(null);
-    setBulkFileName('');
-  }
-
-  function clearBulkUpload() {
-    setShowBulkUpload(false);
-    setBulkRows(null);
-    setBulkFileName('');
-    setBulkMsg('');
-  }
-
   const q = searchQuery.trim().toLowerCase();
   const myWard = profile?.ward || '';
   // Patients mid-transfer are excluded already, inside patientDirectory.js
@@ -833,90 +657,9 @@ export default function Home() {
           <div className="search-row search-row-actions">
             <button className="btn btn-success" onClick={() => { setNewForm((f) => ({ ...f, ward: f.ward || myWard })); setShowNewForm(true); }}>+ New Patient</button>
             <button className="btn btn-secondary" onClick={newFromClipboard}>📋 From Clipboard</button>
-            {profile?.role === 'admin' && (
-              <button className="btn btn-secondary" onClick={() => setShowBulkUpload(true)}>📁 Bulk Upload</button>
-            )}
           </div>
           {clipMsg && <div className="error-msg">{clipMsg}</div>}
         </div>
-
-        {showBulkUpload && profile?.role === 'admin' && (
-          <div className="card-box">
-            <h3 style={{ marginTop: 0 }}>Bulk Upload Patients (CSV)</h3>
-            <p style={{ fontSize: 12, color: '#555' }}>
-              Upload a CSV of patients and they\u2019ll be created and sorted into their wards automatically \u2014
-              same fields as the New Patient form, plus an optional Drugs column that\u2019s added straight to
-              each patient\u2019s Drug Course Chart. Re-uploading with the same EMR Number and just the Drugs
-              column filled in adds drugs to that existing patient instead of creating a duplicate. Not sure
-              of the format? Download the template first.
-            </p>
-            <div style={{ marginBottom: 10 }}>
-              <button className="btn btn-secondary" onClick={downloadCsvTemplate}>⬇ Download CSV Template</button>
-            </div>
-            <div className="field">
-              <label>Choose CSV file</label>
-              <input type="file" accept=".csv,text/csv" onChange={handleBulkFile} />
-            </div>
-            <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, margin: '6px 0' }}>
-              <input type="checkbox" checked={bulkOldPatients} onChange={(e) => setBulkOldPatients(e.target.checked)} />
-              These are old patients already on the ward (no NEW PATIENT tag)
-            </label>
-            {bulkFileName && <div style={{ fontSize: 12, color: '#555' }}>{bulkFileName}</div>}
-            {bulkMsg && <div style={{ fontSize: 12, color: '#555', marginTop: 6 }}>{bulkMsg}</div>}
-
-            {bulkRows && bulkRows.length > 0 && (
-              <div style={{ marginTop: 10, overflowX: 'auto' }}>
-                <table style={{ borderCollapse: 'collapse', width: '100%' }}>
-                  <thead>
-                    <tr>
-                      <th style={{ border: '1px solid #000', padding: 3, fontSize: 12 }}>Line</th>
-                      <th style={{ border: '1px solid #000', padding: 3, fontSize: 12 }}>Name</th>
-                      <th style={{ border: '1px solid #000', padding: 3, fontSize: 12 }}>EMR</th>
-                      <th style={{ border: '1px solid #000', padding: 3, fontSize: 12 }}>Ward</th>
-                      <th style={{ border: '1px solid #000', padding: 3, fontSize: 12 }}>Drugs</th>
-                      <th style={{ border: '1px solid #000', padding: 3, fontSize: 12 }}>Status</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {bulkRows.map((r) => (
-                      <tr key={r.line} style={r.errors.length ? { background: '#fef2f2' } : undefined}>
-                        <td style={{ border: '1px solid #000', padding: 3, fontSize: 12 }}>{r.line}</td>
-                        <td style={{ border: '1px solid #000', padding: 3, fontSize: 12 }}>{r.data.name || '—'}</td>
-                        <td style={{ border: '1px solid #000', padding: 3, fontSize: 12 }}>{r.data.emr || '—'}</td>
-                        <td style={{ border: '1px solid #000', padding: 3, fontSize: 12 }}>{r.data.ward || '—'}</td>
-                        <td style={{ border: '1px solid #000', padding: 3, fontSize: 12 }}>
-                          {r.data.drugsParsed && r.data.drugsParsed.length
-                            ? r.data.drugsParsed.length + ' drug(s)'
-                            : '—'}
-                          {bulkEmrMatches.has(normEmr(r.data.emr)) && (
-                            <div style={{ color: '#2563eb' }}>existing patient — drugs only</div>
-                          )}
-                        </td>
-                        <td style={{ border: '1px solid #000', padding: 3, fontSize: 12, color: r.errors.length ? '#b91c1c' : '#16a34a' }}>
-                          {r.errors.length ? r.errors.join('; ') : 'OK'}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-                <div style={{ fontSize: 11, color: '#888', marginTop: 4 }}>
-                  Rows in red have errors and will be skipped. Fix them in your CSV and re-upload if needed.
-                </div>
-              </div>
-            )}
-
-            <div style={{ marginTop: 10 }}>
-              <button
-                className="btn btn-primary"
-                disabled={bulkSaving || !bulkRows || !bulkRows.some(r => r.errors.length === 0)}
-                onClick={saveBulkPatients}
-              >
-                {bulkSaving ? 'Uploading…' : 'Upload Patients'}
-              </button>
-              <button className="btn btn-secondary" onClick={clearBulkUpload}>Cancel</button>
-            </div>
-          </div>
-        )}
 
         {showNewForm && (
           <div className="card-box">
