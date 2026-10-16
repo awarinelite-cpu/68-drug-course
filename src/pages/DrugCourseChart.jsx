@@ -1734,22 +1734,23 @@ export default function DrugCourseChart() {
                   {bulkParseMsg && <div style={{ fontSize: 12, color: '#dc2626', marginTop: 6 }}>{bulkParseMsg}</div>}
                 </div>
               ) : (
-                <div>
-                  <div style={{ overflowX: 'auto' }}>
-                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                <div style={{ minWidth: 0, maxWidth: '100%' }}>
+                  <div style={{ fontSize: 11, color: '#666', marginBottom: 4 }}>Swipe left or right to see all columns.</div>
+                  <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch', maxWidth: '100%', touchAction: 'pan-x pan-y' }}>
+                    <table style={{ width: '100%', minWidth: 640, borderCollapse: 'collapse', fontSize: 12 }}>
                       <thead>
                         <tr style={{ background: '#f2f2f2' }}>
-                          <th style={{ border: '1px solid #000', padding: 4 }}>Drug Name</th>
-                          <th style={{ border: '1px solid #000', padding: 4 }}>Route</th>
-                          <th style={{ border: '1px solid #000', padding: 4 }}>Frequency</th>
-                          <th style={{ border: '1px solid #000', padding: 4 }}>Duration</th>
-                          <th style={{ border: '1px solid #000', padding: 4 }}></th>
+                          <th style={{ border: '1px solid #000', padding: 4, minWidth: 190 }}>Drug Name</th>
+                          <th style={{ border: '1px solid #000', padding: 4, minWidth: 90 }}>Route</th>
+                          <th style={{ border: '1px solid #000', padding: 4, minWidth: 150 }}>Frequency</th>
+                          <th style={{ border: '1px solid #000', padding: 4, minWidth: 110 }}>Duration</th>
+                          <th style={{ border: '1px solid #000', padding: 4, minWidth: 44 }}></th>
                         </tr>
                       </thead>
                       <tbody>
                         {bulkParsed.map((d, i) => (
                           <tr key={i}>
-                            <td style={{ border: '1px solid #000', padding: 3 }}><input type="text" style={{ width: '100%', border: 'none', fontSize: 12 }} value={d.name} onChange={(e) => updateBulkRow(i, { name: e.target.value })} />{d.action === 'Inactive' && d.actionNote && <div style={{ fontSize: 10, lineHeight: 1.25, color: '#6d28d9', marginTop: 3, fontWeight: 'normal' }}>Inactive — {d.actionNote}</div>}</td>
+                            <td style={{ border: '1px solid #000', padding: 3 }}><input type="text" style={{ width: '100%', minWidth: 170, border: 'none', fontSize: 12 }} value={d.name} onChange={(e) => updateBulkRow(i, { name: e.target.value })} />{d.action === 'Inactive' && d.actionNote && <div style={{ fontSize: 10, lineHeight: 1.25, color: '#6d28d9', marginTop: 3, fontWeight: 'normal' }}>Inactive — {d.actionNote}</div>}</td>
                             <td style={{ border: '1px solid #000', padding: 3 }}>
                               <select style={{ fontSize: 12 }} value={d.route || ''} onChange={(e) => updateBulkRow(i, { route: e.target.value })}>
                                 {ROUTE_OPTIONS.map(opt => <option key={opt} value={opt}>{opt || '—'}</option>)}
@@ -1758,7 +1759,7 @@ export default function DrugCourseChart() {
                             <td style={{ border: '1px solid #000', padding: 3 }}>
                               <FreqCell drug={d} onChange={(text, forcedDuration) => updateBulkRow(i, forcedDuration ? { frequency: text, duration: forcedDuration } : { frequency: text })} openFreqModal={openFreqModal} />
                             </td>
-                            <td style={{ border: '1px solid #000', padding: 3 }}><input type="text" style={{ width: '100%', border: 'none', fontSize: 12 }} value={d.duration} onChange={(e) => updateBulkRow(i, { duration: e.target.value })} /></td>
+                            <td style={{ border: '1px solid #000', padding: 3 }}><input type="text" style={{ width: '100%', minWidth: 90, border: 'none', fontSize: 12 }} value={d.duration} onChange={(e) => updateBulkRow(i, { duration: e.target.value })} /></td>
                             <td style={{ border: '1px solid #000', padding: 3, textAlign: 'center' }}><button className="remove-drug-btn" onClick={() => removeBulkRow(i)}>x</button></td>
                           </tr>
                         ))}
