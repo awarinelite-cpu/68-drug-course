@@ -2128,7 +2128,8 @@ h3.ward-report-subheading, .ward-report-subheading { font-size: clamp(28px, 3.4v
    rounded corners, screen only. Same technique as the chart tables — border-
    radius is ignored on collapsed-border tables, so the grid is drawn with
    separate borders and the four outer corner cells are rounded. ── */
-:where(table.report, table.shift, table.ward-shift) { --rt-w: 1px; --rt-line: var(--border); --rt-ow: 2px; --rt-outer: var(--border); }
+/* Bold black grid lines (same as the Overall Nurse sheet): 2px cell lines, 3px black outer border. */
+:where(table.report, table.shift, table.ward-shift) { --rt-w: 2px; --rt-line: #0f172a; --rt-ow: 3px; --rt-outer: #0f172a; }
 .ov-sheet table.report { --rt-w: 2px; --rt-line: #334155; --rt-ow: 3px; --rt-outer: #0f172a; }
 @media screen {
   :is(table.report, table.shift, table.ward-shift):not(.rt) { border-collapse: separate; border-spacing: 0; border: none; }
