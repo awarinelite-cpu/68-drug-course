@@ -155,6 +155,7 @@ function toMillis(v) {
 // rather than needing a scheduled function to go clear it).
 export function activeAdmissionTag(data) {
   if (!data || !data.admissionSource) return '';
+  if (data.admissionSource === 'OLD_PATIENT') return '';
   if (Date.now() - toMillis(data.admissionSourceAt) > ADMISSION_TAG_WINDOW_MS) return '';
   return data.admissionSource;
 }

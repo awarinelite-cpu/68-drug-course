@@ -172,6 +172,7 @@ export default function Home() {
   const [bulkRows, setBulkRows] = useState(null); // null = no file parsed yet
   const [bulkMsg, setBulkMsg] = useState('');
   const [bulkSaving, setBulkSaving] = useState(false);
+  const [bulkOldPatients, setBulkOldPatients] = useState(false); // true = rows are existing ward patients (no NEW PATIENT tag)
 
   const showExitToast = useExitOnDoubleBack();
 
@@ -439,6 +440,11 @@ export default function Home() {
     // Referred in from another hospital = EXT TRANS IN: counted under Ext In
     // (not Adm) and tagged so the Ward Report auto-selects it as EXT TRANS IN.
     const isExtIn = newForm.arrivalType === 'EXT';
+    // Old patient = already physically on the ward before the app went live.
+    // Still counts toward the ward (Adm/Occ + Demographics below) but gets no
+    // NEW PATIENT tag: admissionSourceAt is left null so activeAdmissionTag()
+    // returns '' straight away.
+    const isOldPatient = newForm.arrivalType === 'OLD';
     const admStatKey = isExtIn ? 'ext' : 'adm';
     const data = {
       name, emr,
@@ -457,7 +463,8 @@ export default function Home() {
       // Brand-new record, no transfer involved — tags this patient "NEW
       // PATIENT" (blue) on the ward's roster picker for 24h. See
       // ADMISSION_TAG_LABEL/activeAdmissionTag in patientAdmissionStatus.js.
-      admissionSource: isExtIn ? 'EXT_TRANSFER' : 'NEW_PATIENT', admissionSourceAt: serverTimestamp()
+      admissionSource: isOldPatient ? 'OLD_PATIENT' : (isExtIn ? 'EXT_TRANSFER' : 'NEW_PATIENT'),
+      admissionSourceAt: isOldPatient ? null : serverTimestamp()
     };
     // Recomputed from Insurance/Army Number above, never chosen by hand —
     // see classifyAffiliation in patientAffiliation.js. This is what
@@ -671,7 +678,8 @@ export default function Home() {
           // form — only for rows creating a brand-new record; a row that
           // matched an existing patient by EMR (the `existing` branch
           // above) isn't a new admission and gets no tag.
-          admissionSource: 'NEW_PATIENT', admissionSourceAt: serverTimestamp()
+          admissionSource: bulkOldPatients ? 'OLD_PATIENT' : 'NEW_PATIENT',
+          admissionSourceAt: bulkOldPatients ? null : serverTimestamp()
         };
         const ref = doc(collection(db, 'patients'));
         createPatientUnique(ref, data, () => {
@@ -849,6 +857,10 @@ export default function Home() {
               <label>Choose CSV file</label>
               <input type="file" accept=".csv,text/csv" onChange={handleBulkFile} />
             </div>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, margin: '6px 0' }}>
+              <input type="checkbox" checked={bulkOldPatients} onChange={(e) => setBulkOldPatients(e.target.checked)} />
+              These are old patients already on the ward (no NEW PATIENT tag)
+            </label>
             {bulkFileName && <div style={{ fontSize: 12, color: '#555' }}>{bulkFileName}</div>}
             {bulkMsg && <div style={{ fontSize: 12, color: '#555', marginTop: 6 }}>{bulkMsg}</div>}
 

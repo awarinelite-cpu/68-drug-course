@@ -62,6 +62,7 @@ export default function PatientForm({ form, setForm, lockWard, showArrival }) {
           <select value={form.arrivalType || ''} onChange={set('arrivalType')}>
             <option value="">New patient</option>
             <option value="EXT">Referred in from another hospital (EXT TRANS IN)</option>
+            <option value="OLD">Old patient (already on the ward)</option>
           </select>
         </div>
       )}
