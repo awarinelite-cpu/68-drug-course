@@ -450,6 +450,39 @@ export async function markPatientNotAdmitted({ patientId }) {
   return { ok: true, label: STATUS_LABELS.notAdmitted };
 }
 
+// "Old patient": a patient who was already on the ward before the app went
+// live but was registered as a new patient by mistake. Converts the record
+// to exactly what registering them as an Old patient would have produced:
+// admissionSource 'OLD_PATIENT' with no timestamp, so the NEW PATIENT tag
+// (and the Ward Report's NEW PATIENT status stamp) disappears. Nothing is
+// recounted — a new registration and an old-patient registration both bump
+// Adm/Occ and Demographics once, so Shift Statistics stay as they are.
+// Transfer-ins and readmits are refused: those really were arrivals.
+export async function markPatientOldPatient({ patientId }) {
+  let pdata;
+  try {
+    const snap = await getDoc(doc(db, 'patients', patientId));
+    if (!snap.exists()) return { ok: false, message: 'Patient record not found.' };
+    pdata = snap.data();
+  } catch (e) {
+    return { ok: false, message: 'Could not look up the patient: ' + (e.code || e.message || 'unknown error') };
+  }
+  if (!pdata.ward) return { ok: false, message: 'This patient is not on a ward.' };
+  if (pdata.admissionSource === 'OLD_PATIENT') return { ok: false, message: 'This patient is already marked as an old patient.' };
+  if (['AE_TRANSFER', 'WARD_TRANSFER', 'EXT_TRANSFER', 'READMITTED', 'TRANSFER_REJECTED'].includes(pdata.admissionSource)) {
+    return { ok: false, message: 'This patient was transferred in or readmitted, so they can\u2019t be marked as an old patient.' };
+  }
+  try {
+    await updateDoc(doc(db, 'patients', patientId), {
+      admissionSource: 'OLD_PATIENT', admissionSourceAt: null, transferRejectedByWard: '',
+      updatedAt: serverTimestamp()
+    });
+  } catch (e) {
+    return { ok: false, message: 'Could not update the patient: ' + (e.code || e.message || 'unknown error') };
+  }
+  return { ok: true };
+}
+
 // Exit reasons a nurse can walk back via Readmit — the patient's stay
 // continues, so the archived chart data is restorable. 'died' is
 // permanent, and 'transferred' never archives anything in the first

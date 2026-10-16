@@ -17,7 +17,7 @@ import {
   autoDurationForFrequency, buildSnoSegments, buildSnoText, abbreviateReason,
   parseWeeklyFrequency, weeklyDosesGivenThisWeek, formatHHMM12
 } from "../lib/drugChartHelpers.js";
-import { ROSTER_TAG_FOR_REASON, clearAllocationsForPatient, EXIT_STAT_KEY, EXIT_DEMOGRAPHIC_CATEGORY, setPatientParoleStatus, releaseParoleOnExit, markPatientNotAdmitted } from "../lib/patientAdmissionStatus.js";
+import { ROSTER_TAG_FOR_REASON, clearAllocationsForPatient, EXIT_STAT_KEY, EXIT_DEMOGRAPHIC_CATEGORY, setPatientParoleStatus, releaseParoleOnExit, markPatientNotAdmitted, markPatientOldPatient } from "../lib/patientAdmissionStatus.js";
 import { PAROLE_PATIENT_WARD_LABEL, todayISO } from "../lib/nurses-report-common.js";
 import { bumpShiftStatForPatientWard, bumpDemographicStatForPatientWard } from "../lib/shiftStatsSync.js";
 import { classifyAffiliation, isOfficerArmyNumber } from "../lib/patientAffiliation.js";
@@ -1004,6 +1004,24 @@ export default function DrugCourseChart() {
       return;
     }
 
+    // "Old patient": registered as new by mistake — drops the NEW PATIENT
+    // tag, same result as registering them as an Old patient. See
+    // markPatientOldPatient.
+    if (reason === 'oldPatient') {
+      if (!confirm('Confirm: Old patient?\n\nThis patient was already on the ward and is not a new patient. The NEW PATIENT tag will be removed. Nothing else changes.')) return;
+      setStatusApplying(true);
+      setStatusMsg({ color: '#555', text: 'Updating…' });
+      const result = await markPatientOldPatient({ patientId });
+      if (!result.ok) {
+        setStatusMsg({ color: '#dc2626', text: result.message });
+        setStatusApplying(false);
+        return;
+      }
+      setStatusMsg({ color: '#16a34a', text: 'Marked as old patient. Redirecting…' });
+      setTimeout(() => navigate('/'), 900);
+      return;
+    }
+
     // "Not admitted": undoes the automatic ADM, archives this admission's
     // charts (kept in Overview) and moves the patient file to the
     // Patient Archive. 
@@ -1482,6 +1500,7 @@ export default function DrugCourseChart() {
                 <option value="referred">Referred to another hospital</option>
                 <option value="transferred">Transferred to another ward</option>
                 <option value="notAdmitted">Not admitted</option>
+                <option value="oldPatient">Old patient</option>
                 <option value="discharged">Discharged</option>
                 <option value="died">Death</option>
                 <option value="dama">Discharged Against Medical Advice (DAMA)</option>

@@ -7,7 +7,7 @@ import { useGoBack } from "../hooks/useGoBack.js";
 import { useBackLock } from "../hooks/useBackLock.js";
 import { usePatientHeader } from "../hooks/usePatientHeader.js";
 import { getDocSafe } from "../lib/firestoreOffline.js";
-import { applyPatientStatus, admitExistingPatientToWard, setPatientParoleStatus, markPatientNotAdmitted } from "../lib/patientAdmissionStatus.js";
+import { applyPatientStatus, admitExistingPatientToWard, setPatientParoleStatus, markPatientNotAdmitted, markPatientOldPatient } from "../lib/patientAdmissionStatus.js";
 import { PAROLE_PATIENT_WARD_LABEL, todayISO } from "../lib/nurses-report-common.js";
 import { nameSearchTokens } from "../lib/patientDirectory.js";
 import { parsePatientFields } from "../lib/patientParse.js";
@@ -317,6 +317,24 @@ export default function Patient() {
       return;
     }
 
+    // "Old patient": registered as new by mistake — drops the NEW PATIENT
+    // tag, same result as registering them as an Old patient. See
+    // markPatientOldPatient.
+    if (reason === 'oldPatient') {
+      if (!confirm('Confirm: Old patient?\n\nThis patient was already on the ward and is not a new patient. The NEW PATIENT tag will be removed. Nothing else changes.')) return;
+      setStatusApplying(true);
+      setStatusMsg({ color: '#555', text: 'Updating…' });
+      const result = await markPatientOldPatient({ patientId: patient.id });
+      if (!result.ok) {
+        setStatusMsg({ color: '#dc2626', text: result.message });
+        setStatusApplying(false);
+        return;
+      }
+      setStatusMsg({ color: '#16a34a', text: 'Marked as old patient. Redirecting…' });
+      setTimeout(() => navigate('/'), 900);
+      return;
+    }
+
     // "Not admitted": undoes the automatic ADM, archives the admission's
     // charts (kept in Overview) and moves the patient file to the
     // Patient Archive. See markPatientNotAdmitted.
@@ -424,6 +442,7 @@ export default function Patient() {
                     <option value="">Select action…</option>
                     <option value="admitted">{STATUS_LABELS.admitted}</option>
                     <option value="notAdmitted">{STATUS_LABELS.notAdmitted}</option>
+                    <option value="oldPatient">{STATUS_LABELS.oldPatient}</option>
                     <option value="discharged">{STATUS_LABELS.discharged}</option>
                     <option value="transferred">{STATUS_LABELS.transferred}</option>
                     <option value="referred">{STATUS_LABELS.referred}</option>
