@@ -2385,3 +2385,25 @@ h3.ward-report-subheading, .ward-report-subheading { font-size: clamp(28px, 3.4v
 
 /* Small mobile/desktop switch icon in the top bar */
 .view-mode-btn { padding: 6px 9px; }
+
+/* ── Drug Course Chart administration table: always swipe sideways ──
+   On wide viewports (incl. the phone's "desktop mode") the generic rules
+   make .table-wrap overflow:visible and squeeze the table to 100%, so a
+   long Drug S/N row pushed Nurses Name / Remark off-screen with no way to
+   reach them. Keep this one table scrollable at every width (screen only;
+   print keeps its own fit-to-page rules). */
+@media screen {
+  .drug-chart-page .table-wrap.chart-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; max-width: 100%; }
+  .drug-chart-page .table-wrap.chart-scroll table.chart { width: max-content; min-width: 100%; table-layout: auto; }
+  .drug-chart-page .table-wrap.chart-scroll table.chart th,
+  .drug-chart-page .table-wrap.chart-scroll table.chart td { white-space: nowrap; }
+  .drug-chart-page .table-wrap.chart-scroll table.chart th.col-date,  .drug-chart-page .table-wrap.chart-scroll table.chart td.col-date  { width: auto; min-width: 95px; }
+  .drug-chart-page .table-wrap.chart-scroll table.chart th.col-sno,   .drug-chart-page .table-wrap.chart-scroll table.chart td.col-sno   { width: auto; min-width: 220px; }
+  .drug-chart-page .table-wrap.chart-scroll table.chart th.col-time,  .drug-chart-page .table-wrap.chart-scroll table.chart td.col-time  { width: auto; min-width: 70px; }
+  .drug-chart-page .table-wrap.chart-scroll table.chart th.col-dose,  .drug-chart-page .table-wrap.chart-scroll table.chart td.col-dose  { width: auto; min-width: 70px; }
+  .drug-chart-page .table-wrap.chart-scroll table.chart th.col-route, .drug-chart-page .table-wrap.chart-scroll table.chart td.col-route { width: auto; min-width: 90px; }
+  .drug-chart-page .table-wrap.chart-scroll table.chart th.col-nurse, .drug-chart-page .table-wrap.chart-scroll table.chart td.col-nurse { width: auto; min-width: 140px; }
+  .drug-chart-page .table-wrap.chart-scroll table.chart th.col-remark,.drug-chart-page .table-wrap.chart-scroll table.chart td.col-remark{ width: auto; min-width: 130px; }
+  .drug-chart-page .table-wrap.chart-scroll table.chart td input,
+  .drug-chart-page .table-wrap.chart-scroll table.chart td select { width: auto; min-width: 60px; }
+}

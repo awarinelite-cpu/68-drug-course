@@ -1401,7 +1401,7 @@ export default function DrugCourseChart() {
           )}
         </div>
 
-        <div className="table-wrap">
+        <div className="table-wrap chart-scroll">
           <table className="chart">
             <thead>
               <tr>
