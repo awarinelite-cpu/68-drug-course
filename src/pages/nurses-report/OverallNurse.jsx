@@ -245,6 +245,59 @@ function GroupedWardShiftTable({ group, wardData }) {
   );
 }
 
+// Maternity's ward report on this page reads exactly like the Ward Nurse
+// page's report: one shared Shift Statistics table (GroupedWardShiftTable),
+// one Patient Demographics table with a MAT BED / MAT COT row each, and one
+// combined Patients / Night Update section with no per-ward subheadings.
+// The "All Wards" tables at the top of this page are never merged.
+const MATERNITY_GROUP_KEY = 'matward';
+const MAT_DEMO_ROW_LABEL = { matbed: 'MAT BED', matcot: 'MAT COT' };
+
+function GroupedDemographicsTable({ group, wardData, demoValue }) {
+  return (
+    <table className="report">
+      <thead>
+        <tr>
+          <th rowSpan={3}>Ward</th>
+          {DEMOGRAPHIC_CATEGORIES.map((cat) => <th key={cat.key} colSpan={4}>{cat.label}</th>)}
+          <th rowSpan={3}>Rmks</th>
+        </tr>
+        <tr>
+          {DEMOGRAPHIC_CATEGORIES.flatMap((cat) =>
+            DEMOGRAPHIC_AFFILIATIONS.map((aff) => <th key={cat.key + aff.key} colSpan={2}>{aff.label}</th>)
+          )}
+        </tr>
+        <tr>{DEMOGRAPHIC_FIELDS.map((f) => <th key={f.key}>{f.sex}</th>)}</tr>
+      </thead>
+      <tbody>
+        {group.wardKeys.map((k) => {
+          const w = WARDS.find((x) => x.key === k);
+          const data = wardData[k] || {};
+          return (
+            <tr key={k}>
+              <td className="ward-name">{MAT_DEMO_ROW_LABEL[k] || (w && w.label)}</td>
+              {DEMOGRAPHIC_FIELDS.map((f) => <td key={f.key}>{demoValue(k, f)}</td>)}
+              <td>{data.demographicsRemarks || ''}</td>
+            </tr>
+          );
+        })}
+      </tbody>
+    </table>
+  );
+}
+
+// One combined Patients + Night Update payload for a merged group's members
+// (so the section renders once, without MOTHERS / COTS subheadings).
+function combineMemberReports(members) {
+  const patients = members.flatMap((m) => (Array.isArray(m.data.patients) ? m.data.patients : []));
+  const withNight = members.find((m) => m.data.nightUpdate);
+  return {
+    patients,
+    nightUpdate: withNight ? withNight.data.nightUpdate : '',
+    nightUpdateBy: withNight ? withNight.data.nightUpdateBy : ''
+  };
+}
+
 // Wraps a single ward's patient write-ups + night update. When merged into
 // a group's combined report, `labeled` adds the same small subheading so
 // the reader can tell which ward each write-up came from.
@@ -1059,9 +1112,19 @@ export default function OverallNurse() {
                       : g.members.map(({ w, data }) => (
                           <WardStatsSection w={w} data={data} labeled={labeled} key={'stats-' + w.key} />
                         ))}
-                    {g.members.map(({ w, data }) => (
-                      <WardPatientSection w={w} data={data} labeled={labeled} key={'patients-' + w.key} />
-                    ))}
+                    {g.key === MATERNITY_GROUP_KEY && (
+                      <>
+                        <h3 className="patient-note-label" style={{ marginTop: 14 }}>Patient Demographics</h3>
+                        <div className="table-wrap ov-sheet">
+                          <GroupedDemographicsTable group={WARD_GROUPS.find(x => x.key === g.key)} wardData={wardData} demoValue={demoValue} />
+                        </div>
+                      </>
+                    )}
+                    {g.key === MATERNITY_GROUP_KEY
+                      ? <WardPatientSection w={g.members[0].w} data={combineMemberReports(g.members)} labeled={false} />
+                      : g.members.map(({ w, data }) => (
+                          <WardPatientSection w={w} data={data} labeled={labeled} key={'patients-' + w.key} />
+                        ))}
                   </div>
                 )}
               </div>

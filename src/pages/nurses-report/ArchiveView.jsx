@@ -5,7 +5,7 @@ import { db } from "../../firebase.js";
 import { useAuth } from "../../contexts/AuthContext.jsx";
 import { useGoBack } from "../../hooks/useGoBack.js";
 import {
-  WARDS, STAT_FIELDS, SHIFT_STAT_FIELDS, SHIFTS, PATIENT_FIELDS, PATIENT_STATUS_OPTIONS,
+  WARDS, WARD_GROUPS, STAT_FIELDS, SHIFT_STAT_FIELDS, SHIFTS, PATIENT_FIELDS, PATIENT_STATUS_OPTIONS,
   DEMOGRAPHIC_FIELDS, DEMOGRAPHIC_CATEGORIES, DEMOGRAPHIC_AFFILIATIONS, occDelta, movementColorClass, PAROLE_WARD_KEY, wardShowsDel
 } from "../../lib/nurses-report-common.js";
 import { useTimeFormat, formatDateTime } from "../../lib/time-format.js";
@@ -24,6 +24,14 @@ const SOLO_AFTER = ['del', 'sc', 'vsc', 'absc', 'bid', 'death'].map(byKey);
 const TRANSFER_PAIR = [byKey('transferIn'), byKey('transferOut')];
 const EXT_PAIR = [byKey('ext'), byKey('extOut')];
 const ORDERED_MOVEMENT = [...SOLO_BEFORE, ...TRANSFER_PAIR, ...EXT_PAIR, ...SOLO_AFTER];
+
+// Maternity (Mothers + Cots) is archived as two ward docs but reads as ONE
+// report, exactly like the Ward Nurse page: shared shift table, a MAT BED /
+// MAT COT demographics table, and one combined patients section. The
+// "All Wards" tables on an overall archive are never merged.
+const MAT_GROUP = WARD_GROUPS.find(g => g.key === 'matward');
+const MAT_DEMO_ROW_LABEL = { matbed: 'MAT BED', matcot: 'MAT COT' };
+const matMembers = () => MAT_GROUP.wardKeys.map(k => WARDS.find(x => x.key === k));
 
 function fmtTimestamp(ts) {
   if (!ts || !ts.toDate) return '';
@@ -335,6 +343,144 @@ function WardReportBlockView({ w, data }) {
   );
 }
 
+// One shared Shift Statistics table for a merged group (Morning: Mothers,
+// Cots / Night: Mothers, Cots / one combined Total). In edit mode every cell
+// writes back to its own member ward's data via onChange(wardKey, nextData).
+function MergedShiftTable({ members, wardsMap, edit, onChange }) {
+  const showDel = members.some(w => wardShowsDel(w.key));
+  const afterCols = showDel ? SOLO_AFTER : SOLO_AFTER.filter(f => f.key !== 'del');
+  const moveCols = showDel ? ORDERED_MOVEMENT : ORDERED_MOVEMENT.filter(f => f.key !== 'del');
+  const rows = members.map((w) => {
+    const data = wardsMap[w.key] || {};
+    return { w, data, shifts: data.shifts || {}, ...computeWardCensus(w, data) };
+  });
+  const totalBeds = rows.reduce((n, r) => n + r.beds, 0);
+  const totalOcc = rows.reduce((n, r) => n + r.finalOcc, 0);
+  const totalMove = {};
+  moveCols.forEach(f => { totalMove[f.key] = rows.reduce((n, r) => n + (typeof r.data[f.key] === 'number' ? r.data[f.key] : 0), 0); });
+  const dutyNames = rows.map(r => (r.shifts.pm || {}).nurseOnDuty).filter(Boolean).join(', ');
+  const colSpanAll = 4 + moveCols.length + 1;
+  const num = (raw) => { const n = parseFloat(raw); return isNaN(n) ? 0 : n; };
+  const setBeds = (r, raw) => onChange(r.w.key, { ...r.data, beds: num(raw) });
+  const setField = (r, sk, fk, raw) => onChange(r.w.key, { ...r.data, shifts: { ...r.shifts, [sk]: { ...r.shifts[sk], [fk]: num(raw) } } });
+  const setDuty = (r, sk, v) => onChange(r.w.key, { ...r.data, shifts: { ...r.shifts, [sk]: { ...r.shifts[sk], nurseOnDuty: v } } });
+
+  return (
+    <table className="ward-shift">
+      <thead>
+        <tr>
+          <th rowSpan={2}>Shift</th><th rowSpan={2}>Beds</th><th rowSpan={2}>Occ</th><th rowSpan={2}>Vac</th>
+          {SOLO_BEFORE.map(f => <th key={f.key} rowSpan={2}>{f.label}</th>)}
+          <th colSpan={2}>Int. Transfer</th><th colSpan={2}>Ext. Transfer</th>
+          {afterCols.map(f => <th key={f.key} rowSpan={2}>{f.label}</th>)}
+          <th rowSpan={2}>Nurses on Duty</th>
+        </tr>
+        <tr>{['In', 'Out', 'In', 'Out'].map((l, i) => <th key={i}>{l}</th>)}</tr>
+      </thead>
+      <tbody>
+        {SHIFTS.map((s) => (
+          <Fragment key={s.key}>
+            <tr className="shift-section-row"><td colSpan={colSpanAll}>{s.label === 'Am' ? 'Morning' : 'Night'}</td></tr>
+            {rows.map((r) => {
+              const sData = r.shifts[s.key] || {};
+              return (
+                <tr key={r.w.key}>
+                  <td className="shift-name">{r.w.label}</td>
+                  <td className="stat-beds">
+                    {edit && s.key === 'am'
+                      ? <input type="number" inputMode="numeric" value={r.data.beds || 0} onChange={(e) => setBeds(r, e.target.value)} />
+                      : r.beds}
+                  </td>
+                  <td className="stat-occ">{r.perShiftOcc[s.key]}</td>
+                  <td className="stat-vac">{r.beds - r.perShiftOcc[s.key]}</td>
+                  {moveCols.map(f => (
+                    <td key={f.key} className={movementColorClass(f.key)}>
+                      {edit
+                        ? <input type="number" inputMode="numeric" value={sData[f.key] || 0} onChange={(e) => setField(r, s.key, f.key, e.target.value)} />
+                        : (typeof sData[f.key] === 'number' ? sData[f.key] : 0)}
+                    </td>
+                  ))}
+                  <td style={{ textAlign: 'left' }}>
+                    {edit
+                      ? <input type="text" className="duty-input" value={sData.nurseOnDuty || ''} onChange={(e) => setDuty(r, s.key, e.target.value)} />
+                      : (sData.nurseOnDuty || '\u2014')}
+                  </td>
+                </tr>
+              );
+            })}
+          </Fragment>
+        ))}
+        {!edit && (
+          <tr className="total-row">
+            <td className="shift-name">Total</td>
+            <td className="stat-beds">{totalBeds}</td><td className="stat-occ">{totalOcc}</td><td className="stat-vac">{totalBeds - totalOcc}</td>
+            {moveCols.map(f => <td key={f.key} className={movementColorClass(f.key)}>{totalMove[f.key]}</td>)}
+            <td style={{ textAlign: 'left' }}>{dutyNames || '\u2014'}</td>
+          </tr>
+        )}
+      </tbody>
+    </table>
+  );
+}
+
+// One Patient Demographics table, one row per member ward (MAT BED / MAT COT).
+function MergedDemographicsTable({ members, wardsMap, edit, onChange }) {
+  const fields = DEMOGRAPHIC_FIELDS;
+  return (
+    <table className="shift">
+      <thead>
+        <DemographicsHeaderRows leadCell={<th rowSpan={3}>Ward</th>} trailingCell={<th rowSpan={3}>Rmks</th>} />
+      </thead>
+      <tbody>
+        {members.map((w) => {
+          const data = wardsMap[w.key] || {};
+          return (
+            <tr key={w.key}>
+              <td className="shift-name">{MAT_DEMO_ROW_LABEL[w.key] || w.label}</td>
+              {fields.map((f) => (
+                <td key={f.key}>
+                  {edit
+                    ? <input type="number" inputMode="numeric" value={data[f.key] || 0}
+                        onChange={(e) => { const n = parseFloat(e.target.value); onChange(w.key, { ...data, [f.key]: isNaN(n) ? 0 : n }); }} />
+                    : (typeof data[f.key] === 'number' ? data[f.key] : 0)}
+                </td>
+              ))}
+              <td>
+                {edit
+                  ? <input type="text" value={data.demographicsRemarks || ''} onChange={(e) => onChange(w.key, { ...data, demographicsRemarks: e.target.value })} />
+                  : (data.demographicsRemarks || '')}
+              </td>
+            </tr>
+          );
+        })}
+      </tbody>
+    </table>
+  );
+}
+
+// Read-only merged report (Maternity): looks like the Ward Nurse page.
+function MergedWardReportBlockView({ group, members, wardsMap }) {
+  const patients = members.flatMap(w => (Array.isArray((wardsMap[w.key] || {}).patients) ? wardsMap[w.key].patients : []));
+  const withNight = members.map(w => wardsMap[w.key] || {}).find(d => d.nightUpdate);
+  return (
+    <div className="ward-report-block">
+      <h2 className="ward-report-heading">{group.label}</h2>
+      <div className="table-wrap"><MergedShiftTable members={members} wardsMap={wardsMap} /></div>
+      <h3 className="patient-note-label" style={{ marginTop: 14 }}>Patient Demographics</h3>
+      <div className="table-wrap"><MergedDemographicsTable members={members} wardsMap={wardsMap} /></div>
+      {patients.length === 0
+        ? <div className="no-patients" style={{ marginTop: 10 }}>No patient write-ups submitted for this ward.</div>
+        : patients.map((p, i) => <PatientBlockView p={p} n={i + 1} total={patients.length} key={p.id || i} />)}
+      {withNight && (
+        <div className="night-update-block">
+          <h3 className="patient-note-label">{'Night Update' + (withNight.nightUpdateBy ? ' \u2014 ' + withNight.nightUpdateBy : '') + ':'}</h3>
+          <p className="patient-note-text">{withNight.nightUpdate}</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
 let patientCounter = 0;
 
 function WardReportBlockEdit({ w, data, onChange }) {
@@ -371,6 +517,51 @@ function WardReportBlockEdit({ w, data, onChange }) {
           <textarea value={data.nightUpdate || ''} onChange={(e) => onChange({ ...data, nightUpdate: e.target.value })} />
         </div>
       )}
+    </div>
+  );
+}
+
+// Editable merged report (admin/subadmin): same single layout, every cell
+// still writes to its own member ward's archived data.
+function MergedWardReportBlockEdit({ group, members, wardsMap, onChange }) {
+  const lead = members[0];
+  const num = (raw) => { const n = parseFloat(raw); return isNaN(n) ? 0 : n; };
+  function updatePatient(wKey, i, next) {
+    const d = wardsMap[wKey] || {}; const list = Array.isArray(d.patients) ? d.patients : [];
+    onChange(wKey, { ...d, patients: list.map((p, idx) => idx === i ? next : p) });
+  }
+  function removePatient(wKey, i) {
+    const d = wardsMap[wKey] || {}; const list = Array.isArray(d.patients) ? d.patients : [];
+    onChange(wKey, { ...d, patients: list.filter((_, idx) => idx !== i) });
+  }
+  function addPatient() {
+    patientCounter += 1;
+    const d = wardsMap[lead.key] || {}; const list = Array.isArray(d.patients) ? d.patients : [];
+    onChange(lead.key, { ...d, patients: [...list, { id: 'a' + Date.now() + '_' + patientCounter, status: '' }] });
+  }
+  return (
+    <div className="ward-report-block">
+      <h2 className="ward-report-heading">{group.label}</h2>
+      {members.map((w) => (
+        <div className="patient-field" key={w.key}>
+          <label>{'Previous Occ (' + w.label + '):'}</label>
+          <input type="number" inputMode="numeric" value={(wardsMap[w.key] || {}).startOcc || 0}
+            onChange={(e) => onChange(w.key, { ...(wardsMap[w.key] || {}), startOcc: num(e.target.value) })} />
+        </div>
+      ))}
+      <div className="table-wrap"><MergedShiftTable members={members} wardsMap={wardsMap} edit onChange={onChange} /></div>
+      <h3 className="patient-note-label" style={{ marginTop: 14 }}>Patient Demographics</h3>
+      <div className="table-wrap"><MergedDemographicsTable members={members} wardsMap={wardsMap} edit onChange={onChange} /></div>
+      {members.flatMap((w) => (Array.isArray((wardsMap[w.key] || {}).patients) ? wardsMap[w.key].patients : []).map((p, i) => (
+        <PatientCardEdit key={w.key + (p.id || i)} p={p} onChange={(next) => updatePatient(w.key, i, next)} onRemove={() => removePatient(w.key, i)} />
+      )))}
+      <button type="button" className="add-patient-btn" onClick={addPatient}>+ Add Patient</button>
+      {members.map((w) => (wardsMap[w.key] || {}).nightUpdate ? (
+        <div className="patient-field" style={{ marginTop: 14 }} key={'nu-' + w.key}>
+          <label>Night Update (older report, whole ward):</label>
+          <textarea value={wardsMap[w.key].nightUpdate || ''} onChange={(e) => onChange(w.key, { ...wardsMap[w.key], nightUpdate: e.target.value })} />
+        </div>
+      ) : null)}
     </div>
   );
 }
@@ -583,6 +774,9 @@ export default function ArchiveView() {
   const [deniedMsg, setDeniedMsg] = useState('');
   const [editMode, setEditMode] = useState(false);
   const [wardsMap, setWardsMap] = useState({});
+  // Archive doc ids of the other half of a merged ward (Maternity's Cots when
+  // Mothers is opened, and vice versa), keyed by ward key.
+  const [siblingIds, setSiblingIds] = useState({});
   const [saving, setSaving] = useState(false);
   const [editStatus, setEditStatus] = useState({ text: '', error: false });
 
@@ -601,7 +795,21 @@ export default function ArchiveView() {
     const data = snap.data();
     setArchiveData(data);
     const isOverallType = data.type === 'overall';
-    setWardsMap(isOverallType ? (data.wards || {}) : { [data.wardKey]: data.data || {} });
+    const map = isOverallType ? (data.wards || {}) : { [data.wardKey]: data.data || {} };
+    const sibs = {};
+    if (!isOverallType && MAT_GROUP.wardKeys.includes(data.wardKey)) {
+      // Pull in the other Maternity half archived for the same date so the
+      // report reads as one MATERNITY WARD report.
+      for (const k of MAT_GROUP.wardKeys.filter(x => x !== data.wardKey)) {
+        const id = 'ward_' + k + '_' + data.dateId;
+        try {
+          const sSnap = await getDoc(doc(db, 'archives', id));
+          if (sSnap.exists()) { map[k] = (sSnap.data() || {}).data || {}; sibs[k] = id; }
+        } catch (e) { /* sibling not readable — show what we have */ }
+      }
+    }
+    setSiblingIds(sibs);
+    setWardsMap(map);
     setEditMode(false);
     setEditStatus({ text: '', error: false });
   }
@@ -627,7 +835,17 @@ export default function ArchiveView() {
   if (!archiveData) return null;
 
   const isOverallType = archiveData.type === 'overall';
-  const wardsMeta = isOverallType ? WARDS : [{ key: archiveData.wardKey, label: archiveData.wardLabel, beds: (archiveData.data || {}).beds || 0 }];
+  const isMatWardArchive = !isOverallType && MAT_GROUP.wardKeys.includes(archiveData.wardKey);
+  const wardsMeta = isOverallType ? WARDS
+    : isMatWardArchive ? matMembers()
+    : [{ key: archiveData.wardKey, label: archiveData.wardLabel, beds: (archiveData.data || {}).beds || 0 }];
+  // Ward Reports section: Maternity's two member wards collapse into one item.
+  const reportItems = [];
+  wardsMeta.forEach((w) => {
+    if (MAT_GROUP.wardKeys.includes(w.key)) {
+      if (!reportItems.some(i => i.group)) reportItems.push({ group: MAT_GROUP, members: matMembers() });
+    } else reportItems.push({ w });
+  });
 
   function updateWard(key, next) {
     setWardsMap((m) => ({ ...m, [key]: next }));
@@ -641,6 +859,9 @@ export default function ArchiveView() {
     setSaving(true);
     try {
       await updateDoc(doc(db, 'archives', archiveId), payload);
+      for (const [k, id] of Object.entries(siblingIds)) {
+        await updateDoc(doc(db, 'archives', id), { data: wardsMap[k] || {}, lastEditedBy: payload.lastEditedBy, lastEditedByUid: payload.lastEditedByUid, lastEditedAt: payload.lastEditedAt });
+      }
       setEditStatus({ text: 'Saved.', error: false });
       await load();
     } catch (e) {
@@ -703,7 +924,13 @@ export default function ArchiveView() {
 
         <div className="card-box archive-report-box">
           <h2>{'Ward Report' + (isOverallType ? 's' : '')}</h2>
-          {wardsMeta.map((w) => {
+          {reportItems.map((item) => {
+            if (item.group) {
+              return editMode
+                ? <MergedWardReportBlockEdit key={item.group.key} group={item.group} members={item.members} wardsMap={wardsMap} onChange={updateWard} />
+                : <MergedWardReportBlockView key={item.group.key} group={item.group} members={item.members} wardsMap={wardsMap} />;
+            }
+            const w = item.w;
             const data = wardsMap[w.key] || {};
             return editMode
               ? <WardReportBlockEdit key={w.key} w={w} data={data} onChange={(next) => updateWard(w.key, next)} />
