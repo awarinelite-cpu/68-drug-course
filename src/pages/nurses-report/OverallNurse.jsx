@@ -245,12 +245,12 @@ function GroupedWardShiftTable({ group, wardData }) {
   );
 }
 
-// Maternity's ward report on this page reads exactly like the Ward Nurse
+// Maternity's and Paed's ward reports on this page read exactly like the Ward Nurse
 // page's report: one shared Shift Statistics table (GroupedWardShiftTable),
-// one Patient Demographics table with a MAT BED / MAT COT row each, and one
+// one Patient Demographics table with a row per member (MAT BED / MAT COT, PAED BED / PAED COT), and one
 // combined Patients / Night Update section with no per-ward subheadings.
 // The "All Wards" tables at the top of this page are never merged.
-const MATERNITY_GROUP_KEY = 'matward';
+const MERGED_REPORT_GROUP_KEYS = ['matward', 'paedward'];
 const MAT_DEMO_ROW_LABEL = { matbed: 'MAT BED', matcot: 'MAT COT' };
 
 function GroupedDemographicsTable({ group, wardData, demoValue }) {
@@ -1112,7 +1112,7 @@ export default function OverallNurse() {
                       : g.members.map(({ w, data }) => (
                           <WardStatsSection w={w} data={data} labeled={labeled} key={'stats-' + w.key} />
                         ))}
-                    {g.key === MATERNITY_GROUP_KEY && (
+                    {MERGED_REPORT_GROUP_KEYS.includes(g.key) && (
                       <>
                         <h3 className="patient-note-label" style={{ marginTop: 14 }}>Patient Demographics</h3>
                         <div className="table-wrap ov-sheet">
@@ -1120,7 +1120,7 @@ export default function OverallNurse() {
                         </div>
                       </>
                     )}
-                    {g.key === MATERNITY_GROUP_KEY
+                    {MERGED_REPORT_GROUP_KEYS.includes(g.key)
                       ? <WardPatientSection w={g.members[0].w} data={combineMemberReports(g.members)} labeled={false} />
                       : g.members.map(({ w, data }) => (
                           <WardPatientSection w={w} data={data} labeled={labeled} key={'patients-' + w.key} />

@@ -25,13 +25,14 @@ const TRANSFER_PAIR = [byKey('transferIn'), byKey('transferOut')];
 const EXT_PAIR = [byKey('ext'), byKey('extOut')];
 const ORDERED_MOVEMENT = [...SOLO_BEFORE, ...TRANSFER_PAIR, ...EXT_PAIR, ...SOLO_AFTER];
 
-// Maternity (Mothers + Cots) is archived as two ward docs but reads as ONE
+// Maternity (Mothers + Cots) and Paed (Bed + Cot) are archived as two ward docs but read as ONE
 // report, exactly like the Ward Nurse page: shared shift table, a MAT BED /
 // MAT COT demographics table, and one combined patients section. The
 // "All Wards" tables on an overall archive are never merged.
-const MAT_GROUP = WARD_GROUPS.find(g => g.key === 'matward');
+const MERGED_REPORT_GROUPS = WARD_GROUPS.filter(g => g.key === 'matward' || g.key === 'paedward');
+const mergedGroupFor = (wardKey) => MERGED_REPORT_GROUPS.find(g => g.wardKeys.includes(wardKey));
 const MAT_DEMO_ROW_LABEL = { matbed: 'MAT BED', matcot: 'MAT COT' };
-const matMembers = () => MAT_GROUP.wardKeys.map(k => WARDS.find(x => x.key === k));
+const groupMembers = (g) => g.wardKeys.map(k => WARDS.find(x => x.key === k));
 
 function fmtTimestamp(ts) {
   if (!ts || !ts.toDate) return '';
@@ -797,10 +798,11 @@ export default function ArchiveView() {
     const isOverallType = data.type === 'overall';
     const map = isOverallType ? (data.wards || {}) : { [data.wardKey]: data.data || {} };
     const sibs = {};
-    if (!isOverallType && MAT_GROUP.wardKeys.includes(data.wardKey)) {
-      // Pull in the other Maternity half archived for the same date so the
-      // report reads as one MATERNITY WARD report.
-      for (const k of MAT_GROUP.wardKeys.filter(x => x !== data.wardKey)) {
+    const mergedGroup = isOverallType ? null : mergedGroupFor(data.wardKey);
+    if (mergedGroup) {
+      // Pull in the other half archived for the same date so the report
+      // reads as one MATERNITY / PAED WARD report.
+      for (const k of mergedGroup.wardKeys.filter(x => x !== data.wardKey)) {
         const id = 'ward_' + k + '_' + data.dateId;
         try {
           const sSnap = await getDoc(doc(db, 'archives', id));
@@ -835,15 +837,16 @@ export default function ArchiveView() {
   if (!archiveData) return null;
 
   const isOverallType = archiveData.type === 'overall';
-  const isMatWardArchive = !isOverallType && MAT_GROUP.wardKeys.includes(archiveData.wardKey);
+  const archiveGroup = isOverallType ? null : mergedGroupFor(archiveData.wardKey);
   const wardsMeta = isOverallType ? WARDS
-    : isMatWardArchive ? matMembers()
+    : archiveGroup ? groupMembers(archiveGroup)
     : [{ key: archiveData.wardKey, label: archiveData.wardLabel, beds: (archiveData.data || {}).beds || 0 }];
   // Ward Reports section: Maternity's two member wards collapse into one item.
   const reportItems = [];
   wardsMeta.forEach((w) => {
-    if (MAT_GROUP.wardKeys.includes(w.key)) {
-      if (!reportItems.some(i => i.group)) reportItems.push({ group: MAT_GROUP, members: matMembers() });
+    const g = mergedGroupFor(w.key);
+    if (g) {
+      if (!reportItems.some(i => i.group === g)) reportItems.push({ group: g, members: groupMembers(g) });
     } else reportItems.push({ w });
   });
 
