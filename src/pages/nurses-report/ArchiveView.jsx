@@ -249,7 +249,7 @@ function DemographicsTableView({ data, w }) {
       </thead>
       <tbody>
         <tr>
-          {fields.map(f => <td key={f.key}><PNum n={typeof data[f.key] === 'number' ? data[f.key] : 0} kind="demo" keys={[w.key]} field={f.key} docs={{ [w.key]: data }} label={w.label + ' \u2014 ' + f.label} /></td>)}
+          {fields.map(f => <td key={f.key}><PNum n={typeof data[f.key] === 'number' ? data[f.key] : 0} kind="demo" archive keys={[w.key]} field={f.key} docs={{ [w.key]: data }} label={w.label + ' \u2014 ' + f.label} /></td>)}
           <td>{data.demographicsRemarks || ''}</td>
         </tr>
       </tbody>
@@ -444,7 +444,7 @@ function MergedDemographicsTable({ members, wardsMap, edit, onChange }) {
                   {edit
                     ? <input type="number" inputMode="numeric" value={data[f.key] || 0}
                         onChange={(e) => { const n = parseFloat(e.target.value); onChange(w.key, { ...data, [f.key]: isNaN(n) ? 0 : n }); }} />
-                    : <PNum n={typeof data[f.key] === 'number' ? data[f.key] : 0} kind="demo" keys={[w.key]} field={f.key} docs={wardsMap} label={(MAT_DEMO_ROW_LABEL[w.key] || w.label) + ' \u2014 ' + f.label} />}
+                    : <PNum n={typeof data[f.key] === 'number' ? data[f.key] : 0} kind="demo" archive keys={[w.key]} field={f.key} docs={wardsMap} label={(MAT_DEMO_ROW_LABEL[w.key] || w.label) + ' \u2014 ' + f.label} />}
                 </td>
               ))}
               <td>
@@ -696,7 +696,7 @@ function DemoStatsTableView({ wardsMeta, wardsMap }) {
               {fields.map((f) => {
                 const v = typeof data[f.key] === 'number' ? data[f.key] : 0;
                 totals[f.key] += v;
-                return <td key={f.key}><PNum n={v} kind="demo" keys={[w.key]} field={f.key} docs={wardsMap} label={w.label + ' \u2014 ' + f.label} /></td>;
+                return <td key={f.key}><PNum n={v} kind="demo" archive keys={[w.key]} field={f.key} docs={wardsMap} label={w.label + ' \u2014 ' + f.label} /></td>;
               })}
               <td>{data.demographicsRemarks || ''}</td>
             </tr>
@@ -704,7 +704,7 @@ function DemoStatsTableView({ wardsMeta, wardsMap }) {
         })}
         <tr className="totals-row">
           <td className="ward-name">TOTAL</td>
-          {fields.map(f => <td key={f.key}><PNum n={totals[f.key]} kind="demo" keys={wardsMeta.map((x) => x.key)} field={f.key} docs={wardsMap} label={'All wards \u2014 ' + f.label} /></td>)}
+          {fields.map(f => <td key={f.key}><PNum n={totals[f.key]} kind="demo" archive keys={wardsMeta.map((x) => x.key)} field={f.key} docs={wardsMap} label={'All wards \u2014 ' + f.label} /></td>)}
           <td></td>
         </tr>
       </tbody>

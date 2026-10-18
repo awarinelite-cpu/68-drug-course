@@ -79,7 +79,7 @@ export function PNum({ n, kind, keys, field, docs, label, archive }) {
     : LISTABLE_DEMO_CATEGORIES.has(String(field).split("_")[0]);
   if (!ctx || !listable || value <= 0) return <>{n}</>;
   const go = () => ctx.open(label + " \u2014 " + value, value, async () => {
-    if (kind !== "stat") return demoPatients(docs, keys, field);
+    if (kind !== "stat") return demoPatients(docs, keys, field, archive);
     // Occ on a live page = the ward's current patient list. On a past (archived)
     // report the live list would be wrong, so it keeps using that day's write-ups.
     if (field === "occ" && !archive) {

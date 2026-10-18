@@ -74,7 +74,7 @@ export function statPatients(docs, wardKeys, statKey) {
 // in Occ. Mid-transfer patients are left out, same rule as the headcount that
 // seeds Previous Occ. Returns null when a ward has no patient-chart
 // equivalent (ECO, Amenity ...) so the caller can fall back to write-up cards.
-export async function occPatients(docs, wardKeys) {
+async function liveWardPatients(wardKeys) {
   const infos = (wardKeys || []).map((k) => patientWardAndBedTypeForReportKey(k)).filter(Boolean);
   if (!infos.length) return null;
   const all = await loadPatientsForWardLabels(infos.map((i) => i.wardLabel));
@@ -91,7 +91,12 @@ export async function occPatients(docs, wardKeys) {
       out.push(p);
     });
   });
-  return out.map(shape).sort(byName);
+  return out;
+}
+
+export async function occPatients(docs, wardKeys) {
+  const live = await liveWardPatients(wardKeys);
+  return live ? live.map(shape).sort(byName) : null;
 }
 
 const affCache = new Map();
@@ -109,10 +114,21 @@ async function affiliationOf(p) {
 }
 
 // fieldKey looks like 'adm_milM' / 'disch_civF' / 'dead_milM'.
-export async function demoPatients(docs, wardKeys, fieldKey) {
+export async function demoPatients(docs, wardKeys, fieldKey, archive) {
   const m = /^([a-z]+)_(mil|civ)([MF])$/.exec(fieldKey || '');
   if (!m) return [];
   const [, category, aff, sex] = m;
+  // Admission block = the standing census of the ward, so on a live page the
+  // names come straight from the ward's patient list (sex and Mil/Civ read
+  // from each patient chart, the same way the census counts them).
+  if (category === 'adm' && !archive) {
+    const live = await liveWardPatients(wardKeys);
+    if (live) {
+      return live
+        .filter((p) => String(p.gender || p.sex || '').trim().charAt(0).toUpperCase() === sex && classifyAffiliation(p) === aff)
+        .map(shape).sort(byName);
+    }
+  }
   const ups = writeUps(docs, wardKeys);
   const candidates = ups.filter((p) => {
     if (sexOf(p) !== sex) return false;
