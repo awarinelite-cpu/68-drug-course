@@ -2409,12 +2409,12 @@ h3.ward-report-subheading, .ward-report-subheading { font-size: clamp(28px, 3.4v
 }
 
 
-/* ── Archive: All Wards 24-Hour Statistics always fits the screen ──
+/* ── Archive: All Wards 24-Hour Statistics fits the screen on desktop layout ──
    The generic .table-wrap rules let this 20-column table grow wider than its
    card on desktop / desktop-mode, cutting off "Nurses on Duty". Lock it to
    the card width: fixed layout, wrapping text, font that scales with the
-   viewport. Screen only; print keeps its own fit-to-page rules. */
-@media screen {
+   viewport. Desktop layout only (>=1024px, incl. the phone's desktop mode); mobile mode keeps its normal sideways scroll. Print keeps its own fit-to-page rules. */
+@media screen and (min-width: 1024px) {
   .table-wrap.fit-stats { overflow-x: hidden; max-width: 100%; }
   .table-wrap.fit-stats table.report {
     width: 100% !important; min-width: 0 !important; max-width: 100%;
