@@ -26,6 +26,7 @@ export default function Records() {
   const [remarks, setRemarks] = useState({});
   const [officers, setOfficers] = useState({});
   const [source, setSource] = useState("");
+  const [docs, setDocs] = useState({}); // ward docs behind the numbers (for the tap-a-number patient lists)
   const [savedInfo, setSavedInfo] = useState(null); // { at, by } of the archived copy for this date
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -71,7 +72,7 @@ export default function Records() {
         const saved = await getDocSafe(doc(db, "recordSummaries", date));
         if (saved.exists()) rem = saved.data().remarks || {};
         if (!cancelled) {
-          setRows(built.rows); setOfficers(built.officers); setRemarks(rem); setSource(src);
+          setDocs(wardsMap); setRows(built.rows); setOfficers(built.officers); setRemarks(rem); setSource(src);
           setSavedInfo(savedArchive ? { at: fmtSaved(savedArchive.savedAt), by: savedArchive.savedByName || "" } : null);
         }
       } catch (e) {
@@ -128,7 +129,7 @@ export default function Records() {
           )}
 
           {loading ? <div className="loading-note">Loading…</div> : (
-            <RecordsSheet date={date} rows={rows} officers={officers} remarks={remarks}
+            <RecordsSheet date={date} rows={rows} officers={officers} remarks={remarks} docs={docs}
               onRemarkChange={(k, v) => setRemarks((m) => ({ ...m, [k]: v }))} />
           )}
 

@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { PatientPopupProvider, PNum } from "./PatientListModal.jsx";
 import {
   DEMOGRAPHIC_CATEGORIES, DEMOGRAPHIC_AFFILIATIONS, DEMOGRAPHIC_SEXES, DEMOGRAPHIC_FIELDS, OFFICER_FIELDS
 } from "../lib/nurses-report-common.js";
@@ -52,7 +53,9 @@ const remarkInput = { width: "100%", textAlign: "left", padding: "8px", boxSizin
 
 // The sheet itself. Pass onRemarkChange to make the Rmks column editable;
 // leave it out for a read-only view (the archive).
-export default function RecordsSheet({ date, rows, officers, remarks, onRemarkChange }) {
+// `docs` ({ wardKey: wardDoc }) is optional: when given, tapping a number opens the
+// list of patients behind it (names + EMR numbers).
+export default function RecordsSheet({ date, rows, officers, remarks, onRemarkChange, docs }) {
   const allKeys = useMemo(() => RECORD_ROWS.map((r) => r.key), []);
   const totalFor = (field) => allKeys.reduce((t, rk) => t + toNum(rows[rk]?.[field]), 0);
   const footer = DEMOGRAPHIC_CATEGORIES.reduce((acc, cat) => {
@@ -63,7 +66,10 @@ export default function RecordsSheet({ date, rows, officers, remarks, onRemarkCh
     return acc;
   }, {});
 
+  const allWardKeys = RECORD_ROWS.flatMap((r) => r.wards);
+  const cell = (n, keys, field, label) => (n && docs ? <PNum n={n} kind="demo" keys={keys} field={field} docs={docs} label={label} /> : (n || ""));
   return (
+    <PatientPopupProvider>
     <div className="rec-sheet">
       <h3 style={{ marginTop: 0, textAlign: "center" }}>
         SUMMARY BREAKDOWN OF STATISTICS AS AT {date.split("-").reverse().join("/")}
@@ -91,7 +97,7 @@ export default function RecordsSheet({ date, rows, officers, remarks, onRemarkCh
             {RECORD_ROWS.map((r) => (
               <tr key={r.key}>
                 <td style={{ textAlign: "left", fontWeight: 600, whiteSpace: "nowrap" }}>{r.label}</td>
-                {DEMOGRAPHIC_FIELDS.map((f) => <td key={f.key}>{toNum(rows[r.key]?.[f.key]) || ""}</td>)}
+                {DEMOGRAPHIC_FIELDS.map((f) => <td key={f.key}>{cell(toNum(rows[r.key]?.[f.key]), r.wards, f.key, r.label + " \u2014 " + f.label)}</td>)}
                 <td style={{ padding: onRemarkChange ? 2 : undefined, textAlign: "left" }}>
                   {onRemarkChange
                     ? <input type="text" style={remarkInput} value={remarks[r.key] ?? ""} onChange={(e) => onRemarkChange(r.key, e.target.value)} />
@@ -101,7 +107,7 @@ export default function RecordsSheet({ date, rows, officers, remarks, onRemarkCh
             ))}
             <tr style={{ fontWeight: 700, background: "var(--background)" }}>
               <td style={{ textAlign: "left" }}>G/TOTAL</td>
-              {DEMOGRAPHIC_FIELDS.map((f) => <td key={f.key}>{totalFor(f.key)}</td>)}
+              {DEMOGRAPHIC_FIELDS.map((f) => <td key={f.key}>{totalFor(f.key) && docs ? <PNum n={totalFor(f.key)} kind="demo" keys={allWardKeys} field={f.key} docs={docs} label={"G/TOTAL \u2014 " + f.label} /> : totalFor(f.key)}</td>)}
               <td></td>
             </tr>
           </tbody>
@@ -125,5 +131,6 @@ export default function RecordsSheet({ date, rows, officers, remarks, onRemarkCh
         <div className="field-hint">OFFRS = officers in every ward (Army Number N/…); SLDRS = all other military; CIVS = all civilians.</div>
       </div>
     </div>
+    </PatientPopupProvider>
   );
 }

@@ -25,6 +25,7 @@ import { loadPatientsForWardLabels, loadCensusPatients } from "../../lib/patient
 import { useGoBack } from "../../hooks/useGoBack.js";
 import useArchiveSweep from "../../hooks/useArchiveSweep.js";
 import Topbar from "../../components/Topbar.jsx";
+import { PatientPopupProvider, PNum } from "../../components/PatientListModal.jsx";
 import ParoleTables, { hasAny as paroleHasAny } from "../../components/ParoleTables.jsx";
 import { splitDiagnosisNote } from "../../lib/diagnosisNote.js";
 import { DiagnosisHeadline } from "../../components/DiagnosisNoteEditor.jsx";
@@ -129,11 +130,11 @@ function WardShiftTable({ w, data }) {
         <tr className="total-row">
           <td className="shift-name">Total</td>
           <td className="stat-beds">{beds}</td>
-          <td className="stat-occ">{finalOcc}</td>
+          <td className="stat-occ"><PNum n={finalOcc} kind="stat" keys={[w.key]} field="occ" docs={{ [w.key]: data }} label={w.label + ' \u2014 Occ'} /></td>
           <td className="stat-vac">{beds - finalOcc}</td>
           {moveCols.map(f => (
             <Fragment key={f.key}>
-              <td className={movementColorClass(f.key)}>{typeof data[f.key] === 'number' ? data[f.key] : 0}</td>
+              <td className={movementColorClass(f.key)}><PNum n={typeof data[f.key] === 'number' ? data[f.key] : 0} kind="stat" keys={[w.key]} field={f.key} docs={{ [w.key]: data }} label={w.label + ' \u2014 ' + f.label} /></td>
               {f.key === 'bid' && isParoleWard && PAROLE_COLS.map(c => <td key={c.key}>{paroleCount(c.key)}</td>)}
             </Fragment>
           ))}
@@ -235,9 +236,9 @@ function GroupedWardShiftTable({ group, wardData }) {
         <tr className="total-row">
           <td className="shift-name">Total</td>
           <td className="stat-beds">{totalBeds}</td>
-          <td className="stat-occ">{totalOcc}</td>
+          <td className="stat-occ"><PNum n={totalOcc} kind="stat" keys={group.wardKeys} field="occ" docs={wardData} label={group.label + ' \u2014 Occ'} /></td>
           <td className="stat-vac">{totalBeds - totalOcc}</td>
-          {moveCols.map(f => <td key={f.key} className={movementColorClass(f.key)}>{totalMovement[f.key]}</td>)}
+          {moveCols.map(f => <td key={f.key} className={movementColorClass(f.key)}><PNum n={totalMovement[f.key]} kind="stat" keys={group.wardKeys} field={f.key} docs={wardData} label={group.label + ' \u2014 ' + f.label} /></td>)}
           <td style={{ textAlign: 'left' }}>{dutyNames || '\u2014'}</td>
         </tr>
       </tbody>
@@ -276,7 +277,7 @@ function GroupedDemographicsTable({ group, wardData, demoValue }) {
           return (
             <tr key={k}>
               <td className="ward-name">{MAT_DEMO_ROW_LABEL[k] || (w && w.label)}</td>
-              {DEMOGRAPHIC_FIELDS.map((f) => <td key={f.key}>{demoValue(k, f)}</td>)}
+              {DEMOGRAPHIC_FIELDS.map((f) => <td key={f.key}><PNum n={demoValue(k, f)} kind="demo" keys={[k]} field={f.key} docs={wardData} label={(MAT_DEMO_ROW_LABEL[k] || (w && w.label)) + ' \u2014 ' + f.label} /></td>)}
               <td>{data.demographicsRemarks || ''}</td>
             </tr>
           );
@@ -938,7 +939,7 @@ export default function OverallNurse() {
   }
 
   return (
-    <>
+    <PatientPopupProvider>
       <Topbar brand="Overall Nurse">
         <button className="btn btn-secondary" style={{ padding: '6px 12px' }} onClick={goBack}>Back</button>
         <button className="btn btn-secondary" style={{ padding: '6px 12px' }} onClick={() => navigate('/nurses-report/archive-list?type=overall')}>{'\uD83D\uDCC1 Archive'}</button>
@@ -1017,7 +1018,7 @@ export default function OverallNurse() {
                         onClick={isAdmin ? () => renameWard(w) : undefined}>{w.label}</td>
                       {STAT_FIELDS.map((f) => (
                         <td key={f.key} className={movementColorClass(f.key)}>
-                          {typeof data[f.key] === 'number' ? data[f.key] : (f.key === 'beds' ? w.beds : 0)}
+                          <PNum n={typeof data[f.key] === 'number' ? data[f.key] : (f.key === 'beds' ? w.beds : 0)} kind="stat" keys={[w.key]} field={f.key} docs={wardData} label={w.label + ' \u2014 ' + f.label} />
                         </td>
                       ))}
                       {CUSTOM_TEXT_COLUMNS.map((c) => (
@@ -1042,7 +1043,7 @@ export default function OverallNurse() {
                 })}
                 <tr className="totals-row">
                   <td className="ward-name">TOTAL</td>
-                  {STAT_FIELDS.map((f) => <td key={f.key} className={movementColorClass(f.key)}>{totals[f.key]}</td>)}
+                  {STAT_FIELDS.map((f) => <td key={f.key} className={movementColorClass(f.key)}><PNum n={totals[f.key]} kind="stat" keys={WARDS.map((x) => x.key)} field={f.key} docs={wardData} label={'All wards \u2014 ' + f.label} /></td>)}
                   {CUSTOM_TEXT_COLUMNS.map((c) => <td key={c.key}></td>)}
                   <td></td><td></td>
                 </tr>
@@ -1075,14 +1076,14 @@ export default function OverallNurse() {
                   return (
                     <tr key={w.key}>
                       <td className="ward-name">{w.label}</td>
-                      {DEMOGRAPHIC_FIELDS.map((f) => <td key={f.key}>{demoValue(w.key, f)}</td>)}
+                      {DEMOGRAPHIC_FIELDS.map((f) => <td key={f.key}><PNum n={demoValue(w.key, f)} kind="demo" keys={[w.key]} field={f.key} docs={wardData} label={w.label + ' \u2014 ' + f.label} /></td>)}
                       <td>{data.demographicsRemarks || ''}</td>
                     </tr>
                   );
                 })}
                 <tr className="totals-row">
                   <td className="ward-name">TOTAL</td>
-                  {DEMOGRAPHIC_FIELDS.map(f => <td key={f.key}>{demoTotals[f.key]}</td>)}
+                  {DEMOGRAPHIC_FIELDS.map(f => <td key={f.key}><PNum n={demoTotals[f.key]} kind="demo" keys={WARDS.map((x) => x.key)} field={f.key} docs={wardData} label={'All wards \u2014 ' + f.label} /></td>)}
                   <td></td>
                 </tr>
               </tbody>
@@ -1174,6 +1175,6 @@ export default function OverallNurse() {
       </div>
 
       {contactModal && <ReportContactModal nurse={contactModal} onClose={() => setContactModal(null)} />}
-    </>
+    </PatientPopupProvider>
   );
 }

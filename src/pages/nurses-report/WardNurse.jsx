@@ -19,6 +19,7 @@ import { loadPatientsForWardLabels, loadCensusPatients } from "../../lib/patient
 import { applyPatientStatus, closeOutDischargedPatient, closeOutParolePatients, readmitFromParole, activeAdmissionTag, clearAdmissionTag, activeTransferOut, clearTransferOutMarker, ADMISSION_TAG_LABEL, ADMISSION_TAG_STATUS_STAMP } from "../../lib/patientAdmissionStatus.js";
 import useArchiveSweep from "../../hooks/useArchiveSweep.js";
 import Topbar from "../../components/Topbar.jsx";
+import { PatientPopupProvider, PNum } from "../../components/PatientListModal.jsx";
 import { splitDiagnosisNote, withPatientDiagnosis } from "../../lib/diagnosisNote.js";
 import DiagnosisNoteEditor, { DiagnosisHeadline } from "../../components/DiagnosisNoteEditor.jsx";
 import VitalsNoteText from "../../components/VitalsNoteText.jsx";
@@ -412,12 +413,12 @@ function ShiftTable({ wardKey, wardDoc, census, movementTotals, editable, statsE
         <tr className="total-row">
           <td className="shift-name">Total</td>
           <td className="stat-beds">{census.beds}</td>
-          <td className="stat-occ">{census.occ}</td>
+          <td className="stat-occ"><PNum n={census.occ} kind="stat" keys={[wardKey]} field="occ" docs={{ [wardKey]: wardDoc }} label={(wardDoc.label || 'Ward') + ' \u2014 Occ'} /></td>
           <td className="stat-vac">{census.vac}</td>
           {moveCols.map((f) => (
             <Fragment key={f.key}>
-              <td className={movementColorClass(f.key)}>{movementTotals[f.key]}</td>
-              {f.key === 'bid' && parole && PAROLE_COLS.map(c => <td key={c.key} className="computed">{parole[c.key].length}</td>)}
+              <td className={movementColorClass(f.key)}><PNum n={movementTotals[f.key]} kind="stat" keys={[wardKey]} field={f.key} docs={{ [wardKey]: wardDoc }} label={(wardDoc.label || 'Ward') + ' \u2014 ' + f.label} /></td>
+              {f.key === 'bid' && parole && PAROLE_COLS.map(c => <td key={c.key} className="computed"><PNum n={parole[c.key].length} kind="stat" keys={[wardKey]} field={c.key} docs={{ [wardKey]: { paroleList: parole.parole, dParoleList: parole.dParole } }} label={(wardDoc.label || 'Ward') + ' \u2014 ' + c.label} /></td>)}
             </Fragment>
           ))}
           <td style={{ textAlign: 'left' }}>{wardDoc.shifts.pm.nurseOnDuty || '\u2014'}</td>
@@ -455,7 +456,7 @@ function DemographicsHeaderRows({ leadCell, trailingCell }) {
 // One daily total per ward, entered directly — matches the paper
 // "Summary Breakdown of Statistics" form's single row per ward, rather
 // than a per-shift entry table.
-function DemographicsTable({ wardDoc, editable, statsEditable, onField, onRemarks, census }) {
+function DemographicsTable({ wardKey, wardDoc, editable, statsEditable, onField, onRemarks, census }) {
   return (
     <table className="shift">
       <thead>
@@ -466,9 +467,11 @@ function DemographicsTable({ wardDoc, editable, statsEditable, onField, onRemark
           {DEMOGRAPHIC_FIELDS.map((f) => (
             <td key={f.key}>
               {f.category === 'adm' && census
-                ? <input type="number" inputMode="numeric" disabled readOnly value={census[f.key] || 0} />
-                : <input type="number" inputMode="numeric" disabled={!statsEditable}
-                    value={wardDoc[f.key]} onChange={(e) => onField(f.key, e.target.value)} />}
+                ? <PNum n={census[f.key] || 0} kind="demo" keys={[wardKey]} field={f.key} docs={{ [wardKey]: wardDoc }} label={(wardDoc.label || 'Ward') + ' \u2014 ' + f.label} />
+                : (statsEditable
+                    ? <input type="number" inputMode="numeric"
+                        value={wardDoc[f.key]} onChange={(e) => onField(f.key, e.target.value)} />
+                    : <PNum n={wardDoc[f.key] || 0} kind="demo" keys={[wardKey]} field={f.key} docs={{ [wardKey]: wardDoc }} label={(wardDoc.label || 'Ward') + ' \u2014 ' + f.label} />)}
             </td>
           ))}
           <td>
@@ -1711,7 +1714,7 @@ function WardPanelRest({ h, showLabel, isAdmin, navigate, includeShiftTable = tr
                 <>
                   <h2 style={includeShiftTable ? { marginTop: 14 } : undefined}>Patient Demographics</h2>
                   <div className="table-wrap">
-                    <DemographicsTable wardDoc={wardDoc} editable={editable} statsEditable={isAdmin && editable} census={liveCensusMap ? (liveCensusMap[wardKey] || {}) : null}
+                    <DemographicsTable wardKey={wardKey} wardDoc={wardDoc} editable={editable} statsEditable={isAdmin && editable} census={liveCensusMap ? (liveCensusMap[wardKey] || {}) : null}
                       onField={(key, raw) => { touchedDemographicFieldsRef.current.add(key); const n = parseFloat(raw); updateWardDoc({ [key]: isNaN(n) ? 0 : n }); }}
                       onRemarks={(v) => updateWardDoc({ demographicsRemarks: v })} />
                   </div>
@@ -1942,9 +1945,9 @@ function MergedShiftTable({ panels }) {
         <tr className="total-row">
           <td className="shift-name">Total</td>
           <td className="stat-beds">{totalBeds}</td>
-          <td className="stat-occ">{totalOcc}</td>
+          <td className="stat-occ"><PNum n={totalOcc} kind="stat" keys={panels.map((p) => p.w.key)} field="occ" docs={Object.fromEntries(panels.map((p) => [p.w.key, p.wardDoc]))} label="Ward \u2014 Occ" /></td>
           <td className="stat-vac">{totalVac}</td>
-          {moveCols.map((f) => <td key={f.key} className={movementColorClass(f.key)}>{totalMovement[f.key]}</td>)}
+          {moveCols.map((f) => <td key={f.key} className={movementColorClass(f.key)}><PNum n={totalMovement[f.key]} kind="stat" keys={panels.map((p) => p.w.key)} field={f.key} docs={Object.fromEntries(panels.map((p) => [p.w.key, p.wardDoc]))} label={'Ward \u2014 ' + f.label} /></td>)}
           <td style={{ textAlign: 'left' }}>{dutyNames || '\u2014'}</td>
         </tr>
       </tbody>
@@ -1976,9 +1979,11 @@ function MergedDemographicsTable({ panels, censusMap }) {
             {fields.map((f) => (
               <td key={f.key}>
                 {f.category === 'adm' && censusMap
-                  ? <input type="number" inputMode="numeric" disabled readOnly value={(censusMap[p.w.key] || {})[f.key] || 0} />
-                  : <input type="number" inputMode="numeric" disabled={!p.statsEditable}
-                      value={getVal(p, f.key)} onChange={(e) => p.onField(f.key, e.target.value)} />}
+                  ? <PNum n={(censusMap[p.w.key] || {})[f.key] || 0} kind="demo" keys={[p.w.key]} field={f.key} docs={{ [p.w.key]: p.wardDoc }} label={p.w.label + ' \u2014 ' + f.label} />
+                  : (p.statsEditable
+                      ? <input type="number" inputMode="numeric"
+                          value={getVal(p, f.key)} onChange={(e) => p.onField(f.key, e.target.value)} />
+                      : <PNum n={getVal(p, f.key)} kind="demo" keys={[p.w.key]} field={f.key} docs={{ [p.w.key]: p.wardDoc }} label={p.w.label + ' \u2014 ' + f.label} />)}
               </td>
             ))}
             <td>
@@ -2104,7 +2109,7 @@ export default function WardNurse() {
   const activeOption = wardOptions.find(o => o.key === groupKey) || null;
 
   return (
-    <>
+    <PatientPopupProvider>
       <Topbar brand="Ward Nurse">
         <button className="btn btn-secondary" style={{ padding: '6px 12px' }} onClick={goBack}>Back</button>
       </Topbar>
@@ -2140,6 +2145,6 @@ export default function WardNurse() {
               ))
         )}
       </div>
-    </>
+    </PatientPopupProvider>
   );
 }

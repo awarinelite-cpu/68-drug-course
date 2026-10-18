@@ -10,6 +10,7 @@ import {
 } from "../../lib/nurses-report-common.js";
 import { useTimeFormat, formatDateTime } from "../../lib/time-format.js";
 import Topbar from "../../components/Topbar.jsx";
+import { PatientPopupProvider, PNum } from "../../components/PatientListModal.jsx";
 import ParoleTables, { hasAny as paroleHasAny } from "../../components/ParoleTables.jsx";
 import { splitDiagnosisNote } from "../../lib/diagnosisNote.js";
 import DiagnosisNoteEditor, { DiagnosisHeadline } from "../../components/DiagnosisNoteEditor.jsx";
@@ -154,10 +155,10 @@ function WardShiftTableView({ w, data }) {
         })}
         <tr className="total-row">
           <td className="shift-name">Total</td>
-          <td className="stat-beds">{beds}</td><td className="stat-occ">{finalOcc}</td><td className="stat-vac">{beds - finalOcc}</td>
+          <td className="stat-beds">{beds}</td><td className="stat-occ"><PNum n={finalOcc} kind="stat" keys={[w.key]} field="occ" docs={{ [w.key]: data }} label={w.label + ' \u2014 Occ'} /></td><td className="stat-vac">{beds - finalOcc}</td>
           {moveCols.map(f => (
             <Fragment key={f.key}>
-              <td className={movementColorClass(f.key)}>{typeof data[f.key] === 'number' ? data[f.key] : 0}</td>
+              <td className={movementColorClass(f.key)}><PNum n={typeof data[f.key] === 'number' ? data[f.key] : 0} kind="stat" keys={[w.key]} field={f.key} docs={{ [w.key]: data }} label={w.label + ' \u2014 ' + f.label} /></td>
               {f.key === 'bid' && isParoleWard && PAROLE_COLS.map(c => <td key={c.key}>{paroleCount(c.key)}</td>)}
             </Fragment>
           ))}
@@ -248,7 +249,7 @@ function DemographicsTableView({ data, w }) {
       </thead>
       <tbody>
         <tr>
-          {fields.map(f => <td key={f.key}>{typeof data[f.key] === 'number' ? data[f.key] : 0}</td>)}
+          {fields.map(f => <td key={f.key}><PNum n={typeof data[f.key] === 'number' ? data[f.key] : 0} kind="demo" keys={[w.key]} field={f.key} docs={{ [w.key]: data }} label={w.label + ' \u2014 ' + f.label} /></td>)}
           <td>{data.demographicsRemarks || ''}</td>
         </tr>
       </tbody>
@@ -414,8 +415,8 @@ function MergedShiftTable({ members, wardsMap, edit, onChange }) {
         {!edit && (
           <tr className="total-row">
             <td className="shift-name">Total</td>
-            <td className="stat-beds">{totalBeds}</td><td className="stat-occ">{totalOcc}</td><td className="stat-vac">{totalBeds - totalOcc}</td>
-            {moveCols.map(f => <td key={f.key} className={movementColorClass(f.key)}>{totalMove[f.key]}</td>)}
+            <td className="stat-beds">{totalBeds}</td><td className="stat-occ"><PNum n={totalOcc} kind="stat" keys={rows.map(r => r.w.key)} field="occ" docs={wardsMap} label={'Ward \u2014 Occ'} /></td><td className="stat-vac">{totalBeds - totalOcc}</td>
+            {moveCols.map(f => <td key={f.key} className={movementColorClass(f.key)}><PNum n={totalMove[f.key]} kind="stat" keys={rows.map(r => r.w.key)} field={f.key} docs={wardsMap} label={'Ward \u2014 ' + f.label} /></td>)}
             <td style={{ textAlign: 'left' }}>{dutyNames || '\u2014'}</td>
           </tr>
         )}
@@ -443,7 +444,7 @@ function MergedDemographicsTable({ members, wardsMap, edit, onChange }) {
                   {edit
                     ? <input type="number" inputMode="numeric" value={data[f.key] || 0}
                         onChange={(e) => { const n = parseFloat(e.target.value); onChange(w.key, { ...data, [f.key]: isNaN(n) ? 0 : n }); }} />
-                    : (typeof data[f.key] === 'number' ? data[f.key] : 0)}
+                    : <PNum n={typeof data[f.key] === 'number' ? data[f.key] : 0} kind="demo" keys={[w.key]} field={f.key} docs={wardsMap} label={(MAT_DEMO_ROW_LABEL[w.key] || w.label) + ' \u2014 ' + f.label} />}
                 </td>
               ))}
               <td>
@@ -595,7 +596,7 @@ function StatsTableView({ wardsMeta, wardsMap }) {
               {STAT_FIELDS.map((f) => {
                 const v = f.key === 'beds' ? (typeof data.beds === 'number' ? data.beds : w.beds) : (typeof data[f.key] === 'number' ? data[f.key] : 0);
                 totals[f.key] += v;
-                return <td key={f.key} className={movementColorClass(f.key)}>{v}</td>;
+                return <td key={f.key} className={movementColorClass(f.key)}><PNum n={v} kind="stat" keys={[w.key]} field={f.key} docs={wardsMap} label={w.label + ' \u2014 ' + f.label} /></td>;
               })}
               <td style={{ textAlign: 'left' }}>{data.submittedBy || '\u2014'}</td>
             </tr>
@@ -603,7 +604,7 @@ function StatsTableView({ wardsMeta, wardsMap }) {
         })}
         <tr className="totals-row">
           <td className="ward-name">TOTAL</td>
-          {STAT_FIELDS.map((f) => <td key={f.key} className={movementColorClass(f.key)}>{totals[f.key]}</td>)}
+          {STAT_FIELDS.map((f) => <td key={f.key} className={movementColorClass(f.key)}><PNum n={totals[f.key]} kind="stat" keys={wardsMeta.map((x) => x.key)} field={f.key} docs={wardsMap} label={'All wards \u2014 ' + f.label} /></td>)}
           <td></td>
         </tr>
       </tbody>
@@ -695,7 +696,7 @@ function DemoStatsTableView({ wardsMeta, wardsMap }) {
               {fields.map((f) => {
                 const v = typeof data[f.key] === 'number' ? data[f.key] : 0;
                 totals[f.key] += v;
-                return <td key={f.key}>{v}</td>;
+                return <td key={f.key}><PNum n={v} kind="demo" keys={[w.key]} field={f.key} docs={wardsMap} label={w.label + ' \u2014 ' + f.label} /></td>;
               })}
               <td>{data.demographicsRemarks || ''}</td>
             </tr>
@@ -703,7 +704,7 @@ function DemoStatsTableView({ wardsMeta, wardsMap }) {
         })}
         <tr className="totals-row">
           <td className="ward-name">TOTAL</td>
-          {fields.map(f => <td key={f.key}>{totals[f.key]}</td>)}
+          {fields.map(f => <td key={f.key}><PNum n={totals[f.key]} kind="demo" keys={wardsMeta.map((x) => x.key)} field={f.key} docs={wardsMap} label={'All wards \u2014 ' + f.label} /></td>)}
           <td></td>
         </tr>
       </tbody>
@@ -884,7 +885,7 @@ export default function ArchiveView() {
   if (archiveData.lastEditedAt) meta.push('Last edited by ' + (archiveData.lastEditedBy || 'Unknown') + ' on ' + fmtTimestamp(archiveData.lastEditedAt));
 
   return (
-    <>
+    <PatientPopupProvider>
       <Topbar brand="Archived Report">
         <button className="btn btn-secondary" style={{ padding: '6px 12px' }} onClick={goBack}>Back</button>
         <button className="btn btn-primary" style={{ padding: '6px 12px' }} onClick={() => window.print()}>Print</button>
@@ -951,6 +952,6 @@ export default function ArchiveView() {
           </div>
         )}
       </div>
-    </>
+    </PatientPopupProvider>
   );
 }
