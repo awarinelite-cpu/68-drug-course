@@ -23,5 +23,5 @@ const columns = [
 ];
 
 export default function Vitals() {
-  return <EntryChart title="Vital Signs Chart" collectionName="vitals" columns={columns} entryNoun="Reading" recentDays={7} />;
+  return <EntryChart title="Vital Signs Chart" collectionName="vitals" columns={columns} entryNoun="Reading" recentDays={7} editable />;
 }

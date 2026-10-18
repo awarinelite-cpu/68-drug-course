@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { collection, deleteDoc, doc, getDoc, setDoc, onSnapshot, query, orderBy, serverTimestamp, or, where } from "firebase/firestore";
+import { collection, deleteDoc, doc, getDoc, setDoc, updateDoc, onSnapshot, query, orderBy, serverTimestamp, or, where } from "firebase/firestore";
 import { db } from "../firebase.js";
 import { useAuth } from "../contexts/AuthContext.jsx";
 import { useBackLock } from "../hooks/useBackLock.js";
@@ -49,6 +49,9 @@ const STATUS_LABELS = { referred: 'Referred to another hospital', transferred: '
 //                         or { closedAt: Date|null, closedAtDisplay: string|null } when viewing a
 //                         closed admission — letting deriveRows force its final period closed at
 //                         that moment rather than waiting for the period's normal boundary.
+//   editable: true — the Delete button on each row becomes Edit. Edit loads that row into the
+//                         entry form (heading becomes "Edit ...", button "Save Changes"), with Cancel
+//                         and Delete available while editing.
 //   sortOrder: 'asc' | 'desc' (default) — display order after deriveRows runs.
 //   summary: { label, archivedLabel, storeAt: [collName, docId], archivedKey, compute(rawRows, closeContext) }
 //          — renders a small auto-updating, auto-saved totals card above the table.
@@ -167,7 +170,7 @@ function recentWindowStart(days) {
   return { date, key: date + 'T06:00' };
 }
 
-export default function EntryChart({ title, collectionName, columns, deriveRows, summary, entryNoun = 'Entry', sortOrder = 'desc', recentDays = 3 }) {
+export default function EntryChart({ title, collectionName, columns, deriveRows, summary, entryNoun = 'Entry', sortOrder = 'desc', recentDays = 3, editable = false }) {
   usePrintOrientation('landscape');
   const { profile } = useAuth();
   const [searchParams] = useSearchParams();
@@ -183,7 +186,7 @@ export default function EntryChart({ title, collectionName, columns, deriveRows,
   const displayColumns = columns.filter(c => !c.formOnly);
   const enterableColumns = columns.filter(c => !c.computed);
 
-  const [entryValues, setEntryValues] = useState(() => {
+  const freshValues = () => {
     const initial = {};
     enterableColumns.forEach(c => {
       const now = new Date();
@@ -198,7 +201,10 @@ export default function EntryChart({ title, collectionName, columns, deriveRows,
       } else initial[c.key] = '';
     });
     return initial;
-  });
+  };
+  const [entryValues, setEntryValues] = useState(freshValues);
+  const [editingId, setEditingId] = useState(null); // id of the row being edited, or null when adding
+  const formRef = useRef(null);
   const [entryOtherValues, setEntryOtherValues] = useState({});
 
   const [rawRows, setRawRows] = useState([]);
@@ -315,6 +321,18 @@ export default function EntryChart({ title, collectionName, columns, deriveRows,
 
     const hasDateColumn = enterableColumns.some(c => c.key === 'date');
     if (!data.time || (hasDateColumn && !data.date)) { alert('Please set the date and time.'); return; }
+    if (editingId) {
+      // Editing an existing row: update just the entered fields, keep who/when it was first entered.
+      data.editedAt = serverTimestamp();
+      data.editedBy = profile.name;
+      updateDoc(doc(db, 'patients', patientId, collectionName, editingId), data).catch((e) => {
+        console.warn('Edit queued locally; will retry once back online:', e);
+      });
+      setEditingId(null);
+      setEntryValues(freshValues());
+      setEntryOtherValues({});
+      return;
+    }
     data.createdAt = serverTimestamp();
     data.enteredBy = profile.name;
     // Client-generated ID via setDoc instead of addDoc, fired without
@@ -336,7 +354,32 @@ export default function EntryChart({ title, collectionName, columns, deriveRows,
   }
 
   async function deleteEntry(id) {
-    if (confirm('Delete this entry?')) await deleteDoc(doc(db, 'patients', patientId, collectionName, id));
+    if (confirm('Delete this entry?')) {
+      await deleteDoc(doc(db, 'patients', patientId, collectionName, id));
+      if (id === editingId) cancelEdit();
+    }
+  }
+
+  // Load a row into the entry form for editing.
+  function startEdit(row) {
+    const vals = {}; const others = {};
+    enterableColumns.forEach((col) => {
+      const v = row[col.key] != null ? String(row[col.key]) : '';
+      if (col.type === 'select' && col.otherOption && v.startsWith(col.otherOption)) {
+        vals[col.key] = col.otherOption;
+        others[col.key] = v.slice(col.otherOption.length).replace(/^:\s*/, '');
+      } else vals[col.key] = v;
+    });
+    setEntryValues(vals);
+    setEntryOtherValues(others);
+    setEditingId(row.id);
+    setTimeout(() => { if (formRef.current) formRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 0);
+  }
+
+  function cancelEdit() {
+    setEditingId(null);
+    setEntryValues(freshValues());
+    setEntryOtherValues({});
   }
 
   // Groups entry-form fields into their `group` boxes (in column order), and
@@ -412,12 +455,16 @@ export default function EntryChart({ title, collectionName, columns, deriveRows,
         )}
 
         {!isArchived && (
-          <div className="card-box no-print">
-            <h3 style={{ marginTop: 0 }}>New {entryNoun === 'Reading' ? 'Reading' : 'Entry'}</h3>
+          <div className="card-box no-print" ref={formRef} style={editingId ? { border: '2px solid #2563eb' } : undefined}>
+            <h3 style={{ marginTop: 0 }}>{editingId ? 'Edit' : 'New'} {entryNoun === 'Reading' ? 'Reading' : 'Entry'}</h3>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
               {renderEntryForm()}
             </div>
-            <button className="btn btn-primary" onClick={addEntry}>Add {entryNoun}</button>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+              <button className="btn btn-primary" onClick={addEntry}>{editingId ? 'Save Changes' : 'Add ' + entryNoun}</button>
+              {editingId && <button className="btn btn-secondary" onClick={cancelEdit}>Cancel</button>}
+              {editingId && <button className="btn btn-danger" onClick={() => deleteEntry(editingId)}>Delete</button>}
+            </div>
           </div>
         )}
 
@@ -471,7 +518,9 @@ export default function EntryChart({ title, collectionName, columns, deriveRows,
                     })}
                     {!isArchived && (
                       <td className="no-print">
-                        <button className="btn btn-danger" style={{ padding: '4px 8px', fontSize: 11 }} onClick={() => deleteEntry(row.id)}>Delete</button>
+                        {editable
+                          ? <button className="btn btn-primary" style={{ padding: '4px 8px', fontSize: 11 }} onClick={() => startEdit(row)}>Edit</button>
+                          : <button className="btn btn-danger" style={{ padding: '4px 8px', fontSize: 11 }} onClick={() => deleteEntry(row.id)}>Delete</button>}
                       </td>
                     )}
                   </tr>
