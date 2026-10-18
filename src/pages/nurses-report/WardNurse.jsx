@@ -393,7 +393,7 @@ function ShiftTable({ wardKey, wardDoc, census, movementTotals, editable, statsE
                 ? <input type="number" inputMode="numeric" disabled={!statsEditable} value={wardDoc.beds} onChange={(e) => onBeds(e.target.value)} />
                 : census.beds}
             </td>
-            <td className="computed stat-occ">{census.perShiftOcc[s.key]}</td>
+            <td className="computed stat-occ"><PNum n={census.perShiftOcc[s.key]} kind="stat" keys={[wardKey]} field="occ" docs={{ [wardKey]: wardDoc }} label={(wardDoc.label || 'Ward') + ' \u2014 Occ (' + s.label + ')'} /></td>
             <td className="computed stat-vac">{census.beds - census.perShiftOcc[s.key]}</td>
             {moveCols.map((f) => (
               <Fragment key={f.key}>
@@ -1926,7 +1926,7 @@ function MergedShiftTable({ panels }) {
                     ? <input type="number" inputMode="numeric" disabled={!p.statsEditable} value={p.wardDoc.beds} onChange={(e) => p.updateBeds(e.target.value)} />
                     : p.census.beds}
                 </td>
-                <td className="computed stat-occ">{p.census.perShiftOcc[s.key]}</td>
+                <td className="computed stat-occ"><PNum n={p.census.perShiftOcc[s.key]} kind="stat" keys={[p.w.key]} field="occ" docs={{ [p.w.key]: p.wardDoc }} label={p.w.label + ' \u2014 Occ (' + s.label + ')'} /></td>
                 <td className="computed stat-vac">{p.census.beds - p.census.perShiftOcc[s.key]}</td>
                 {moveCols.map((f) => (
                   <td key={f.key} className={movementColorClass(f.key)}>

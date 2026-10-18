@@ -115,7 +115,7 @@ function WardShiftTable({ w, data }) {
             <tr key={s.key}>
               <td className="shift-name">{s.label}</td>
               <td className="stat-beds">{beds}</td>
-              <td className="stat-occ">{perShiftOcc[s.key]}</td>
+              <td className="stat-occ"><PNum n={perShiftOcc[s.key]} kind="stat" keys={[w.key]} field="occ" docs={{ [w.key]: data }} label={w.label + ' \u2014 Occ (' + s.label + ')'} /></td>
               <td className="stat-vac">{beds - perShiftOcc[s.key]}</td>
               {moveCols.map(f => (
                 <Fragment key={f.key}>
@@ -224,7 +224,7 @@ function GroupedWardShiftTable({ group, wardData }) {
                 <tr key={w.key}>
                   <td className="shift-name">{w.label}</td>
                   <td className="stat-beds">{beds}</td>
-                  <td className="stat-occ">{perShiftOcc[s.key]}</td>
+                  <td className="stat-occ"><PNum n={perShiftOcc[s.key]} kind="stat" keys={[w.key]} field="occ" docs={wardData} label={w.label + ' \u2014 Occ (' + s.label + ')'} /></td>
                   <td className="stat-vac">{beds - perShiftOcc[s.key]}</td>
                   {moveCols.map(f => <td key={f.key} className={movementColorClass(f.key)}>{typeof sData[f.key] === 'number' ? sData[f.key] : 0}</td>)}
                   <td style={{ textAlign: 'left' }}>{sData.nurseOnDuty || '\u2014'}</td>
