@@ -123,7 +123,7 @@ export default function RecordsSheet({ date, rows, officers, remarks, onRemarkCh
             {[["OFFRS", "offrs"], ["SLDRS", "sldrs"], ["CIVS", "civs"]].map(([label, k]) => (
               <tr key={k}>
                 <td style={{ textAlign: "left", fontWeight: 600 }}>{label}</td>
-                {DEMOGRAPHIC_CATEGORIES.map((c) => <td key={c.key}>{footer[c.key][k]}</td>)}
+                {DEMOGRAPHIC_CATEGORIES.map((c) => <td key={c.key}>{footer[c.key][k] && docs ? <PNum n={footer[c.key][k]} kind="group" group={k} keys={allWardKeys} field={c.key} docs={docs} label={label + " \u2014 " + c.label} /> : footer[c.key][k]}</td>)}
               </tr>
             ))}
           </tbody>

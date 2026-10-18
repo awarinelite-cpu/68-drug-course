@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useMemo, useState } from "react";
 import {
-  statPatients, demoPatients, occPatients, LISTABLE_STAT_KEYS, LISTABLE_DEMO_CATEGORIES
+  statPatients, demoPatients, groupPatients, occPatients, LISTABLE_STAT_KEYS, LISTABLE_DEMO_CATEGORIES
 } from "../lib/movementPatients.js";
 
 const PopupCtx = createContext(null);
@@ -71,14 +71,15 @@ export function PatientPopupProvider({ children }) {
 //   docs  { wardKey: wardDoc } holding each ward's patient list
 //   label what to call the cell in the pop-up title
 //   archive true on a past-day report: Occ then lists that day's write-ups, not today's ward list
-export function PNum({ n, kind, keys, field, docs, label, archive }) {
+export function PNum({ n, kind, keys, field, docs, label, archive, group }) {
   const ctx = useContext(PopupCtx);
   const value = typeof n === "number" ? n : (parseFloat(n) || 0);
   const listable = kind === "stat"
     ? LISTABLE_STAT_KEYS.has(field)
-    : LISTABLE_DEMO_CATEGORIES.has(String(field).split("_")[0]);
+    : LISTABLE_DEMO_CATEGORIES.has(String(field).split("_")[0]); // kind "group": field is the category (adm/disch/dead)
   if (!ctx || !listable || value <= 0) return <>{n}</>;
   const go = () => ctx.open(label + " \u2014 " + value, value, async () => {
+    if (kind === "group") return groupPatients(docs, keys, field, group, archive);
     if (kind !== "stat") return demoPatients(docs, keys, field, archive);
     // Occ on a live page = the ward's current patient list. On a past (archived)
     // report the live list would be wrong, so it keeps using that day's write-ups.

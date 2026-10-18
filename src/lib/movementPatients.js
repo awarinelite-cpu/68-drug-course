@@ -6,7 +6,7 @@
 import { doc } from 'firebase/firestore';
 import { db } from '../firebase.js';
 import { getDocSafe } from './firestoreOffline.js';
-import { classifyAffiliation } from './patientAffiliation.js';
+import { classifyAffiliation, isOfficerArmyNumber } from './patientAffiliation.js';
 import { patientWardAndBedTypeForReportKey } from './wardNameMatch.js';
 import { loadPatientsForWardLabels } from './patientDirectory.js';
 
@@ -99,22 +99,26 @@ export async function occPatients(docs, wardKeys) {
   return live ? live.map(shape).sort(byName) : null;
 }
 
-const affCache = new Map();
-async function affiliationOf(p) {
+const recCache = new Map();
+async function recordOf(p) {
   const id = p.sourcePatientId;
-  if (!id) return '';
-  if (affCache.has(id)) return affCache.get(id);
-  let aff = '';
+  if (!id) return null;
+  if (recCache.has(id)) return recCache.get(id);
+  let rec = null;
   try {
     const snap = await getDocSafe(doc(db, 'patients', id));
-    if (snap.exists()) aff = classifyAffiliation(snap.data());
+    if (snap.exists()) rec = snap.data();
   } catch (e) { /* leave unclassified */ }
-  affCache.set(id, aff);
-  return aff;
+  recCache.set(id, rec);
+  return rec;
+}
+async function affiliationOf(p) {
+  const rec = await recordOf(p);
+  return rec ? classifyAffiliation(rec) : '';
 }
 
 // fieldKey looks like 'adm_milM' / 'disch_civF' / 'dead_milM'.
-export async function demoPatients(docs, wardKeys, fieldKey, archive) {
+async function demoRaw(docs, wardKeys, fieldKey, archive) {
   const m = /^([a-z]+)_(mil|civ)([MF])$/.exec(fieldKey || '');
   if (!m) return [];
   const [, category, aff, sex] = m;
@@ -125,8 +129,7 @@ export async function demoPatients(docs, wardKeys, fieldKey, archive) {
     const live = await liveWardPatients(wardKeys);
     if (live) {
       return live
-        .filter((p) => String(p.gender || p.sex || '').trim().charAt(0).toUpperCase() === sex && classifyAffiliation(p) === aff)
-        .map(shape).sort(byName);
+        .filter((p) => String(p.gender || p.sex || '').trim().charAt(0).toUpperCase() === sex && classifyAffiliation(p) === aff);
     }
   }
   const ups = writeUps(docs, wardKeys);
@@ -136,5 +139,29 @@ export async function demoPatients(docs, wardKeys, fieldKey, archive) {
     return STATUS_TO_DEMO[p.status] === category;
   });
   const affs = await Promise.all(candidates.map(affiliationOf));
-  return candidates.filter((_, i) => affs[i] === aff).map(shape).sort(byName);
+  return candidates.filter((_, i) => affs[i] === aff);
+}
+
+export async function demoPatients(docs, wardKeys, fieldKey, archive) {
+  return (await demoRaw(docs, wardKeys, fieldKey, archive)).map(shape).sort(byName);
+}
+
+// OFFRS / SLDRS / CIVS rows under the Records table: every patient behind the
+// category (adm / disch / dead) across all wards, split by Army Number
+// (N/... = officer), other military = soldier, the rest civilian.
+export async function groupPatients(docs, wardKeys, category, group, archive) {
+  const fields = ['milM', 'milF', 'civM', 'civF'].map((x) => category + '_' + x);
+  const lists = await Promise.all(fields.map((f) => demoRaw(docs, wardKeys, f, archive)));
+  const picked = [];
+  for (let i = 0; i < fields.length; i++) {
+    const isMil = fields[i].includes('_mil');
+    if (group === 'civs') { if (!isMil) picked.push(...lists[i]); continue; }
+    if (!isMil) continue;
+    const flags = await Promise.all(lists[i].map(async (p) => {
+      const army = p.armyNumber != null ? p.armyNumber : ((await recordOf(p)) || {}).armyNumber;
+      return isOfficerArmyNumber(army);
+    }));
+    lists[i].forEach((p, j) => { if (flags[j] === (group === 'offrs')) picked.push(p); });
+  }
+  return picked.map(shape).sort(byName);
 }
