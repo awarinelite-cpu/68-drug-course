@@ -682,7 +682,7 @@ export default function ArchiveView() {
         {isOverallType && (
           <div className="card-box">
             <h2>All Wards — 24-Hour Statistics</h2>
-            <div className="table-wrap">
+            <div className="table-wrap fit-stats">
               {editMode
                 ? <StatsTableEdit wardsMeta={wardsMeta} wardsMap={wardsMap} onChange={updateWard} />
                 : <StatsTableView wardsMeta={wardsMeta} wardsMap={wardsMap} />}
