@@ -7,6 +7,8 @@ import { doc } from 'firebase/firestore';
 import { db } from '../firebase.js';
 import { getDocSafe } from './firestoreOffline.js';
 import { classifyAffiliation } from './patientAffiliation.js';
+import { patientWardAndBedTypeForReportKey } from './wardNameMatch.js';
+import { loadPatientsForWardLabels } from './patientDirectory.js';
 
 // Write-up status stamp -> Shift Statistics column it was counted under.
 export const STATUS_TO_STAT = {
@@ -64,6 +66,32 @@ export function statPatients(docs, wardKeys, statKey) {
     ? ups.filter((p) => !LEFT_WARD.has(p.status))
     : ups.filter((p) => STATUS_TO_STAT[p.status] === statKey);
   return picked.map(shape).sort(byName);
+}
+
+// Occ = everybody still on the ward right now, so the names come from the
+// ward's real patient list (the patient charts on that ward), not only from
+// the write-up cards -- a patient nobody has written up yet is still counted
+// in Occ. Mid-transfer patients are left out, same rule as the headcount that
+// seeds Previous Occ. Returns null when a ward has no patient-chart
+// equivalent (ECO, Amenity ...) so the caller can fall back to write-up cards.
+export async function occPatients(docs, wardKeys) {
+  const infos = (wardKeys || []).map((k) => patientWardAndBedTypeForReportKey(k)).filter(Boolean);
+  if (!infos.length) return null;
+  const all = await loadPatientsForWardLabels(infos.map((i) => i.wardLabel));
+  const seen = new Set();
+  const out = [];
+  infos.forEach(({ wardLabel, bedType }) => {
+    all.forEach((p) => {
+      if (!p || p.pendingTransfer || p.ward !== wardLabel) return;
+      if (bedType && (p.pedBedType || '') !== bedType) return;
+      if (!hasWho(p)) return;
+      const id = p.emr ? 'emr:' + String(p.emr).trim().toLowerCase() : 'n:' + wardLabel + ':' + String(p.name).trim().toLowerCase();
+      if (seen.has(id)) return;
+      seen.add(id);
+      out.push(p);
+    });
+  });
+  return out.map(shape).sort(byName);
 }
 
 const affCache = new Map();

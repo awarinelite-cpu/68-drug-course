@@ -142,7 +142,7 @@ function WardShiftTableView({ w, data }) {
           return (
             <tr key={s.key}>
               <td className="shift-name">{s.label}</td>
-              <td className="stat-beds">{beds}</td><td className="stat-occ"><PNum n={perShiftOcc[s.key]} kind="stat" keys={[w.key]} field="occ" docs={{ [w.key]: data }} label={w.label + ' \u2014 Occ (' + s.label + ')'} /></td><td className="stat-vac">{beds - perShiftOcc[s.key]}</td>
+              <td className="stat-beds">{beds}</td><td className="stat-occ"><PNum n={perShiftOcc[s.key]} kind="stat" keys={[w.key]} field="occ" archive docs={{ [w.key]: data }} label={w.label + ' \u2014 Occ (' + s.label + ')'} /></td><td className="stat-vac">{beds - perShiftOcc[s.key]}</td>
               {moveCols.map(f => (
                 <Fragment key={f.key}>
                   <td className={movementColorClass(f.key)}>{typeof sData[f.key] === 'number' ? sData[f.key] : 0}</td>
@@ -155,7 +155,7 @@ function WardShiftTableView({ w, data }) {
         })}
         <tr className="total-row">
           <td className="shift-name">Total</td>
-          <td className="stat-beds">{beds}</td><td className="stat-occ"><PNum n={finalOcc} kind="stat" keys={[w.key]} field="occ" docs={{ [w.key]: data }} label={w.label + ' \u2014 Occ'} /></td><td className="stat-vac">{beds - finalOcc}</td>
+          <td className="stat-beds">{beds}</td><td className="stat-occ"><PNum n={finalOcc} kind="stat" keys={[w.key]} field="occ" archive docs={{ [w.key]: data }} label={w.label + ' \u2014 Occ'} /></td><td className="stat-vac">{beds - finalOcc}</td>
           {moveCols.map(f => (
             <Fragment key={f.key}>
               <td className={movementColorClass(f.key)}><PNum n={typeof data[f.key] === 'number' ? data[f.key] : 0} kind="stat" keys={[w.key]} field={f.key} docs={{ [w.key]: data }} label={w.label + ' \u2014 ' + f.label} /></td>
@@ -200,7 +200,7 @@ function WardShiftTableEdit({ w, data, onChange }) {
           <tr key={s.key}>
             <td className="shift-name">{s.label}</td>
             <td className="stat-beds">{s.key === 'am' ? <input type="number" inputMode="numeric" value={data.beds || 0} onChange={(e) => setBeds(e.target.value)} /> : beds}</td>
-            <td className="stat-occ"><PNum n={perShiftOcc[s.key]} kind="stat" keys={[w.key]} field="occ" docs={{ [w.key]: data }} label={w.label + ' \u2014 Occ (' + s.label + ')'} /></td>
+            <td className="stat-occ"><PNum n={perShiftOcc[s.key]} kind="stat" keys={[w.key]} field="occ" archive docs={{ [w.key]: data }} label={w.label + ' \u2014 Occ (' + s.label + ')'} /></td>
             <td className="stat-vac">{beds - perShiftOcc[s.key]}</td>
             {moveCols.map((f) => (
               <td key={f.key} className={movementColorClass(f.key)}>
@@ -393,7 +393,7 @@ function MergedShiftTable({ members, wardsMap, edit, onChange }) {
                       ? <input type="number" inputMode="numeric" value={r.data.beds || 0} onChange={(e) => setBeds(r, e.target.value)} />
                       : r.beds}
                   </td>
-                  <td className="stat-occ"><PNum n={r.perShiftOcc[s.key]} kind="stat" keys={[r.w.key]} field="occ" docs={wardsMap} label={r.w.label + ' \u2014 Occ (' + s.label + ')'} /></td>
+                  <td className="stat-occ"><PNum n={r.perShiftOcc[s.key]} kind="stat" keys={[r.w.key]} field="occ" archive docs={wardsMap} label={r.w.label + ' \u2014 Occ (' + s.label + ')'} /></td>
                   <td className="stat-vac">{r.beds - r.perShiftOcc[s.key]}</td>
                   {moveCols.map(f => (
                     <td key={f.key} className={movementColorClass(f.key)}>
@@ -415,7 +415,7 @@ function MergedShiftTable({ members, wardsMap, edit, onChange }) {
         {!edit && (
           <tr className="total-row">
             <td className="shift-name">Total</td>
-            <td className="stat-beds">{totalBeds}</td><td className="stat-occ"><PNum n={totalOcc} kind="stat" keys={rows.map(r => r.w.key)} field="occ" docs={wardsMap} label={'Ward \u2014 Occ'} /></td><td className="stat-vac">{totalBeds - totalOcc}</td>
+            <td className="stat-beds">{totalBeds}</td><td className="stat-occ"><PNum n={totalOcc} kind="stat" keys={rows.map(r => r.w.key)} field="occ" archive docs={wardsMap} label={'Ward \u2014 Occ'} /></td><td className="stat-vac">{totalBeds - totalOcc}</td>
             {moveCols.map(f => <td key={f.key} className={movementColorClass(f.key)}><PNum n={totalMove[f.key]} kind="stat" keys={rows.map(r => r.w.key)} field={f.key} docs={wardsMap} label={'Ward \u2014 ' + f.label} /></td>)}
             <td style={{ textAlign: 'left' }}>{dutyNames || '\u2014'}</td>
           </tr>
