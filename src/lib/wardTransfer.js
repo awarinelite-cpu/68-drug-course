@@ -1,3 +1,4 @@
+import { getWardCapacity, wardFullMessage } from "./wardCapacity.js";
 import { doc, getDoc, updateDoc, deleteField, serverTimestamp } from "firebase/firestore";
 import { db } from "../firebase.js";
 import { AE_WARD_LABEL } from "./drugChartHelpers.js";
@@ -20,6 +21,10 @@ export function pendingTransfersFor(patients, ward) {
 // only relevant when accepting into PEDIATRIC/NICU WARD — see
 // NewPatientTransfersModal, which is the only caller that passes it.
 export async function acceptTransfer(patientId, pendingTransfer, pedBedType) {
+  {
+    const cap = await getWardCapacity(pendingTransfer.toWard, pedBedType || '');
+    if (cap.full) throw new Error(wardFullMessage(cap));
+  }
   // Needed to resolve the *sending* ward's Shift Statistics key below —
   // pedBedType (the function argument) only ever describes the
   // *receiving* ward's Bed/Cot split (see the caller comment above), so

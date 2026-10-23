@@ -4,6 +4,7 @@ import { STATUS_LABELS, WARD_OPTIONS, defaultRow } from "./drugChartHelpers.js";
 import { formatDateTime } from "./time-format.js";
 import { bumpShiftStat, bumpShiftStatForPatientWard, bumpDemographicStat, bumpDemographicStatForPatientWard } from "./shiftStatsSync.js";
 import { classifyAffiliation, isOfficerArmyNumber } from "./patientAffiliation.js";
+import { getWardCapacity, wardFullMessage } from "./wardCapacity.js";
 import { PAROLE_STATUS, PAROLE_OUT_KEY, OLD_IN_KEY, PAROLE_WARD_KEY, PAROLE_PATIENT_WARD_LABEL, isParoleActive } from "./nurses-report-common.js";
 
 // Which Shift Statistics column each exit reason feeds — 'referred' is
@@ -607,6 +608,10 @@ export async function admitExistingPatientToWard({ patientId, currentWard, nurse
     }
   }
   const nextPedBedType = nurseWard === 'PEDIATRIC/NICU WARD' ? (pedBedType || '') : '';
+  if (nurseWard && nurseWard !== currentWard) {
+    const cap = await getWardCapacity(nurseWard, nextPedBedType);
+    if (cap.full) return { ok: false, message: wardFullMessage(cap) };
+  }
   try {
     await updateDoc(doc(db, 'patients', patientId), {
       ward: nurseWard || '', pedBedType: nextPedBedType,
@@ -745,6 +750,13 @@ export async function readmitLatestAdmission({ patientId, nurseName }) {
     return { ok: false, message: 'Patient on admission in ' + wardName + '. You can transfer the patient to the ward if need be.' };
   }
 
+  {
+    const targetWard = admData.ward || currentWard;
+    if (targetWard && targetWard !== currentWard) {
+      const cap = await getWardCapacity(targetWard, admData.pedBedType || '');
+      if (cap.full) return { ok: false, message: wardFullMessage(cap) };
+    }
+  }
   try {
     const dc = admData.drugCourseChart || {};
     const restoredAuditLog = Array.isArray(dc.auditLog) ? dc.auditLog.slice() : [];

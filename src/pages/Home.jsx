@@ -8,6 +8,7 @@ import { useOverallNurseThisWeek } from "../hooks/useOverallNurseThisWeek.js";
 import { avatarMarkup, avatarSVG } from "../lib/avatar.js";
 import Topbar from "../components/Topbar.jsx";
 import PatientForm from "../components/PatientForm.jsx";
+import { getWardCapacity, wardFullMessage } from "../lib/wardCapacity.js";
 import PatientStatusButton from "../components/PatientStatusButton.jsx";
 import NewPatientTransfersModal from "../components/NewPatientTransfersModal.jsx";
 import { parsePatientFields } from "../lib/patientParse.js";
@@ -480,6 +481,10 @@ export default function Home() {
     // what made "Save Patient" hang forever while offline — it queues
     // fine locally and syncs automatically on reconnect, so there's
     // nothing to wait for.
+    if (ward && (!existing || existing.ward !== ward)) {
+      const cap = await getWardCapacity(ward, data.pedBedType);
+      if (cap.full) { setNewMsg(wardFullMessage(cap)); return; }
+    }
     const ref = existing ? doc(db, 'patients', existing.id) : doc(collection(db, 'patients'));
     if (existing) {
       setDoc(ref, data, { merge: true }).catch((e) => {
