@@ -2450,3 +2450,9 @@ h3.ward-report-subheading, .ward-report-subheading { font-size: clamp(28px, 3.4v
 .pl-name { font-weight: 600; }
 .pl-note { font-size: 13px; color: #6b7280; padding: 10px 2px; }
 @media print { .num-tap { text-decoration: none; font-weight: inherit; } .pl-backdrop { display: none; } }
+
+/* Status button on each ward-list patient card */
+.patient-status-wrap { flex: 0 0 auto; align-self: center; margin-left: auto; }
+.patient-status-btn { padding: 6px 14px; font-size: 13px; white-space: nowrap; }
+.patient-status-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 2000; display: flex; align-items: center; justify-content: center; padding: 16px; cursor: default; }
+.patient-status-modal { width: 100%; max-width: 380px; max-height: 90vh; overflow: auto; }

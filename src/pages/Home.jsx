@@ -8,6 +8,7 @@ import { useOverallNurseThisWeek } from "../hooks/useOverallNurseThisWeek.js";
 import { avatarMarkup, avatarSVG } from "../lib/avatar.js";
 import Topbar from "../components/Topbar.jsx";
 import PatientForm from "../components/PatientForm.jsx";
+import PatientStatusButton from "../components/PatientStatusButton.jsx";
 import NewPatientTransfersModal from "../components/NewPatientTransfersModal.jsx";
 import { parsePatientFields } from "../lib/patientParse.js";
 import { takePendingEmrImport, stashEmrText } from "../lib/emrBridge.js";
@@ -734,7 +735,7 @@ export default function Home() {
                         <span className="patient-diagnosis-col">
                           <span>{p.diagnosis || ''}</span>
                           <BedTag patient={p} />
-                        </span></span></span>
+                        </span></span><PatientStatusButton patient={p} onApplied={() => loadWardData(true)} /></span>
                       </div>
                     ))}
                   </div>
@@ -750,7 +751,7 @@ export default function Home() {
                         <span className="patient-diagnosis-col">
                           <span>{p.diagnosis || ''}</span>
                           <BedTag patient={p} />
-                        </span></span></span>
+                        </span></span><PatientStatusButton patient={p} onApplied={() => loadWardData(true)} /></span>
                       </div>
                     ))}
                   </div>
@@ -763,7 +764,7 @@ export default function Home() {
                 <span className="patient-diagnosis-col">
                   <span>{p.diagnosis || ''}</span>
                   <BedTag patient={p} />
-                </span></span></span>
+                </span></span><PatientStatusButton patient={p} onApplied={() => loadWardData(true)} /></span>
               </div>
             ))}
           </div>
