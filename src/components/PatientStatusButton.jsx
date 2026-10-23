@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { createPortal } from "react-dom";
 import { useAuth } from "../contexts/AuthContext.jsx";
 import { applyPatientStatus, admitExistingPatientToWard, setPatientParoleStatus, markPatientNotAdmitted, markPatientOldPatient } from "../lib/patientAdmissionStatus.js";
 import { PAROLE_PATIENT_WARD_LABEL, todayISO } from "../lib/nurses-report-common.js";
@@ -87,7 +88,7 @@ export default function PatientStatusButton({ patient, onApplied }) {
   return (
     <span className="patient-status-wrap" onClick={stop}>
       <button type="button" className="btn btn-secondary patient-status-btn" onClick={(e) => { stop(e); setOpen(true); }}>Status</button>
-      {open && (
+      {open && createPortal(
         <div className="patient-status-overlay" onClick={(e) => { stop(e); if (!busy) close(); }}>
           <div className="card-box patient-status-modal" onClick={stop}>
             <div style={{ fontWeight: 'bold', marginBottom: 2 }}>{patient.name || 'Patient'}</div>
@@ -124,7 +125,8 @@ export default function PatientStatusButton({ patient, onApplied }) {
               {msg.text && <div style={{ fontSize: 12, color: msg.color }}>{msg.text}</div>}
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </span>
   );
