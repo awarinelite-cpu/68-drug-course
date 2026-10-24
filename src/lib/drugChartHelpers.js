@@ -347,6 +347,17 @@ export function parseDurationMinutes(text) {
   return m ? parseInt(m[1], 10) : null;
 }
 
+// --- Dose-count durations (e.g. "2 doses") ------------------------------
+// Some orders are limited by how many doses are given rather than by time
+// ("IV Dicynone 250mg 8hrly x 2 doses"). Returns the dose count, or null if
+// the text isn't in this form. Completion is counted from the doses actually
+// charted against the drug on the chart below (matched by Drug S/N).
+export function parseDurationDoses(text) {
+  if (!text) return null;
+  const m = text.trim().toLowerCase().match(/^x?\s*(\d+)\s*doses?$/);
+  return m ? parseInt(m[1], 10) : null;
+}
+
 // How long a timed run lasts in ms, if the duration is given in minutes or
 // hours — otherwise null (day/week/month durations aren't a "run time").
 export function durationRunMs(text) {
@@ -443,6 +454,14 @@ function completionPass(drugs, chartRows) {
     const seq = parseDoseSequence(d.frequency);
     if (seq) {
       if (!locked && administrationTimesFor(chartRows, i).length >= seq.length) { changed = true; return { ...d, action: 'Completed' }; }
+      return d;
+    }
+
+    // Dose-count duration ("x 2 doses"): complete once that many doses have
+    // been recorded as given. Documented "not given" entries never count.
+    const doseLimit = parseDurationDoses(d.duration);
+    if (doseLimit != null) {
+      if (!locked && administrationTimesFor(chartRows, i).length >= doseLimit) { changed = true; return { ...d, action: 'Completed' }; }
       return d;
     }
 
@@ -698,6 +717,9 @@ const DURATION_WORD_COMPACT_RE = /^x?(\d+)(days?|d|weeks?|wks?|months?|mo)$/i;
 // "8 hrly x 24 hours" never gets its duration split out and "24 hours"
 // leaks into the Frequency text instead.
 const DURATION_HOUR_WORD_RE = /^(hrs?|hours?|h)$/i;
+// A duration counted in doses ("2 doses", "x2doses") rather than in time.
+const DURATION_DOSE_WORD_RE = /^doses?$/i;
+const DURATION_DOSES_COMPACT_RE = /^x?(\d+)doses?$/i;
 function isDosageToken(t) { return DOSAGE_RE.test(t) || COMPOUND_DOSAGE_RE.test(t); }
 
 // A dose written with a stray space before its unit ("120 mg" instead of
@@ -910,15 +932,18 @@ export function parseDrugLine(line) {
   }
 
   let duration = '';
-  const durIdx = rest.findIndex(t => DURATION_RE.test(t) || DURATION_HOURS_RE.test(t) || DURATION_WORD_COMPACT_RE.test(t));
+  const durIdx = rest.findIndex(t => DURATION_RE.test(t) || DURATION_HOURS_RE.test(t) || DURATION_WORD_COMPACT_RE.test(t) || DURATION_DOSES_COMPACT_RE.test(t));
   if (durIdx !== -1) {
     const tok = rest[durIdx];
     const fracM = tok.match(DURATION_RE);
     const hrM = fracM ? null : tok.match(DURATION_HOURS_RE);
+    const doseM = fracM || hrM ? null : tok.match(DURATION_DOSES_COMPACT_RE);
     if (fracM) {
       duration = fracM[1] + '/' + fracM[2];
     } else if (hrM) {
       duration = hrM[1] + 'hrs';
+    } else if (doseM) {
+      duration = doseM[1] + (doseM[1] === '1' ? ' dose' : ' doses');
     } else {
       const wM = tok.match(DURATION_WORD_COMPACT_RE);
       duration = wM[1] + ' ' + wM[2].toLowerCase();
@@ -931,11 +956,12 @@ export function parseDrugLine(line) {
     // words and pull the pair out together.
     const wordIdx = rest.findIndex((t, idx) =>
       idx > 0 && /^x?\d+$/i.test(rest[idx - 1]) &&
-      (DURATION_WORD_RE.test(t.replace(/[.,]$/, '')) || DURATION_HOUR_WORD_RE.test(t.replace(/[.,]$/, '')))
+      (DURATION_WORD_RE.test(t.replace(/[.,]$/, '')) || DURATION_HOUR_WORD_RE.test(t.replace(/[.,]$/, '')) || DURATION_DOSE_WORD_RE.test(t.replace(/[.,]$/, '')))
     );
     if (wordIdx !== -1) {
       const num = rest[wordIdx - 1].replace(/^x/i, '');
       duration = num + ' ' + rest[wordIdx].replace(/[.,]$/, '').toLowerCase();
+      if (DURATION_DOSE_WORD_RE.test(rest[wordIdx].replace(/[.,]$/, ''))) duration = num + (num === '1' ? ' dose' : ' doses');
       rest.splice(wordIdx - 1, 2);
     }
   }
@@ -1209,7 +1235,11 @@ export function parseSequentialCourseLine(line) {
   // "6 hourly for 48 hours" reads the same as "6 hourly x 48 hours".
   const first = parseDrugLine(segments[0].replace(/\bfor\s+(?=\d)/i, 'x '));
   if (!first || !first.name || !first.frequency || !isRecognizedFrequency(first.frequency)) return null;
-  if (!first.duration || (parseDurationHours(first.duration) == null && parseDurationDays(first.duration) == null)) return null;
+  // "STAT, then PRN x 2 doses": a one-off STAT dose needs no duration of its
+  // own (it completes when given), but only in a line that states a dose
+  // count — plain "STAT then 8hrly 24hrs" lines are left to the parsers below.
+  const statLeadsDoseCount = first.frequency.toUpperCase() === 'STAT' && !first.duration && /\b\d+\s*doses?\b/i.test(raw);
+  if (!statLeadsDoseCount && (!first.duration || (parseDurationHours(first.duration) == null && parseDurationDays(first.duration) == null && parseDurationDoses(first.duration) == null))) return null;
   first.duration = normalizeHourDuration(first.duration);
   first.id = newDrugId();
 
