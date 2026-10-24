@@ -3,6 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import { doc, getDoc } from "firebase/firestore";
 import { db } from "../firebase.js";
 import { useGoBack } from "../hooks/useGoBack.js";
+import { useBackLock } from "../hooks/useBackLock.js";
 import Topbar from "../components/Topbar.jsx";
 import { initCalculators } from "../lib/calculators.js";
 
@@ -10,6 +11,9 @@ export default function Calculators() {
   const goBack = useGoBack('/');
   const [searchParams] = useSearchParams();
   const patientId = searchParams.get('patient');
+  // Same Back behaviour as the other pages: always land on a known route
+  // (the open patient if there is one, else Home), however this page was reached.
+  useBackLock(patientId ? '/patient?patient=' + encodeURIComponent(patientId) : '/');
   const [patient, setPatient] = useState(null);
   const rootRef = useRef(null);
 

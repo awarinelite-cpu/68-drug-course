@@ -1,10 +1,12 @@
 import { useEffect, useRef } from "react";
 import { useGoBack } from "../hooks/useGoBack.js";
+import { useBackLock } from "../hooks/useBackLock.js";
 import Topbar from "../components/Topbar.jsx";
 import { initLabReference } from "../lib/lab-reference.js";
 
 export default function LabReference() {
   const goBack = useGoBack('/');
+  useBackLock('/');
   const rootRef = useRef(null);
 
   useEffect(() => {
