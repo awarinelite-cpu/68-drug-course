@@ -22,6 +22,11 @@ const CALCULATORS = [
 ];
 
 let root = null;
+let atHub = true;
+
+// Used by the page's Back button: true while the calculator grid is showing.
+export function isCalculatorHub() { return atHub; }
+export function showCalculatorHub() { renderHub(); }
 
 export function initCalculators(container) {
   root = container;
@@ -29,6 +34,7 @@ export function initCalculators(container) {
 }
 
 function renderHub() {
+  atHub = true;
   root.innerHTML = `
     <div class="calc-grid">
       ${CALCULATORS.map(c => `
@@ -49,6 +55,7 @@ function renderHub() {
 }
 
 function renderCalculator(key) {
+  atHub = false;
   const c = CALCULATORS.find(x => x.key === key);
   root.innerHTML = `
     <button class="calc-back" id="calcBackBtn">‹ All Calculators</button>

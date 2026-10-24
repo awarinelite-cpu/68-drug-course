@@ -1,6 +1,6 @@
 import { useState } from "react";
 import StaffRegistrationCard from "./StaffRegistrationCard.jsx";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams, useLocation } from "react-router-dom";
 import { useNav } from "../contexts/NavContext.jsx";
 import { useAuth } from "../contexts/AuthContext.jsx";
 import { formatNameWithTitle, canAccessRecords } from "../lib/roles.js";
@@ -18,6 +18,7 @@ export default function NavDrawer() {
   const { profile, logout } = useAuth();
   const isOverallNurse = useOverallNurseThisWeek();
   const navigate = useNavigate();
+  const location = useLocation();
   const [showStaffReg, setShowStaffReg] = useState(false);
   const [searchParams] = useSearchParams();
   const patientId = getActivePatientId(searchParams);
@@ -25,7 +26,9 @@ export default function NavDrawer() {
 
   function go(path) {
     closeDrawer();
-    navigate(path);
+    // Remember the page the menu was opened from, so pages like Lab
+    // Reference / Calculators can send Back to it with the menu re-opened.
+    navigate(path, { state: { from: location.pathname + location.search } });
   }
 
   async function handleLogout() {
