@@ -51,6 +51,29 @@ service cloud.firestore {
         && get(/databases/$(database)/documents/nurseReportRoles_mhl/$(wid)).data.overallNurse.uid == request.auth.uid;
     }
 
+    // Automatic archive sweep (src/hooks/useArchiveSweep.js). With no Cloud
+    // Functions, the first nurse to open a report page after the 9 AM
+    // rollover files any leftover submitted+locked ward reports and the
+    // overall report. Create-only (a nurse still cannot edit or overwrite an
+    // existing archive), marked as automatic, and the doc id must match its
+    // own contents so it can only ever be the canonical archive id.
+    function isAutoArchiveCreate(archiveId) {
+      let d = request.resource.data;
+      return d.archivedBy == 'Automatic archive (24hr)'
+        && d.archivedByUid == null
+        && ((d.type == 'ward' && archiveId == 'ward_' + d.wardKey + '_' + d.dateId)
+            || (d.type == 'overall' && archiveId == 'overall_' + d.dateId));
+    }
+    // True once a patient's admission is over (discharged/referred) or a
+    // ward transfer has started — any known nurse may then clear every
+    // allocation for that patient, not just her own (replaces the old
+    // clearAllocationsOnPatientStatusChange Cloud Function).
+    function patientAdmissionEnded(patientId) {
+      return exists(/databases/$(database)/documents/patients/$(patientId))
+        && (get(/databases/$(database)/documents/patients/$(patientId)).data.get('dischargeStatus', null) != null
+            || get(/databases/$(database)/documents/patients/$(patientId)).data.get('pendingTransfer', null) != null);
+    }
+
     // User profiles / roles
     match /users/{uid} {
       // A pending applicant needs to read her OWN doc to find out she's
@@ -115,7 +138,8 @@ service cloud.firestore {
     match /allocations/{allocationId} {
       allow read: if isKnownUser();
       allow create, update: if isSignedIn() && request.resource.data.uid == request.auth.uid;
-      allow delete: if isSignedIn() && resource.data.uid == request.auth.uid;
+      allow delete: if isSignedIn() && (resource.data.uid == request.auth.uid
+        || (isKnownUser() && patientAdmissionEnded(resource.data.patientId)));
     }
 
     // Ward-wide community feed (Community page) — a single shared board any
@@ -196,7 +220,8 @@ service cloud.firestore {
     match /archives/{archiveId} {
       allow read: if isKnownUser();
       allow create: if isKnownUser()
-        && (isAdmin() || isSubadmin() || isOverallForWeek(request.resource.data.weekId));
+        && (isAdmin() || isSubadmin() || isOverallForWeek(request.resource.data.weekId)
+            || isAutoArchiveCreate(archiveId));
       allow update: if isAdmin() || isSubadmin();
       allow delete: if isAdmin();
     }
