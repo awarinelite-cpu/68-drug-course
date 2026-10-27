@@ -1,16 +1,14 @@
 import { useEffect, useState } from "react";
 import { Navigate } from "react-router-dom";
 import { collection, getDocs, doc, setDoc, updateDoc, deleteDoc, onSnapshot, serverTimestamp } from "firebase/firestore";
-import { getFunctions, httpsCallable } from "firebase/functions";
-import { app, db } from "../firebase.js";
+import { db } from "../firebase.js";
+import { deleteUserProfile } from "../lib/deleteUserProfile.js";
 import { useAuth } from "../contexts/AuthContext.jsx";
 import { useGoBack } from "../hooks/useGoBack.js";
 import { avatarMarkup } from "../lib/avatar.js";
 import { formatNameWithTitle } from "../lib/roles.js";
 import { weekId } from "../lib/nurses-report-common.js";
 import Topbar from "../components/Topbar.jsx";
-
-const deleteUserAccountFn = httpsCallable(getFunctions(app), 'deleteUserAccount');
 
 function normalizeConfirmText(s) {
   return (s || '').trim().replace(/\s+/g, ' ').toLowerCase();
@@ -135,7 +133,7 @@ export default function AllUsers() {
     setDeleteTarget(null);
     setUserDeletingId(u.id);
     try {
-      await deleteUserAccountFn({ uid: u.id });
+      await deleteUserProfile(u.id, user.uid);
     } catch (e) {
       alert('Delete failed: ' + (e.message || e.code || 'unknown error'));
     }

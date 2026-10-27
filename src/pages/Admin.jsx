@@ -3,8 +3,8 @@ import { useNavigate } from "react-router-dom";
 import { initializeApp, deleteApp } from "firebase/app";
 import { getAuth, createUserWithEmailAndPassword, signOut } from "firebase/auth";
 import { collection, getDocs, doc, setDoc, updateDoc, serverTimestamp } from "firebase/firestore";
-import { getFunctions, httpsCallable } from "firebase/functions";
 import { app, db, firebaseConfig } from "../firebase.js";
+import { deleteUserProfile } from "../lib/deleteUserProfile.js";
 import { useAuth } from "../contexts/AuthContext.jsx";
 import { useGoBack } from "../hooks/useGoBack.js";
 import { downloadFullBackup } from "../lib/export.js";
@@ -22,9 +22,6 @@ import Topbar from "../components/Topbar.jsx";
 function normalizeConfirmText(s) {
   return (s || '').trim().replace(/\s+/g, ' ').toLowerCase();
 }
-
-const functionsInstance = getFunctions(app);
-const deleteUserAccountFn = httpsCallable(functionsInstance, 'deleteUserAccount');
 
 export default function Admin() {
   const { user, profile, logout } = useAuth();
@@ -165,7 +162,7 @@ export default function Admin() {
   async function runDeleteUser(u) {
     setUserDeletingId(u.id);
     try {
-      await deleteUserAccountFn({ uid: u.id });
+      await deleteUserProfile(u.id, user.uid);
     } catch (e) {
       alert('Delete failed: ' + (e.message || e.code || 'unknown error'));
       setUserDeletingId(null);

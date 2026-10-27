@@ -1,14 +1,13 @@
-name: Deploy Firebase Functions & Firestore/Storage Rules
+name: Deploy Firestore/Storage Rules
 
-# Frontend hosting is handled by Vercel (connected directly to this repo) —
-# this workflow only covers the backend pieces Vercel doesn't touch:
-# Cloud Functions, Firestore security rules, and Storage security rules.
+# Frontend hosting is handled by Vercel (connected directly to this repo).
+# The app runs on the free Firebase (Spark) plan with NO Cloud Functions, so
+# this workflow only deploys the Firestore and Storage security rules.
 on:
   push:
     branches:
       - main
     paths:
-      - 'functions/**'
       - 'firestore.rules'
       - 'storage.rules'
       - '.github/workflows/firebase-deploy.yml'
@@ -25,10 +24,6 @@ jobs:
         with:
           node-version: '22'
 
-      - name: Install functions dependencies
-        run: npm install
-        working-directory: functions
-
       - name: Write service account credentials
         run: echo '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}' > /tmp/firebase-sa.json
 
@@ -39,13 +34,5 @@ jobs:
 
       - name: Deploy Storage rules
         run: npx firebase-tools deploy --only storage --project gen-lang-client-0406053716 --non-interactive
-        env:
-          GOOGLE_APPLICATION_CREDENTIALS: /tmp/firebase-sa.json
-
-      - name: Deploy Cloud Functions
-        # --force: lets a non-interactive deploy delete functions that were
-        # removed from the code (Firebase CLI otherwise prompts for
-        # confirmation, and --non-interactive has no one to answer).
-        run: npx firebase-tools deploy --only functions --project gen-lang-client-0406053716 --non-interactive --force
         env:
           GOOGLE_APPLICATION_CREDENTIALS: /tmp/firebase-sa.json
