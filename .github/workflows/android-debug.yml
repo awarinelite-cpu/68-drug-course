@@ -95,7 +95,9 @@ jobs:
 
       - name: Build debug APK
         working-directory: android
-        run: ./gradlew assembleDebug --stacktrace
+        run: |
+          # Retry once: the Gradle distribution / Maven downloads occasionally time out.
+          ./gradlew assembleDebug --stacktrace || { echo "Retrying build..."; sleep 10; ./gradlew assembleDebug --stacktrace; }
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
