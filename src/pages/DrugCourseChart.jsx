@@ -1260,22 +1260,20 @@ export default function DrugCourseChart() {
         <button className="btn btn-primary" style={{ padding: '6px 12px' }} onClick={() => window.print()}>Print</button>
       </Topbar>
 
-      <div className="container no-print">
-        <div className="patient-banner">
-          <div>
-            <div className="pname">{patient ? (patient.name || 'Unnamed') : 'Loading…'}</div>
-            <div className="pmeta">{patient ? 'EMR: ' + (patient.emr || 'N/A') : ''}</div>
-            {patient && displayDiagnosis && <div className="pmeta" style={{ cursor: 'pointer' }} onClick={() => openDiagnosisModal()}>{displayDiagnosis}</div>}
-          </div>
+      {((isArchived && archiveMeta) || (saveStatus || '').startsWith('Save failed')) && (
+        <div className="container no-print" style={{ paddingBottom: 0 }}>
+          {isArchived && archiveMeta && (
+            <div style={{ background: '#fef3c7', border: '1px solid #f59e0b', color: '#78350f', fontWeight: 'bold', padding: '8px 12px', borderRadius: 6, marginTop: 10, fontSize: 13 }}>
+              Archived chart — {(archiveMeta.archiveReasonLabel || STATUS_LABELS[archiveMeta.archiveReason] || 'Closed')}
+              {archiveMeta.archivedAtDisplay ? ' on ' + archiveMeta.archivedAtDisplay : ''}
+            </div>
+          )}
+          {/* Normal "Saved …" text is hidden; a failed save must still be visible so edits are never lost silently. */}
+          {(saveStatus || '').startsWith('Save failed') && (
+            <div style={{ fontSize: 13, color: '#b91c1c', fontWeight: 700, marginTop: 8, textAlign: 'right' }}>{saveStatus}</div>
+          )}
         </div>
-        {isArchived && archiveMeta && (
-          <div style={{ background: '#fef3c7', border: '1px solid #f59e0b', color: '#78350f', fontWeight: 'bold', padding: '8px 12px', borderRadius: 6, marginTop: 10, fontSize: 13 }}>
-            Archived chart — {(archiveMeta.archiveReasonLabel || STATUS_LABELS[archiveMeta.archiveReason] || 'Closed')}
-            {archiveMeta.archivedAtDisplay ? ' on ' + archiveMeta.archivedAtDisplay : ''}
-          </div>
-        )}
-        <div style={{ fontSize: 12, color: '#555', marginTop: 8, textAlign: 'right' }}>{saveStatus}</div>
-      </div>
+      )}
 
       <div className="sheet drug-chart-page">
         <div className="header"><h1>68 Nigerian Army Reference Hospital Yaba</h1></div>

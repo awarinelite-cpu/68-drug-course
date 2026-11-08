@@ -2852,3 +2852,7 @@ html[data-phone-desktop] .drug-chart-page table.drugs-table th.col-rowedit,
 html[data-phone-desktop] .drug-chart-page table.drugs-table td.col-rowedit { width: 34px; padding: 4px 2px; }
 html[data-phone-desktop] .drug-chart-page table.drugs-table td input,
 html[data-phone-desktop] .drug-chart-page table.drugs-table td select { width: 100%; min-width: 0; max-width: 100%; box-sizing: border-box; font-size: 14px; }
+
+/* Drug chart: the patient banner and save-status line above the sheet were removed, so tuck the sheet up under the header. */
+.sheet.drug-chart-page { margin-top: 8px; }
+@media print { .sheet.drug-chart-page { margin-top: 0; } }
