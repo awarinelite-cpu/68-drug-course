@@ -117,7 +117,8 @@ function statusStampForRecord(record) {
   if (!record) return '';
   if (record.dischargeStatus) return record.dischargeStatus;
   if (record.transferOut) return 'INT TRANS OUT';
-  if (record.paroleStatus) return record.paroleStatus;
+  // D/Parole is only ever shown on the D/Parole table, never as a patient status.
+  if (record.paroleStatus && record.paroleStatus !== PAROLE_STATUS.dParole) return record.paroleStatus;
   if (record.admissionTag) return ADMISSION_TAG_STATUS_STAMP[record.admissionTag] || '';
   return '';
 }
@@ -1518,7 +1519,7 @@ function WardPatientPicker({ value, options, onSelect, usedIds, columns }) {
             <div className="ward-patient-picker-tag">{o.dischargeStatus === 'TRANS OUT' ? 'EXT TRANS OUT' : o.dischargeStatus === 'DEATH' ? 'Death' : o.dischargeStatus === 'DAMA' ? 'DAMA' : o.dischargeStatus === 'ABSC' ? 'Absconded' : 'Discharged'}</div>
           ) : o.transferOut ? (
             <div className="ward-patient-picker-tag">{'INT TRANS OUT' + (o.transferOutToWard ? ' to ' + o.transferOutToWard : '')}</div>
-          ) : o.paroleStatus ? (
+          ) : (o.paroleStatus && o.paroleStatus !== PAROLE_STATUS.dParole) ? (
             <div className="ward-patient-picker-tag">{o.paroleStatus}</div>
           ) : o.admissionTag ? (
             <div className="ward-patient-picker-tag admission">{ADMISSION_TAG_LABEL[o.admissionTag] || o.admissionTag}</div>

@@ -561,7 +561,6 @@ export const PATIENT_STATUS_OPTIONS = [
   'DAMA',
   'ABSC',
   'PAROLE',
-  'D/PAROLE',
   'ONGOING RX'
 ];
 

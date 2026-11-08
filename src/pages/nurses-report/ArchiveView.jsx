@@ -295,6 +295,7 @@ function PatientCardEdit({ p, onChange, onRemove }) {
         <select className={"status-select" + (p.status ? ' set' : '')} value={p.status || ''} onChange={(e) => onChange({ ...p, status: e.target.value })}>
           <option value="">{'\u2014 Select status \u2014'}</option>
           {PATIENT_STATUS_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+          {p.status && !PATIENT_STATUS_OPTIONS.includes(p.status) && <option value={p.status}>{p.status}</option>}
         </select>
       </div>
       <div className="patient-grid">
