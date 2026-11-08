@@ -1664,6 +1664,26 @@ table.drugs-table tr.drop-after > td { box-shadow: inset 0 -3px 0 0 #7c3aed; }
 :root[data-theme="dark"] .rec-sheet table.entries tbody tr:nth-child(even) td { background: #14305A; }
 :root[data-theme="dark"] .rec-sheet table.entries tbody tr:last-child td { background: #7C5E10; color: #FFF7D6; border-top-color: #FBBF24; }
 :root[data-theme="dark"] .rec-sheet input[type="text"] { background: #0B1F3A; color: #F1F5F9; border-color: #64748B; }
+/* Records sheet: always fit the screen width (phone in desktop mode too) --
+   no min-width, fixed columns, and type/padding that scale with the sheet's
+   own width so every column (incl. Rmks) stays visible without side-scroll. */
+.rec-sheet { container-type: inline-size; }
+.rec-sheet .table-wrap { overflow-x: hidden; }
+.rec-sheet table.entries { width: 100%; min-width: 0 !important; table-layout: fixed; }
+.rec-sheet table.entries th, .rec-sheet table.entries td {
+  padding: clamp(3px, 1cqw, 12px) 1px; font-size: clamp(8px, 2.3cqw, 24px);
+  overflow-wrap: anywhere; word-break: normal; white-space: normal; line-height: 1.15;
+}
+.rec-sheet table.entries thead th { font-size: clamp(6px, 1.7cqw, 20px); letter-spacing: 0; }
+.rec-sheet table.entries tbody tr:last-child td { font-size: clamp(9px, 2.6cqw, 26px); }
+.rec-sheet table.entries td:first-child, .rec-sheet table.entries th:first-child {
+  width: 13%; padding-left: clamp(2px, .8cqw, 10px); font-size: clamp(7px, 1.9cqw, 24px); overflow-wrap: break-word; hyphens: manual;
+}
+.rec-sheet .rec-rmks { width: 9%; }
+.rec-sheet table.entries.rec-foot { max-width: none; table-layout: fixed; }
+.rec-sheet table.entries.rec-foot td:first-child, .rec-sheet table.entries.rec-foot th:first-child { width: 22%; }
+.rec-sheet h3 { font-size: clamp(14px, 3.6cqw, 28px); }
+.rec-sheet input[type="text"] { font-size: clamp(8px, 2.2cqw, 18px) !important; padding: 2px !important; }
 .rec-full { position: fixed; inset: 0; z-index: 2000; background: var(--surface-bg); overflow: auto; padding: 12px; }
 .rec-full .container { max-width: none !important; padding: 0; margin: 0; }
 .rec-full .card-box { box-shadow: none; border: 0; padding: 8px; }
