@@ -1321,7 +1321,7 @@ export default function DrugCourseChart() {
 
         <div className="drugs-block">
           <h3>Drugs</h3>
-          <div className="table-wrap">
+          <div className={'table-wrap' + (!isArchived ? ' tab-bottom-attached' : '')}>
             <table className="drugs-table">
               <thead>
                 <tr>
@@ -1398,18 +1398,18 @@ export default function DrugCourseChart() {
           </div>
 
           {!isArchived && (
-            <div className="no-print" style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <div className="tab-bar tab-bar--bottom no-print">
               {!drugsEditMode
-                ? <button className="btn btn-purple" onClick={enterDrugsEditMode}>Edit</button>
-                : <button className="btn btn-success" onClick={exitDrugsEditMode}>Save</button>
+                ? <button className="tab-btn tab-btn--bottom" onClick={enterDrugsEditMode}>Edit</button>
+                : <button className="tab-btn tab-btn--bottom tab-btn--save" onClick={exitDrugsEditMode}>Save</button>
               }
-              {drugsEditMode && <>
+              {drugsEditMode && <div className="tab-extras">
                 <button className="btn btn-secondary" style={{ padding: '6px 12px', fontSize: 12 }} onClick={openVerbalModal}>
                   {verbalOrders.length ? '\uD83D\uDCAC Verbal Order (' + verbalOrders.length + ')' : '+ Verbal Order'}
                 </button>
                 <button className="btn btn-secondary" onClick={addDrug}>+ Add Drug</button>
                 <button className="btn btn-secondary" onClick={openBulkModal}>+ Bulk Upload</button>
-              </>}
+              </div>}
             </div>
           )}
           {!isArchived && drugsEditMode && drugs.length > 1 && (
@@ -1419,7 +1419,15 @@ export default function DrugCourseChart() {
           )}
         </div>
 
-        <div className="table-wrap chart-scroll">
+        {!isArchived && (
+          <div className="tab-bar tab-bar--top no-print">
+            {!chartEditMode
+              ? <button className="tab-btn tab-btn--top" onClick={enterChartEditMode}>Edit</button>
+              : <button className="tab-btn tab-btn--top tab-btn--save" onClick={exitChartEditMode}>Save</button>
+            }
+          </div>
+        )}
+        <div className={'table-wrap chart-scroll' + (!isArchived ? ' tab-top-attached tab-bottom-attached' : '')}>
           <table className="chart">
             <thead>
               <tr>
@@ -1497,15 +1505,15 @@ export default function DrugCourseChart() {
         </div>
 
         {!isArchived && (
-          <div className="no-print" style={{ marginTop: 10 }}>
+          <div className="tab-bar tab-bar--bottom no-print">
             {!chartEditMode
-              ? <button className="btn btn-purple" onClick={enterChartEditMode}>Edit</button>
-              : <>
-                <button className="btn btn-success" onClick={exitChartEditMode}>Save</button>
-                <button className="btn btn-success" onClick={() => addChartRow(1)}>+ Add Row</button>
-                <button className="btn btn-secondary" onClick={removeChartRow}>− Remove Row</button>
-              </>
+              ? <button className="tab-btn tab-btn--bottom" onClick={enterChartEditMode}>Edit</button>
+              : <button className="tab-btn tab-btn--bottom tab-btn--save" onClick={exitChartEditMode}>Save</button>
             }
+            {chartEditMode && <div className="tab-extras">
+              <button className="btn btn-success" onClick={() => addChartRow(1)}>+ Add Row</button>
+              <button className="btn btn-secondary" onClick={removeChartRow}>− Remove Row</button>
+            </div>}
           </div>
         )}
 

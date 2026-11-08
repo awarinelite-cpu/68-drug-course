@@ -2866,3 +2866,30 @@ html[data-phone-desktop] .drug-chart-page table.drugs-table td select { width: 1
 .wh-med-dot--overdue { background: #ef4444; box-shadow: 0 0 0 3px rgba(239,68,68,.3); animation: wh-dot-blink 0.9s ease-in-out infinite; }
 .wh-med-dot--soon { background: #f97316; box-shadow: 0 0 0 3px rgba(249,115,22,.3); animation: wh-dot-blink 1.2s ease-in-out infinite; }
 @keyframes wh-dot-blink { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: .15; transform: scale(.85); } }
+
+
+/* ── Curvy "tab" Edit/Save buttons attached to the drug chart tables ──
+   Bottom tab hangs from the table's bottom-left edge; top tab rises from the
+   second table's top-left edge. A concave fillet (::after) flows the button's
+   outer edge into the table border. */
+.tab-bar { display: flex; align-items: flex-start; gap: 0; position: relative; z-index: 1; }
+.tab-bar--bottom { margin-top: -10px; margin-bottom: 14px; }
+.tab-bar--top { margin-top: 6px; margin-bottom: -4px; align-items: flex-end; }
+.tab-btn {
+  --tab-color: #7c3aed; --tab-fillet: 18px;
+  position: relative; border: 0; background: var(--tab-color); color: #fff; font: inherit; font-weight: 800; font-size: 17px;
+  min-width: 96px; padding: 9px 26px; cursor: pointer; -webkit-tap-highlight-color: transparent;
+  box-shadow: 0 6px 10px -6px rgba(76,29,149,.7);
+}
+.tab-btn--save { --tab-color: #16a34a; box-shadow: 0 6px 10px -6px rgba(22,101,52,.7); }
+.tab-btn:active { filter: brightness(.92); }
+.tab-btn--bottom { border-radius: 0 0 22px 22px; padding-top: 12px; }
+.tab-btn--top { border-radius: 22px 22px 0 0; padding-bottom: 12px; box-shadow: 0 -6px 10px -8px rgba(76,29,149,.6); }
+.tab-btn::after { content: ""; position: absolute; width: var(--tab-fillet); height: var(--tab-fillet); right: calc(-1 * var(--tab-fillet)); pointer-events: none; }
+.tab-btn--bottom::after { top: 0; background: radial-gradient(circle at 100% 100%, transparent calc(var(--tab-fillet) - .5px), var(--tab-color) var(--tab-fillet)); }
+.tab-btn--top::after { bottom: 0; background: radial-gradient(circle at 100% 0, transparent calc(var(--tab-fillet) - .5px), var(--tab-color) var(--tab-fillet)); }
+.tab-extras { display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0 0 26px; }
+/* Square off the table corner the tab is attached to so the edge runs straight into the tab */
+.drug-chart-page .tab-bottom-attached table tbody tr:last-child > :first-child { border-bottom-left-radius: 0; }
+.drug-chart-page .tab-top-attached table thead tr:first-child > :first-child { border-top-left-radius: 0; }
+@media print { .tab-bar { display: none; } }
