@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import narhyLogo from "../assets/narhy-logo.png";
+import buildingPhoto from "../assets/narhy-building.jpg";
 import { useNavigate } from "react-router-dom";
 import { useNav } from "../contexts/NavContext.jsx";
 import { useTheme } from "../contexts/ThemeContext.jsx";
@@ -13,22 +14,9 @@ function Logo() {
   return <img className="wh-logo" src={narhyLogo} alt="68 NARHY" width="52" height="52" />;
 }
 
-// Faint hospital-building silhouette on the right of the header.
+// The real 68 NARHY building, faded into the right side of the header.
 function BuildingArt() {
-  return (
-    <svg className="wh-art" viewBox="0 0 220 170" preserveAspectRatio="xMaxYMid slice" aria-hidden="true">
-      <defs>
-        <pattern id="whwin" width="14" height="16" patternUnits="userSpaceOnUse">
-          <rect x="3" y="3" width="8" height="9" fill="#bcd6ff" opacity=".7" />
-        </pattern>
-      </defs>
-      <polygon points="40,40 150,18 210,34 210,170 40,170" fill="#c7d9f5" opacity=".5" />
-      <rect x="40" y="40" width="170" height="130" fill="url(#whwin)" opacity=".8" />
-      <rect x="150" y="18" width="60" height="152" fill="#9fb8e6" opacity=".35" />
-      <circle cx="30" cy="150" r="26" fill="#2f8f4e" opacity=".75" />
-      <circle cx="205" cy="152" r="22" fill="#2f8f4e" opacity=".75" />
-    </svg>
-  );
+  return <img className="wh-art" src={buildingPhoto} alt="" aria-hidden="true" />;
 }
 
 export default function WardHeader({ profile, myWard, incomingCount, onOpenTransfers }) {

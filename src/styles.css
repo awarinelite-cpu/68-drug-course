@@ -2498,8 +2498,9 @@ h3.ward-report-subheading, .ward-report-subheading { font-size: clamp(28px, 3.4v
   padding: calc(env(safe-area-inset-top, 0px) + 16px) 14px 22px;
   box-shadow: 0 12px 28px -14px rgba(5,15,43,.8);
 }
-.wh-art { position: absolute; right: 0; bottom: 0; height: 78%; width: 58%; opacity: .55; pointer-events: none;
-  -webkit-mask-image: linear-gradient(to right, transparent, #000 55%); mask-image: linear-gradient(to right, transparent, #000 55%); }
+.wh-art { position: absolute; right: 0; top: 0; height: 100%; width: 66%; object-fit: cover; object-position: 55% 40%; opacity: .6; pointer-events: none;
+  filter: saturate(.85) brightness(.9);
+  -webkit-mask-image: linear-gradient(to right, transparent 0%, #000 60%); mask-image: linear-gradient(to right, transparent 0%, #000 60%); }
 .wh-header-inner { position: relative; max-width: 880px; margin: 0 auto; }
 .wh-row1 { display: flex; align-items: center; gap: 12px; }
 .wh-circle {
