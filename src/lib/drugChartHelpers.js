@@ -281,6 +281,21 @@ export function computeDueAt(d, i, chartRows) {
   return null;
 }
 
+// Earliest upcoming/overdue dose across every ongoing drug on a chart, as an
+// ISO string (or null when nothing is schedulable — all drugs completed,
+// STAT/PRN only, etc.). Saved onto the patient doc by the Drug Course Chart
+// so the ward list can flag patients with due medication from data it has
+// already loaded, with no extra reads per patient.
+export function earliestDueAt(drugs, chartRows) {
+  let best = null;
+  (drugs || []).forEach((d, i) => {
+    if (!d || !(d.name || '').trim()) return;
+    const at = computeDueAt(d, i, chartRows || []);
+    if (at && !isNaN(at) && (!best || at < best)) best = at;
+  });
+  return best ? best.toISOString() : null;
+}
+
 export function dueLabelFor(d, i, chartRows, now) {
   const dueAt = computeDueAt(d, i, chartRows);
   if (!dueAt) return { text: '—', overdue: false, skippedPending: false };

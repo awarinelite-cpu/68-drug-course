@@ -2806,3 +2806,20 @@ input[type=date], input[type=datetime-local], input[type=time], input[type=month
 @media (min-width: 900px) {
   .role-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)); gap: 16px; }
 }
+
+
+/* Medication-due indicators on ward-list patient cards */
+.wh-due {
+  display: inline-flex; align-items: center; gap: 6px; margin-top: 8px; margin-right: 6px; padding: 5px 12px; border-radius: 12px;
+  font-size: 13px; font-weight: 800;
+}
+.wh-due--overdue { background: #fee2e2; color: #b91c1c; animation: wh-due-pulse 1.4s ease-in-out infinite; }
+.wh-due--soon { background: #fef3c7; color: #92400e; }
+:root[data-theme="dark"] .wh-due--overdue { background: rgba(239,68,68,.25); color: #fca5a5; }
+:root[data-theme="dark"] .wh-due--soon { background: rgba(245,158,11,.25); color: #fcd34d; }
+.wh-card[data-due="overdue"] { border-color: #ef4444; box-shadow: 0 0 0 2px rgba(239,68,68,.35), 0 10px 22px -14px rgba(239,68,68,.6); }
+.wh-card[data-due="soon"] { border-color: #f59e0b; box-shadow: 0 0 0 2px rgba(245,158,11,.3), 0 10px 22px -14px rgba(245,158,11,.5); }
+.wh-due-summary { display: flex; flex-wrap: wrap; margin-top: 10px; }
+.wh-due-summary .wh-due { margin-top: 0; }
+@keyframes wh-due-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .55; } }
+@media (prefers-reduced-motion: reduce) { .wh-due--overdue { animation: none; } }

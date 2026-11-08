@@ -15,7 +15,7 @@ import {
   dueLabelFor, withDrugCompletionChecked, activateFollowOnDrugs, computeRouteFromSno, parseBulkText,
   parseDoseSequence, administrationTimesFor, flaggedDrugRefs, flaggedDrugMessage, diffFields,
   autoDurationForFrequency, buildSnoSegments, buildSnoText, abbreviateReason,
-  parseWeeklyFrequency, weeklyDosesGivenThisWeek, formatHHMM12
+  parseWeeklyFrequency, weeklyDosesGivenThisWeek, formatHHMM12, earliestDueAt
 } from "../lib/drugChartHelpers.js";
 import { ROSTER_TAG_FOR_REASON, clearAllocationsForPatient, EXIT_STAT_KEY, EXIT_DEMOGRAPHIC_CATEGORY, setPatientParoleStatus, releaseParoleOnExit, markPatientNotAdmitted, markPatientOldPatient } from "../lib/patientAdmissionStatus.js";
 import { PAROLE_PATIENT_WARD_LABEL, todayISO } from "../lib/nurses-report-common.js";
@@ -154,6 +154,7 @@ export default function DrugCourseChart() {
   const [drugsEditMode, setDrugsEditMode] = useState(false);
   const [editingDrugRows, setEditingDrugRows] = useState({});
   const [chartRows, setChartRows] = useState([]);
+  const lastNextDueRef = useRef(undefined);
   const [chartEditMode, setChartEditMode] = useState(false);
   const [editingChartRows, setEditingChartRows] = useState({});
   const [verbalOrders, setVerbalOrders] = useState([]);
@@ -399,6 +400,17 @@ export default function DrugCourseChart() {
       setSaveStatus('Save failed: ' + (e.code || e.message));
     });
     setSaveStatus('Saved ' + formatTime(new Date()));
+
+    // Mirror the earliest due dose onto the patient record so the ward list
+    // can flag due/overdue medication from the patient docs it already loads
+    // (no per-patient chart reads). Only written when the value changes.
+    try {
+      const nextDue = earliestDueAt(d, c);
+      if (nextDue !== lastNextDueRef.current) {
+        lastNextDueRef.current = nextDue;
+        updateDoc(doc(db, 'patients', patientId), { drugNextDueAt: nextDue }).catch(() => { lastNextDueRef.current = undefined; });
+      }
+    } catch (e) { /* never block saving the chart */ }
   }
 
   function scheduleSave() {

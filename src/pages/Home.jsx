@@ -134,13 +134,48 @@ function BedTag({ patient }) {
   );
 }
 
+// Medication-due flag on a ward-list card. drugNextDueAt is the earliest
+// upcoming dose across the patient's ongoing drugs, saved by the Drug Course
+// Chart (see saveChart). Overdue = red pulse, due within 30 min = amber,
+// otherwise nothing, so only patients who need attention stand out.
+const DUE_SOON_MS = 30 * 60 * 1000;
+function dueState(patient, now) {
+  const raw = patient && patient.drugNextDueAt;
+  if (!raw || patient.dischargeStatus) return null;
+  const at = new Date(raw);
+  if (isNaN(at)) return null;
+  const diff = at.getTime() - now;
+  if (diff <= 0) return { kind: 'overdue', at, mins: Math.round(-diff / 60000) };
+  if (diff <= DUE_SOON_MS) return { kind: 'soon', at, mins: Math.round(diff / 60000) };
+  return null;
+}
+function fmtMins(m) {
+  if (m < 60) return m + ' min';
+  const h = Math.floor(m / 60), r = m % 60;
+  return h + 'h' + (r ? ' ' + r + 'm' : '');
+}
+function DueBadge({ due }) {
+  if (!due) return null;
+  const hhmm = due.at.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  const text = due.kind === 'overdue'
+    ? 'Meds overdue ' + fmtMins(due.mins) + ' (' + hhmm + ')'
+    : 'Meds due ' + (due.mins <= 0 ? 'now' : 'in ' + fmtMins(due.mins)) + ' (' + hhmm + ')';
+  return (
+    <span className={'wh-due wh-due--' + due.kind}>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9" /><polyline points="12 7 12 12 15.5 14" /></svg>
+      {text}
+    </span>
+  );
+}
+
 // One patient card on the ward list (also used for cross-ward search results).
-function PatientRow({ p, showWard, onOpen, readmitBusyId, readmitMsgs, onReadmit, onApplied }) {
+function PatientRow({ p, showWard, onOpen, readmitBusyId, readmitMsgs, onReadmit, onApplied, now }) {
+  const due = dueState(p, now);
   const g = String(p.gender || '').trim().toUpperCase();
   const female = g === 'F' || g === 'FEMALE';
   const tone = activeAdmissionTag(p) ? 'new' : (female ? 'f' : 'm');
   return (
-    <div className="wh-card" data-tone={tone} data-g={female ? 'f' : 'm'} onClick={() => onOpen(p)}>
+    <div className="wh-card" data-tone={tone} data-g={female ? 'f' : 'm'} data-due={due ? due.kind : undefined} onClick={() => onOpen(p)}>
       <PatientAvatar patient={p} />
       <div className="wh-card-main">
         <div className="wh-card-name"><b>{p.name || 'Unnamed'}</b>{'. '}<span className="wh-emr">EMR: {p.emr || 'N/A'}</span></div>
@@ -151,6 +186,7 @@ function PatientRow({ p, showWard, onOpen, readmitBusyId, readmitMsgs, onReadmit
         </div>
         {p.diagnosis ? <div className="wh-card-dx">{p.diagnosis}</div> : null}
         <BedTag patient={p} />
+        <DueBadge due={due} />
       </div>
       <PatientStatusButton patient={p} onApplied={onApplied} />
       <svg className="wh-card-chev" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="9 5 16 12 9 19" /></svg>
@@ -195,6 +231,13 @@ export default function Home() {
 
 
   const showExitToast = useExitOnDoubleBack();
+
+  // Re-evaluate due/overdue medication flags every minute.
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 60000);
+    return () => clearInterval(t);
+  }, []);
 
   useEffect(() => {
     if (window.location.hash === '#search' && searchInputRef.current) {
@@ -744,6 +787,19 @@ export default function Home() {
               })}
             </div>
           )}
+          {(() => {
+            if (q || !myWardPatients) return null;
+            const states = myWardPatients.map((p) => dueState(p, now)).filter(Boolean);
+            const overdue = states.filter((x) => x.kind === 'overdue').length;
+            const soon = states.length - overdue;
+            if (!states.length) return null;
+            return (
+              <div className="wh-due-summary">
+                {overdue > 0 && <span className="wh-due wh-due--overdue">{overdue} with overdue meds</span>}
+                {soon > 0 && <span className="wh-due wh-due--soon">{soon} due soon</span>}
+              </div>
+            );
+          })()}
           <div className="wh-list">
             {!patientsLoaded && (searching ? 'Searching…' : 'Loading patients…')}
             {patientsLoaded && visiblePatients.length === 0 && (
@@ -759,7 +815,7 @@ export default function Home() {
                     <div style={{ fontWeight: 'bold', fontSize: 13, margin: '8px 0 4px' }}>{g.label} ({g.patients.length})</div>
                     {g.patients.length === 0 && <div style={{ fontSize: 12, color: '#888' }}>No patients yet.</div>}
                     {g.patients.map(p => (
-                      <PatientRow key={p.id} p={p} showWard={false} onOpen={openPatient} readmitBusyId={readmitBusyId} readmitMsgs={readmitMsgs} onReadmit={handleReadmit} onApplied={() => loadWardData(true)} />
+                      <PatientRow key={p.id} p={p} showWard={false} onOpen={openPatient} readmitBusyId={readmitBusyId} readmitMsgs={readmitMsgs} onReadmit={handleReadmit} onApplied={() => loadWardData(true)} now={now} />
                     ))}
                   </div>
                 ))}
@@ -769,14 +825,14 @@ export default function Home() {
                       Bed/Cot not set ({pedGroups.unassigned.length})
                     </div>
                     {pedGroups.unassigned.map(p => (
-                      <PatientRow key={p.id} p={p} showWard={false} onOpen={openPatient} readmitBusyId={readmitBusyId} readmitMsgs={readmitMsgs} onReadmit={handleReadmit} onApplied={() => loadWardData(true)} />
+                      <PatientRow key={p.id} p={p} showWard={false} onOpen={openPatient} readmitBusyId={readmitBusyId} readmitMsgs={readmitMsgs} onReadmit={handleReadmit} onApplied={() => loadWardData(true)} now={now} />
                     ))}
                   </div>
                 )}
               </>
             )}
             {patientsLoaded && visiblePatients.length > 0 && !pedGroups && visiblePatients.map(p => (
-              <PatientRow key={p.id} p={p} showWard={!!q} onOpen={openPatient} readmitBusyId={readmitBusyId} readmitMsgs={readmitMsgs} onReadmit={handleReadmit} onApplied={() => loadWardData(true)} />
+              <PatientRow key={p.id} p={p} showWard={!!q} onOpen={openPatient} readmitBusyId={readmitBusyId} readmitMsgs={readmitMsgs} onReadmit={handleReadmit} onApplied={() => loadWardData(true)} now={now} />
             ))}
           </div>
         </div>
