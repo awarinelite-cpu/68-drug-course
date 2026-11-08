@@ -2508,7 +2508,7 @@ h3.ward-report-subheading, .ward-report-subheading { font-size: clamp(28px, 3.4v
 }
 .wh-circle:active, .wh-icon:active, .wh-pill:active { transform: scale(.95); }
 .wh-brand { display: flex; align-items: center; gap: 8px; min-width: 0; flex: 1 1 auto; }
-.wh-logo { width: 46px; height: 46px; flex: 0 0 auto; filter: drop-shadow(0 2px 4px rgba(0,0,0,.35)); }
+.wh-logo { width: 52px; height: 52px; flex: 0 0 auto; object-fit: contain; background: #fff; border-radius: 14px; padding: 2px; box-shadow: 0 2px 8px rgba(0,0,0,.4); }
 .wh-brand-text { display: flex; flex-direction: column; line-height: 1.08; min-width: 0; }
 .wh-brand-1 { font-size: 21px; font-weight: 800; letter-spacing: -.01em; }
 .wh-brand-2 { font-size: 24px; font-weight: 600; letter-spacing: -.01em; }
@@ -2625,7 +2625,7 @@ h3.ward-report-subheading, .ward-report-subheading { font-size: clamp(28px, 3.4v
   .wh-emr { font-size: 15px; } .wh-ward-title { font-size: 23px; }
 }
 @media (max-width: 380px) {
-  .wh-brand-1 { font-size: 18px; } .wh-brand-2 { font-size: 20px; } .wh-logo { width: 38px; height: 38px; }
+  .wh-brand-1 { font-size: 18px; } .wh-brand-2 { font-size: 20px; } .wh-logo { width: 42px; height: 42px; }
   .wh-card-main { padding-right: 0; } .wh-card .patient-status-wrap { position: static; margin-left: auto; }
 }
 

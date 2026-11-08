@@ -1,17 +1,13 @@
 import { useNav } from "../contexts/NavContext.jsx";
 import { useEffect, useState } from "react";
+import narhyLogo from "../assets/narhy-logo.png";
 import { useTheme } from "../contexts/ThemeContext.jsx";
 import { getViewMode, toggleViewMode } from "../lib/viewMode.js";
 
 const S = { fill: "none", stroke: "currentColor", strokeWidth: 2, strokeLinecap: "round", strokeLinejoin: "round" };
 
 function Logo() {
-  return (
-    <svg className="wh-logo" viewBox="0 0 64 64" aria-hidden="true">
-      <path d="M24 4h16v20h20v16H40v20H24V40H4V24h20z" fill="#1d6bff" />
-      <path d="M6 44c10 14 34 16 52 2-6 8-16 14-28 14C18 60 9 53 6 44z" fill="#fff" />
-    </svg>
-  );
+  return <img className="wh-logo" src={narhyLogo} alt="68 NARHY" width="52" height="52" />;
 }
 
 // Shared page header (same look as the ward home header): hamburger, logo +
