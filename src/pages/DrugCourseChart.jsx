@@ -1320,8 +1320,8 @@ export default function DrugCourseChart() {
               <thead>
                 <tr>
                   {drugsEditMode && <th className="col-rowedit no-print"></th>}
-                  <th style={{ width: 34 }}>No.</th><th className="col-drugname">Drug Name</th><th>Route</th><th>Frequency</th><th>Action</th><th>Duration</th>
-                  <th className="no-print">Due</th>
+                  <th className="col-no" style={{ width: 34 }}>No.</th><th className="col-drugname">Drug Name</th><th className="col-droute">Route</th><th className="col-dfreq">Frequency</th><th className="col-daction">Action</th><th className="col-ddur">Duration</th>
+                  <th className="no-print col-ddue">Due</th>
                   {drugsEditMode && <th className="no-print" style={{ width: 34 }}></th>}
                 </tr>
               </thead>

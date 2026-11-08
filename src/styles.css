@@ -2829,3 +2829,26 @@ input[type=date], input[type=datetime-local], input[type=time], input[type=month
    --phone-desktop-zoom is set by applyTextScale() in lib/viewMode.js. */
 html[data-phone-desktop] body { zoom: var(--phone-desktop-zoom, 1.4); }
 @media print { html[data-phone-desktop] body { zoom: 1; } }
+
+/* Phone desktop mode, zoomed text: the Drugs table has no fit rule of its own on wide
+   screens, so at 1.4x zoom its columns pushed the Due column off-screen (body clips
+   sideways overflow). Fit it to the screen like the administration table below it. */
+html[data-phone-desktop] .table-wrap { overflow-x: auto; }
+html[data-phone-desktop] .drug-chart-page .table-wrap:not(.chart-scroll) { overflow-x: visible; max-width: 100%; }
+html[data-phone-desktop] .drug-chart-page table.drugs-table { width: 100%; max-width: 100%; min-width: 0; table-layout: fixed; }
+html[data-phone-desktop] .drug-chart-page table.drugs-table th,
+html[data-phone-desktop] .drug-chart-page table.drugs-table td {
+  white-space: normal; overflow-wrap: anywhere; min-width: 0; padding: 6px 3px; font-size: 14px;
+}
+html[data-phone-desktop] .drug-chart-page table.drugs-table th { font-size: 12px; }
+html[data-phone-desktop] .drug-chart-page table.drugs-table th.col-no { width: 6%; }
+html[data-phone-desktop] .drug-chart-page table.drugs-table th.col-drugname { width: 27%; }
+html[data-phone-desktop] .drug-chart-page table.drugs-table th.col-droute { width: 9%; }
+html[data-phone-desktop] .drug-chart-page table.drugs-table th.col-dfreq { width: 14%; }
+html[data-phone-desktop] .drug-chart-page table.drugs-table th.col-daction { width: 16%; }
+html[data-phone-desktop] .drug-chart-page table.drugs-table th.col-ddur { width: 12%; }
+html[data-phone-desktop] .drug-chart-page table.drugs-table th.col-ddue { width: 16%; }
+html[data-phone-desktop] .drug-chart-page table.drugs-table th.col-rowedit,
+html[data-phone-desktop] .drug-chart-page table.drugs-table td.col-rowedit { width: 34px; padding: 4px 2px; }
+html[data-phone-desktop] .drug-chart-page table.drugs-table td input,
+html[data-phone-desktop] .drug-chart-page table.drugs-table td select { width: 100%; min-width: 0; max-width: 100%; box-sizing: border-box; font-size: 14px; }
