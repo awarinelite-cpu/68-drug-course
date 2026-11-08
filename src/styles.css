@@ -2814,7 +2814,7 @@ input[type=date], input[type=datetime-local], input[type=time], input[type=month
   font-size: 13px; font-weight: 800;
 }
 .wh-due--overdue { background: #fee2e2; color: #b91c1c; animation: wh-due-pulse 1.4s ease-in-out infinite; }
-.wh-due--soon { background: #fef3c7; color: #92400e; }
+.wh-due--soon { background: #ffedd5; color: #9a3412; }
 :root[data-theme="dark"] .wh-due--overdue { background: rgba(239,68,68,.25); color: #fca5a5; }
 :root[data-theme="dark"] .wh-due--soon { background: rgba(245,158,11,.25); color: #fcd34d; }
 .wh-card[data-due="overdue"] { border-color: #ef4444; box-shadow: 0 0 0 2px rgba(239,68,68,.35), 0 10px 22px -14px rgba(239,68,68,.6); }
@@ -2856,3 +2856,13 @@ html[data-phone-desktop] .drug-chart-page table.drugs-table td select { width: 1
 /* Drug chart: the patient banner and save-status line above the sheet were removed, so tuck the sheet up under the header. */
 .sheet.drug-chart-page { margin-top: 8px; }
 @media print { .sheet.drug-chart-page { margin-top: 0; } }
+
+
+/* Medication dot, sits under the Status button on each ward-list card (replaces the old avatar dot) */
+.wh-med-dot {
+  position: absolute; right: 48px; top: calc(50% + 11px); width: 14px; height: 14px; border-radius: 50%;
+  background: #22c55e; box-shadow: 0 0 0 3px rgba(34,197,94,.22);
+}
+.wh-med-dot--overdue { background: #ef4444; box-shadow: 0 0 0 3px rgba(239,68,68,.3); animation: wh-dot-blink 0.9s ease-in-out infinite; }
+.wh-med-dot--soon { background: #f97316; box-shadow: 0 0 0 3px rgba(249,115,22,.3); animation: wh-dot-blink 1.2s ease-in-out infinite; }
+@keyframes wh-dot-blink { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: .15; transform: scale(.85); } }

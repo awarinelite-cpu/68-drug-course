@@ -91,7 +91,6 @@ function PatientAvatar({ patient }) {
       {svg
         ? <span className="patient-avatar" dangerouslySetInnerHTML={{ __html: svg }} />
         : <span className="patient-avatar patient-avatar--initial">{initial}</span>}
-      <i className="wh-avatar-dot" />
     </span>
   );
 }
@@ -134,11 +133,11 @@ function BedTag({ patient }) {
   );
 }
 
-// Medication-due flag on a ward-list card. drugNextDueAt is the earliest
+// Medication-due flag on a ward-list card (status dot + badge). drugNextDueAt is the earliest
 // upcoming dose across the patient's ongoing drugs, saved by the Drug Course
 // Chart (see saveChart). Overdue = red pulse, due within 30 min = amber,
-// otherwise nothing, so only patients who need attention stand out.
-const DUE_SOON_MS = 30 * 60 * 1000;
+// 'ok' = next dose is further off (green dot only). Soon = within 10 minutes.
+const DUE_SOON_MS = 10 * 60 * 1000;
 function dueState(patient, now) {
   const raw = patient && patient.drugNextDueAt;
   if (!raw || patient.dischargeStatus) return null;
@@ -147,15 +146,23 @@ function dueState(patient, now) {
   const diff = at.getTime() - now;
   if (diff <= 0) return { kind: 'overdue', at, mins: Math.round(-diff / 60000) };
   if (diff <= DUE_SOON_MS) return { kind: 'soon', at, mins: Math.round(diff / 60000) };
-  return null;
+  return { kind: 'ok', at, mins: Math.round(diff / 60000) };
 }
 function fmtMins(m) {
   if (m < 60) return m + ' min';
   const h = Math.floor(m / 60), r = m % 60;
   return h + 'h' + (r ? ' ' + r + 'm' : '');
 }
-function DueBadge({ due }) {
+// Blinking status dot under the Status button: red = dose due/overdue (blinks
+// until it is given), orange = due within 10 minutes (blinks), green = nothing
+// due right now. No dot when the patient has no scheduled medication.
+function MedDot({ due }) {
   if (!due) return null;
+  const label = due.kind === 'overdue' ? 'Medication overdue' : due.kind === 'soon' ? 'Medication due soon' : 'Medication up to date';
+  return <i className={'wh-med-dot wh-med-dot--' + due.kind} role="img" aria-label={label} title={label} />;
+}
+function DueBadge({ due }) {
+  if (!due || due.kind === 'ok') return null;
   const hhmm = due.at.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   const text = due.kind === 'overdue'
     ? 'Meds overdue ' + fmtMins(due.mins) + ' (' + hhmm + ')'
@@ -175,7 +182,7 @@ function PatientRow({ p, showWard, onOpen, readmitBusyId, readmitMsgs, onReadmit
   const female = g === 'F' || g === 'FEMALE';
   const tone = activeAdmissionTag(p) ? 'new' : (female ? 'f' : 'm');
   return (
-    <div className="wh-card" data-tone={tone} data-g={female ? 'f' : 'm'} data-due={due ? due.kind : undefined} onClick={() => onOpen(p)}>
+    <div className="wh-card" data-tone={tone} data-g={female ? 'f' : 'm'} data-due={due && due.kind !== 'ok' ? due.kind : undefined} onClick={() => onOpen(p)}>
       <PatientAvatar patient={p} />
       <div className="wh-card-main">
         <div className="wh-card-name"><b>{p.name || 'Unnamed'}</b>{'. '}<span className="wh-emr">EMR: {p.emr || 'N/A'}</span></div>
@@ -189,6 +196,7 @@ function PatientRow({ p, showWard, onOpen, readmitBusyId, readmitMsgs, onReadmit
         <DueBadge due={due} />
       </div>
       <PatientStatusButton patient={p} onApplied={onApplied} />
+      <MedDot due={due} />
       <svg className="wh-card-chev" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="9 5 16 12 9 19" /></svg>
     </div>
   );
@@ -789,7 +797,7 @@ export default function Home() {
           )}
           {(() => {
             if (q || !myWardPatients) return null;
-            const states = myWardPatients.map((p) => dueState(p, now)).filter(Boolean);
+            const states = myWardPatients.map((p) => dueState(p, now)).filter((x) => x && x.kind !== 'ok');
             const overdue = states.filter((x) => x.kind === 'overdue').length;
             const soon = states.length - overdue;
             if (!states.length) return null;
