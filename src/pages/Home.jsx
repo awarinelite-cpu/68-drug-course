@@ -5,8 +5,8 @@ import { db } from "../firebase.js";
 import { useAuth } from "../contexts/AuthContext.jsx";
 import { useExitOnDoubleBack } from "../hooks/useExitOnDoubleBack.js";
 import { useOverallNurseThisWeek } from "../hooks/useOverallNurseThisWeek.js";
-import { avatarMarkup, avatarSVG } from "../lib/avatar.js";
-import Topbar from "../components/Topbar.jsx";
+import { avatarSVG } from "../lib/avatar.js";
+import WardHeader from "../components/WardHeader.jsx";
 import PatientForm from "../components/PatientForm.jsx";
 import { getWardCapacity, wardFullMessage } from "../lib/wardCapacity.js";
 import PatientStatusButton from "../components/PatientStatusButton.jsx";
@@ -21,7 +21,6 @@ import { activeAdmissionTag, ADMISSION_TAG_LABEL, clearAdmissionTag, readmitLate
 import { bumpShiftStatForPatientWard, bumpDemographicStatForPatientWard } from "../lib/shiftStatsSync.js";
 import { WARD_OPTIONS } from "../lib/drugChartHelpers.js";
 import { classifyAffiliation, isOfficerArmyNumber } from "../lib/patientAffiliation.js";
-import { formatShortNameTag } from "../lib/roles.js";
 import { createPatientUnique } from '../lib/patientUnique.js';
 
 
@@ -85,10 +84,16 @@ const ADMISSION_TAG_BADGE_CLASS = { AE_TRANSFER: 'badge-active', WARD_TRANSFER: 
 // registered gender (M / F), or the patient's first initial when none is on file.
 function PatientAvatar({ patient }) {
   const g = String((patient && patient.gender) || '').trim().toUpperCase();
-  const svg = g === 'M' || g === 'MALE' ? avatarSVG('male', 44) : g === 'F' || g === 'FEMALE' ? avatarSVG('female', 44) : null;
-  if (svg) return <span className="patient-avatar" aria-hidden="true" dangerouslySetInnerHTML={{ __html: svg }} />;
+  const svg = g === 'M' || g === 'MALE' ? avatarSVG('male', 64) : g === 'F' || g === 'FEMALE' ? avatarSVG('female', 64) : null;
   const initial = String((patient && patient.name) || '?').trim().charAt(0).toUpperCase() || '?';
-  return <span className="patient-avatar patient-avatar--initial" aria-hidden="true">{initial}</span>;
+  return (
+    <span className="wh-avatar" aria-hidden="true">
+      {svg
+        ? <span className="patient-avatar" dangerouslySetInnerHTML={{ __html: svg }} />
+        : <span className="patient-avatar patient-avatar--initial">{initial}</span>}
+      <i className="wh-avatar-dot" />
+    </span>
+  );
 }
 
 function AdmissionTagBadge({ patient }) {
@@ -123,8 +128,33 @@ function BedTag({ patient }) {
   const bed = (patient.hospNo || '').trim();
   return (
     <span className={"patient-bed-tag" + (bed ? '' : ' patient-bed-tag-missing')}>
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M3 20V5M3 15h18v5M21 15v-2.5A3.5 3.5 0 0 0 17.5 9H10v6" /><circle cx="6.5" cy="11" r="1.8" /></svg>
       Bed: {bed || 'not set'}
     </span>
+  );
+}
+
+// One patient card on the ward list (also used for cross-ward search results).
+function PatientRow({ p, showWard, onOpen, readmitBusyId, readmitMsgs, onReadmit, onApplied }) {
+  const g = String(p.gender || '').trim().toUpperCase();
+  const female = g === 'F' || g === 'FEMALE';
+  const tone = activeAdmissionTag(p) ? 'new' : (female ? 'f' : 'm');
+  return (
+    <div className="wh-card" data-tone={tone} data-g={female ? 'f' : 'm'} onClick={() => onOpen(p)}>
+      <PatientAvatar patient={p} />
+      <div className="wh-card-main">
+        <div className="wh-card-name"><b>{p.name || 'Unnamed'}</b>{'. '}<span className="wh-emr">EMR: {p.emr || 'N/A'}</span></div>
+        {showWard && p.ward && <div className="wh-card-ward">Ward: {p.ward}</div>}
+        <div className="wh-card-badges">
+          <AdmissionTagBadge patient={p} />
+          <PendingDischargeBadge patient={p} busy={readmitBusyId === p.id} message={readmitMsgs[p.id]} onReadmit={onReadmit} />
+        </div>
+        {p.diagnosis ? <div className="wh-card-dx">{p.diagnosis}</div> : null}
+        <BedTag patient={p} />
+      </div>
+      <PatientStatusButton patient={p} onApplied={onApplied} />
+      <svg className="wh-card-chev" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="9 5 16 12 9 19" /></svg>
+    </div>
   );
 }
 
@@ -614,28 +644,14 @@ export default function Home() {
 
   return (
     <>
-      <Topbar
-        brand="68 NARHY Ward Charts"
-        identity={
-          <a className="whoami-link" onClick={(e) => { e.preventDefault(); navigate('/profile'); }} href="/profile">
-            <span className="whoami-avatar" dangerouslySetInnerHTML={{ __html: profile ? avatarMarkup(profile, 32) : '' }} />
-            <span className="whoami-name">{profile ? formatShortNameTag(profile.name, profile.role) : ''}</span>
-          </a>
-        }
-      >
-        {profile?.role === 'admin' && (
-          <a href="/admin" className="btn btn-purple" style={{ padding: '6px 12px' }} onClick={(e) => { e.preventDefault(); navigate('/admin'); }}>Admin</a>
-        )}
-        <a href="/my-patients" className="btn btn-secondary" style={{ padding: '6px 12px' }} onClick={(e) => { e.preventDefault(); navigate('/my-patients'); }}>My Patients</a>
-        {myWard && (
-          <a href="#" className="btn btn-secondary notif-bell-btn" style={{ padding: '6px 12px' }} onClick={(e) => { e.preventDefault(); setShowTransfers(true); }}>
-            🔔 New Patient
-            {incomingTransfers.length > 0 && <span className="notif-count-badge">{incomingTransfers.length}</span>}
-          </a>
-        )}
-      </Topbar>
+      <WardHeader
+        profile={profile}
+        myWard={myWard}
+        incomingCount={incomingTransfers.length}
+        onOpenTransfers={() => setShowTransfers(true)}
+      />
 
-      <div className="container">
+      <div className="wh-page">
         {isOverallNurse && (
           <div
             className="card-box"
@@ -649,8 +665,9 @@ export default function Home() {
             <div style={{ fontSize: 13, marginTop: 4 }}>Tap to open the Overall Nurse page — you can lock/open wards and save to the archive until the week ends.</div>
           </div>
         )}
-        <div className="card-box">
-          <div className="search-input-wrap">
+        <div className="wh-search">
+          <label className="wh-search-field" htmlFor="searchInput">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7" /><line x1="16.5" y1="16.5" x2="21" y2="21" /></svg>
             <input
               id="searchInput"
               ref={searchInputRef}
@@ -659,14 +676,20 @@ export default function Home() {
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
             />
-            <button className="search-input-btn" aria-label="Search" onClick={() => searchInputRef.current && searchInputRef.current.focus()}>🔍</button>
-          </div>
-          <div className="search-row search-row-actions">
-            <button className="btn btn-success" onClick={() => { setNewForm((f) => ({ ...f, ward: f.ward || myWard })); setShowNewForm(true); }}>+ New Patient</button>
-            <button className="btn btn-secondary" onClick={newFromClipboard}>📋 From Clipboard</button>
-          </div>
-          {clipMsg && <div className="error-msg">{clipMsg}</div>}
+          </label>
+          <button className="wh-search-btn" type="button" aria-label="Search" onClick={() => searchInputRef.current && searchInputRef.current.focus()}>
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7" /><line x1="16.5" y1="16.5" x2="21" y2="21" /></svg>
+          </button>
         </div>
+        <button className="wh-new" type="button" onClick={() => { setNewForm((f) => ({ ...f, ward: f.ward || myWard })); setShowNewForm(true); }}>
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" aria-hidden="true"><line x1="12" y1="4" x2="12" y2="20" /><line x1="4" y1="12" x2="20" y2="12" /></svg>
+          New Patient
+        </button>
+        <button className="wh-clip" type="button" onClick={newFromClipboard}>
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M9 2h6a1.5 1.5 0 0 1 1.5 1.5V5H18a2 2 0 0 1 2 2v13a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h1.5V3.5A1.5 1.5 0 0 1 9 2zm.5 2v2h5V4zM8 11v1.8h8V11zm0 4v1.8h8V15z" /></svg>
+          From Clipboard
+        </button>
+        {clipMsg && <div className="error-msg">{clipMsg}</div>}
 
         {showNewForm && (
           <div className="card-box">
@@ -697,17 +720,18 @@ export default function Home() {
           </div>
         )}
 
-        <div className="card-box">
-          <h3 className="ward-heading" style={{ marginTop: 0 }}>
-            <span className="ward-heading-title">Patients on {myWard ? titleCase(myWard) : 'All Wards'} <span className="ward-count-badge">{wardPatientCount}</span></span>
-            <a
-              className={'ward-heading-link' + (myWard ? '' : ' ward-heading-link--attn')}
-              href="/select-ward"
-              onClick={(e) => { e.preventDefault(); navigate('/select-ward'); }}
-            >
-              {myWard ? 'Switch ward' : 'Set your ward'}
-            </a>
-          </h3>
+        <div className="wh-list-wrap">
+          <a
+            className={'wh-ward-card' + (myWard ? '' : ' wh-ward-card--attn')}
+            href="/select-ward"
+            title={myWard ? 'Switch ward' : 'Set your ward'}
+            onClick={(e) => { e.preventDefault(); navigate('/select-ward'); }}
+          >
+            <svg className="wh-ward-ico" width="40" height="40" viewBox="0 0 32 32" fill="currentColor" aria-hidden="true"><circle cx="16" cy="9" r="4.2" /><path d="M8 24c0-4.4 3.6-7 8-7s8 2.6 8 7z" /><circle cx="6.5" cy="12.5" r="3" /><path d="M0.8 23c0-3.2 2.2-5.2 5.2-5.2 1 0 1.8.2 2.5.5-1.4 1.4-2.2 3.2-2.2 4.7z" /><circle cx="25.5" cy="12.5" r="3" /><path d="M31.2 23c0-3.2-2.2-5.2-5.2-5.2-1 0-1.8.2-2.5.5 1.4 1.4 2.2 3.2 2.2 4.7z" /></svg>
+            <span className="wh-ward-title">{myWard ? 'Patients on ' + titleCase(myWard) : 'Set your ward'}</span>
+            {myWard && <span className="wh-ward-count">{wardPatientCount}</span>}
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="9 5 16 12 9 19" /></svg>
+          </a>
           {isSplitWard && (
             <div className="ward-split-counts">
               {wardBreakdown.map(({ key: k, count }) => {
@@ -720,7 +744,7 @@ export default function Home() {
               })}
             </div>
           )}
-          <div className="search-results">
+          <div className="wh-list">
             {!patientsLoaded && (searching ? 'Searching…' : 'Loading patients…')}
             {patientsLoaded && visiblePatients.length === 0 && (
               <div className="error-msg">
@@ -735,13 +759,7 @@ export default function Home() {
                     <div style={{ fontWeight: 'bold', fontSize: 13, margin: '8px 0 4px' }}>{g.label} ({g.patients.length})</div>
                     {g.patients.length === 0 && <div style={{ fontSize: 12, color: '#888' }}>No patients yet.</div>}
                     {g.patients.map(p => (
-                      <div key={p.id} className="search-result-item" onClick={() => openPatient(p)}>
-                        <span className="patient-row-main"><PatientAvatar patient={p} /><span className="patient-row-text"><b>{p.name || 'Unnamed'}</b>{'. '}EMR: {p.emr || 'N/A'}<AdmissionTagBadge patient={p} /><PendingDischargeBadge patient={p} busy={readmitBusyId === p.id} message={readmitMsgs[p.id]} onReadmit={handleReadmit} />
-                        <span className="patient-diagnosis-col">
-                          <span>{p.diagnosis || ''}</span>
-                          <BedTag patient={p} />
-                        </span></span><PatientStatusButton patient={p} onApplied={() => loadWardData(true)} /></span>
-                      </div>
+                      <PatientRow key={p.id} p={p} showWard={false} onOpen={openPatient} readmitBusyId={readmitBusyId} readmitMsgs={readmitMsgs} onReadmit={handleReadmit} onApplied={() => loadWardData(true)} />
                     ))}
                   </div>
                 ))}
@@ -751,26 +769,14 @@ export default function Home() {
                       Bed/Cot not set ({pedGroups.unassigned.length})
                     </div>
                     {pedGroups.unassigned.map(p => (
-                      <div key={p.id} className="search-result-item" onClick={() => openPatient(p)}>
-                        <span className="patient-row-main"><PatientAvatar patient={p} /><span className="patient-row-text"><b>{p.name || 'Unnamed'}</b>{'. '}EMR: {p.emr || 'N/A'}<AdmissionTagBadge patient={p} /><PendingDischargeBadge patient={p} busy={readmitBusyId === p.id} message={readmitMsgs[p.id]} onReadmit={handleReadmit} />
-                        <span className="patient-diagnosis-col">
-                          <span>{p.diagnosis || ''}</span>
-                          <BedTag patient={p} />
-                        </span></span><PatientStatusButton patient={p} onApplied={() => loadWardData(true)} /></span>
-                      </div>
+                      <PatientRow key={p.id} p={p} showWard={false} onOpen={openPatient} readmitBusyId={readmitBusyId} readmitMsgs={readmitMsgs} onReadmit={handleReadmit} onApplied={() => loadWardData(true)} />
                     ))}
                   </div>
                 )}
               </>
             )}
             {patientsLoaded && visiblePatients.length > 0 && !pedGroups && visiblePatients.map(p => (
-              <div key={p.id} className="search-result-item" onClick={() => openPatient(p)}>
-                <span className="patient-row-main"><PatientAvatar patient={p} /><span className="patient-row-text"><b>{p.name || 'Unnamed'}</b>{'. '}EMR: {p.emr || 'N/A'}{q && p.ward ? '. Ward: ' + p.ward : ''}<AdmissionTagBadge patient={p} /><PendingDischargeBadge patient={p} busy={readmitBusyId === p.id} message={readmitMsgs[p.id]} onReadmit={handleReadmit} />
-                <span className="patient-diagnosis-col">
-                  <span>{p.diagnosis || ''}</span>
-                  <BedTag patient={p} />
-                </span></span><PatientStatusButton patient={p} onApplied={() => loadWardData(true)} /></span>
-              </div>
+              <PatientRow key={p.id} p={p} showWard={!!q} onOpen={openPatient} readmitBusyId={readmitBusyId} readmitMsgs={readmitMsgs} onReadmit={handleReadmit} onApplied={() => loadWardData(true)} />
             ))}
           </div>
         </div>
