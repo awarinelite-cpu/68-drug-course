@@ -266,7 +266,7 @@ export default function Patient() {
     // the ward, just tagged so the A Ward report lists them in its Parole /
     // D/Parole tables. Nothing is archived, so no confirm-archive flow and
     // no online requirement.
-    if (reason === 'parole' || reason === 'dparole' || reason === 'paroleClear') {
+    if (reason === 'parole' || reason === 'paroleClear') {
       if (reason !== 'paroleClear' && patient.ward !== PAROLE_PATIENT_WARD_LABEL) {
         setStatusMsg({ color: '#dc2626', text: 'Parole is only tracked for A Ward patients.' });
         return;
@@ -450,7 +450,6 @@ export default function Patient() {
                     <option value="dama">{STATUS_LABELS.dama}</option>
                     <option value="absconded">{STATUS_LABELS.absconded}</option>
                     <option value="parole">{STATUS_LABELS.parole}</option>
-                    <option value="dparole">{STATUS_LABELS.dparole}</option>
                     {patient.paroleStatus && <option value="paroleClear">{STATUS_LABELS.paroleClear}</option>}
                   </select>
                   {statusAction === 'transferred' && (
@@ -459,7 +458,7 @@ export default function Patient() {
                       {WARD_OPTIONS.map(w => <option key={w} value={w}>{w}</option>)}
                     </select>
                   )}
-                  {(statusAction === 'parole' || statusAction === 'dparole') && (
+                  {statusAction === 'parole' && (
                     <>
                       <label style={{ fontSize: 12 }}>Commencement date
                         <input type="date" value={paroleStart} onChange={(e) => setParoleStart(e.target.value)} />

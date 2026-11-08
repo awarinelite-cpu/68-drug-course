@@ -36,7 +36,7 @@ export default function PatientStatusButton({ patient, onApplied }) {
     if (!reason) return err('Please select an action first.');
     if (reason === 'transferred' && !transferWard) return err('Please select which ward the patient is being transferred to.');
 
-    if (reason === 'parole' || reason === 'dparole' || reason === 'paroleClear') {
+    if (reason === 'parole' || reason === 'paroleClear') {
       if (reason !== 'paroleClear' && patient.ward !== PAROLE_PATIENT_WARD_LABEL) return err('Parole is only tracked for A Ward patients.');
       const kind = reason === 'paroleClear' ? 'clear' : reason;
       if (kind !== 'clear' && paroleReturn && paroleStart && paroleReturn < paroleStart) return err('Return date can\u2019t be before the commencement date.');
@@ -97,7 +97,7 @@ export default function PatientStatusButton({ patient, onApplied }) {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               <select value={action} onChange={(e) => setAction(e.target.value)}>
                 <option value="">Select action…</option>
-                {['admitted', 'notAdmitted', 'oldPatient', 'discharged', 'transferred', 'referred', 'died', 'dama', 'absconded', 'parole', 'dparole'].map((k) => (
+                {['admitted', 'notAdmitted', 'oldPatient', 'discharged', 'transferred', 'referred', 'died', 'dama', 'absconded', 'parole'].map((k) => (
                   <option key={k} value={k}>{STATUS_LABELS[k]}</option>
                 ))}
                 {patient.paroleStatus && <option value="paroleClear">{STATUS_LABELS.paroleClear}</option>}
@@ -108,7 +108,7 @@ export default function PatientStatusButton({ patient, onApplied }) {
                   {WARD_OPTIONS.map((w) => <option key={w} value={w}>{w}</option>)}
                 </select>
               )}
-              {(action === 'parole' || action === 'dparole') && (
+              {action === 'parole' && (
                 <>
                   <label style={{ fontSize: 12 }}>Commencement date
                     <input type="date" value={paroleStart} onChange={(e) => setParoleStart(e.target.value)} />

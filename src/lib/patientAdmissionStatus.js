@@ -5,7 +5,7 @@ import { formatDateTime } from "./time-format.js";
 import { bumpShiftStat, bumpShiftStatForPatientWard, bumpDemographicStat, bumpDemographicStatForPatientWard } from "./shiftStatsSync.js";
 import { classifyAffiliation, isOfficerArmyNumber } from "./patientAffiliation.js";
 import { getWardCapacity, wardFullMessage } from "./wardCapacity.js";
-import { PAROLE_STATUS, PAROLE_OUT_KEY, OLD_IN_KEY, PAROLE_WARD_KEY, PAROLE_PATIENT_WARD_LABEL, isParoleActive } from "./nurses-report-common.js";
+import { PAROLE_STATUS, PAROLE_OUT_KEY, OLD_IN_KEY, PAROLE_WARD_KEY, PAROLE_PATIENT_WARD_LABEL, isParoleActive, todayISO } from "./nurses-report-common.js";
 
 // Which Shift Statistics column each exit reason feeds — 'referred' is
 // an external hand-off to another hospital, so it counts as Ext Out, not
@@ -328,6 +328,8 @@ export async function applyPatientStatus({ patientId, reason, transferWard, from
     ? await bumpDemographicStatForPatientWard(patientWard, patientPedBedType, demographicCategory, patientAffiliation, patientGender, 1, { officer: patientIsOfficer })
     : null;
 
+  const autoDParole = reason === 'discharged' && patientWard === PAROLE_PATIENT_WARD_LABEL;
+
   const admissionDoc = {
     diagnosis: drugChartData.f_diagnosis,
     archiveReason: reason,
@@ -375,7 +377,12 @@ export async function applyPatientStatus({ patientId, reason, transferWard, from
       // closing report is submitted for them — see closeOutDischargedPatient.
       updateDoc(doc(db, 'patients', patientId), {
         dischargeStatus: ROSTER_TAG_FOR_REASON[reason] || '', dischargeStatusAt: serverTimestamp(),
-        paroleStatus: '', paroleAt: null, paroleWard: '', paroleStart: '', paroleReturn: '',
+        // A Ward only: a discharge automatically puts the patient on the
+        // D/Parole list too (they are the only way onto it now). No
+        // 'paroleOut' bump here: the discharge already took them off Occ.
+        ...(autoDParole
+          ? { paroleStatus: PAROLE_STATUS.dParole, paroleAt: serverTimestamp(), paroleWard: PAROLE_PATIENT_WARD_LABEL, paroleStart: todayISO(), paroleReturn: '' }
+          : { paroleStatus: '', paroleAt: null, paroleWard: '', paroleStart: '', paroleReturn: '' }),
         dischargeStatShiftRef: exitStatRef, dischargeStatDemographicRef: demographicStatRef
       })
     ]);
@@ -795,6 +802,7 @@ export async function readmitLatestAdmission({ patientId, nurseName }) {
       // brand-new arrival (see ADMISSION_TAG_LABEL above).
       updateDoc(doc(db, 'patients', patientId), {
         dischargeStatus: '', dischargeStatusAt: null, dischargeStatShiftRef: null, dischargeStatDemographicRef: null,
+        paroleStatus: '', paroleAt: null, paroleWard: '', paroleStart: '', paroleReturn: '',
         ward: admData.ward || currentWard, pedBedType: admData.pedBedType || '',
         admissionSource: 'READMITTED', admissionSourceAt: serverTimestamp(),
         updatedAt: serverTimestamp()
@@ -847,6 +855,9 @@ export async function setPatientParoleStatus({ patientId, kind, startDate, retur
     return { ok: false, message: 'Could not look up the patient: ' + (e.code || e.message || 'unknown error') };
   }
   const wasTagged = !!before.paroleStatus;
+  if (!value && wasTagged && before.dischargeStatus) {
+    return { ok: false, message: 'This D/Parole comes from the discharge. Use Readmit on the discharged patient to undo it.' };
+  }
   const onAWard = before.ward === PAROLE_PATIENT_WARD_LABEL;
   if (!value && wasTagged && !onAWard) {
     return { ok: false, message: 'This patient has already left the ward on parole. Use Readmit on the Parole list to bring them back.' };
@@ -943,7 +954,8 @@ export async function readmitFromParole({ patientId }) {
     return { ok: false, message: 'Readmit failed: ' + (e.code || e.message || 'unknown error') };
   }
   if (stillOnWard) {
-    bumpShiftStat(PAROLE_WARD_KEY, PAROLE_OUT_KEY, -1).catch(() => {});
+    // A discharge-derived D/Parole never bumped 'paroleOut', so nothing to undo.
+    if (!data.dischargeStatus) bumpShiftStat(PAROLE_WARD_KEY, PAROLE_OUT_KEY, -1).catch(() => {});
   } else {
     bumpShiftStatForPatientWard(wardLabel, '', 'adm', 1).catch(() => {});
     const officer = isOfficerArmyNumber(data.armyNumber);

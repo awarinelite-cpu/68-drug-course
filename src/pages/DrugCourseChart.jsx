@@ -1017,7 +1017,7 @@ export default function DrugCourseChart() {
 
     // Parole / D/Parole: a tag only — no archiving, patient stays admitted
     // on A Ward (see setPatientParoleStatus).
-    if (reason === 'parole' || reason === 'dparole' || reason === 'paroleClear') {
+    if (reason === 'parole' || reason === 'paroleClear') {
       if (reason !== 'paroleClear' && patient?.ward !== PAROLE_PATIENT_WARD_LABEL) {
         setStatusMsg({ color: '#dc2626', text: 'Parole is only tracked for A Ward patients.' });
         return;
@@ -1546,7 +1546,6 @@ export default function DrugCourseChart() {
                 <option value="dama">Discharged Against Medical Advice (DAMA)</option>
                 <option value="absconded">Absconded</option>
                 <option value="parole">Parole</option>
-                <option value="dparole">D/Parole</option>
                 {patient?.paroleStatus && <option value="paroleClear">Clear Parole / D/Parole tag</option>}
               </select>
               {statusAction === 'transferred' && (
@@ -1555,7 +1554,7 @@ export default function DrugCourseChart() {
                   {WARD_OPTIONS.map(w => <option key={w} value={w}>{w}</option>)}
                 </select>
               )}
-              {(statusAction === 'parole' || statusAction === 'dparole') && (
+              {statusAction === 'parole' && (
                 <>
                   <label style={{ fontSize: 12 }}>Commencement date
                     <input type="date" value={paroleStart} onChange={(e) => setParoleStart(e.target.value)} />
