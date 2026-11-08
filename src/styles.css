@@ -2493,10 +2493,10 @@ h3.ward-report-subheading, .ward-report-subheading { font-size: clamp(28px, 3.4v
 /* ══ Ward home (redesign) ═════════════════════════════════════════════ */
 .wh-header {
   position: relative; overflow: hidden; color: #fff;
-  background: radial-gradient(120% 90% at 85% 0%, #1550c9 0%, rgba(21,80,201,0) 60%), linear-gradient(165deg, #0a3aa8 0%, #082a80 45%, #05195a 100%);
+  background: linear-gradient(165deg, #0b1f4d 0%, #081a40 50%, #050f2b 100%);
   border-radius: 0 0 40px 64px;
   padding: calc(env(safe-area-inset-top, 0px) + 16px) 14px 22px;
-  box-shadow: 0 12px 28px -14px rgba(5,25,90,.7);
+  box-shadow: 0 12px 28px -14px rgba(5,15,43,.8);
 }
 .wh-art { position: absolute; right: 0; bottom: 0; height: 78%; width: 58%; opacity: .55; pointer-events: none;
   -webkit-mask-image: linear-gradient(to right, transparent, #000 55%); mask-image: linear-gradient(to right, transparent, #000 55%); }
@@ -2670,7 +2670,7 @@ h3.ward-report-subheading, .ward-report-subheading { font-size: clamp(28px, 3.4v
 .btn-danger { background: linear-gradient(180deg, #ef4444, #cf1f1f); }
 input[type=text], input[type=email], input[type=tel], input[type=password], input[type=number],
 input[type=date], input[type=datetime-local], input[type=time], input[type=month], input[type=week], textarea, select { border-radius: 14px; }
-.gnav-drawer-head { background: linear-gradient(165deg, #0a3aa8, #05195a); }
+.gnav-drawer-head { background: linear-gradient(165deg, #0b1f4d, #050f2b); }
 @media print { .wh-header { display: none !important; } }
 
 
