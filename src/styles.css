@@ -2648,7 +2648,8 @@ h3.ward-report-subheading, .ward-report-subheading { font-size: clamp(28px, 3.4v
 .wh-header .theme-toggle-btn { border-radius: 999px; }
 @media (max-width: 480px) { .wh-header--page { position: static; } }
 
-body, :root { --background: #EEF3FB; }
+/* light page background (set on :root only so dark mode can override it) */
+:root { --background: #EEF3FB; }
 :root[data-theme="dark"] { --background: #0B1F3A; }
 .card-box:not(.login-card), :root[data-theme="dark"] .card-box:not(.login-card) {
   background: var(--surface-bg); border: 1px solid var(--border); border-radius: 22px;
@@ -2671,3 +2672,75 @@ input[type=text], input[type=email], input[type=tel], input[type=password], inpu
 input[type=date], input[type=datetime-local], input[type=time], input[type=month], input[type=week], textarea, select { border-radius: 14px; }
 .gnav-drawer-head { background: linear-gradient(165deg, #0a3aa8, #05195a); }
 @media print { .wh-header { display: none !important; } }
+
+
+/* ══ Dark mode everywhere (screen only; printouts stay white) ═════════ */
+@media screen {
+  :root[data-theme="dark"] body { background: #0B1F3A; color: var(--text-primary); }
+
+  /* Report / sheet tables that were hard-coded white */
+  :root[data-theme="dark"] .rec-sheet table.entries th, :root[data-theme="dark"] .rec-sheet table.entries td,
+  :root[data-theme="dark"] .ov-sheet table.report th, :root[data-theme="dark"] .ov-sheet table.report td,
+  :root[data-theme="dark"] table.ward-shift th, :root[data-theme="dark"] table.ward-shift td,
+  :root[data-theme="dark"] table.report th, :root[data-theme="dark"] table.report td,
+  :root[data-theme="dark"] table.shift th, :root[data-theme="dark"] table.shift td {
+    background: #132030; color: #e8eefc; border-color: #475569;
+  }
+  :root[data-theme="dark"] .rec-sheet table.entries, :root[data-theme="dark"] .ov-sheet table.report,
+  :root[data-theme="dark"] table.ward-shift, :root[data-theme="dark"] table.report, :root[data-theme="dark"] table.shift { border-color: #475569; }
+  :root[data-theme="dark"] .ov-sheet table.report td:not(.stat-beds):not(.stat-occ):not(.stat-vac):not(.stat-in):not(.stat-out) { color: #e8eefc; }
+  :root[data-theme="dark"] .rec-sheet table.entries thead th { background: #16294F; color: #fff; border-color: #475569; }
+  :root[data-theme="dark"] .rec-sheet table.entries tbody tr:nth-child(even) td,
+  :root[data-theme="dark"] .ov-sheet table.report tbody tr:nth-child(even) td,
+  :root[data-theme="dark"] table.ward-shift tbody tr:nth-child(even) td,
+  :root[data-theme="dark"] table.report tbody tr:nth-child(even) td,
+  :root[data-theme="dark"] table.shift tbody tr:nth-child(even) td { background: #182a42; }
+  :root[data-theme="dark"] .rec-sheet table.entries tbody tr:last-child td,
+  :root[data-theme="dark"] .ov-sheet table.report tbody tr.totals-row td,
+  :root[data-theme="dark"] table.ward-shift tr.total-row td,
+  :root[data-theme="dark"] table.report tr.totals-row td,
+  :root[data-theme="dark"] table.shift tr.total-row td { background: #5a4a12; color: #fde68a; border-top-color: #fde68a; }
+  :root[data-theme="dark"] table.shift input, :root[data-theme="dark"] table.report input {
+    background: #0c1829; color: #e8eefc; border-color: #475569; -webkit-text-fill-color: #e8eefc;
+  }
+  :root[data-theme="dark"] table.shift input:disabled, :root[data-theme="dark"] table.report input:disabled {
+    background: #0a1422; color: #9fb0cf; -webkit-text-fill-color: #9fb0cf;
+  }
+  :root[data-theme="dark"] table.chart th, :root[data-theme="dark"] table.drugs-table th { background: #1b2c47; color: #e8eefc; }
+
+  /* Panels, pickers, modals, notices */
+  :root[data-theme="dark"] .pl-modal { background: #132030; color: #e8eefc; border: 1px solid var(--border); }
+  :root[data-theme="dark"] .nanda-results { background: #132030; border-color: var(--border); }
+  :root[data-theme="dark"] .nanda-result:active, :root[data-theme="dark"] .nanda-result:hover { background: #1b2c47; }
+  :root[data-theme="dark"] .nanda-close { background: #0f1c30; color: #9fb0cf; }
+  :root[data-theme="dark"] .nanda-filters select { background: #132030; color: #e8eefc; }
+  :root[data-theme="dark"] .nanda-filters select:disabled { background: #0f1c30; color: #64748b; }
+  :root[data-theme="dark"] .nanda-clear { background: #1b2c47; color: #cbd5e1; }
+  :root[data-theme="dark"] .care-bullet { background: rgba(251,191,36,.12); border-color: rgba(251,191,36,.35); color: #fde68a; }
+  :root[data-theme="dark"] .comment-bubble { background: #182a42; }
+  :root[data-theme="dark"] .recording-bar { background: rgba(239,68,68,.15); }
+  :root[data-theme="dark"] .alloc-remove:hover { background: rgba(239,68,68,.15); }
+  :root[data-theme="dark"] .locked-notice, :root[data-theme="dark"] .status-pill.draft, :root[data-theme="dark"] .editing-badge { background: rgba(251,191,36,.18); color: #fde68a; }
+  :root[data-theme="dark"] .status-pill.submitted, :root[data-theme="dark"] .lock-btn.open { background: rgba(34,197,94,.2); color: #86efac; }
+  :root[data-theme="dark"] .calc-bmi-gauge-card, :root[data-theme="dark"] .calc-bmi-medium input { background: #182a42; color: #e8eefc; }
+  :root[data-theme="dark"] .calc-bmi-normal { background: rgba(34,197,94,.15); border-color: rgba(34,197,94,.4); color: #86efac; }
+  :root[data-theme="dark"] .calc-bmi-over { background: rgba(251,191,36,.15); border-color: rgba(251,191,36,.4); color: #fde68a; }
+  :root[data-theme="dark"] .calc-bmi-obese { background: rgba(239,68,68,.15); border-color: rgba(239,68,68,.4); color: #fca5a5; }
+
+  /* Account-request card */
+  :root[data-theme="dark"] .req-account-card h2, :root[data-theme="dark"] .req-account-card label { color: #f1f5f9; }
+  :root[data-theme="dark"] .req-account-card .req-intro { color: #cbd5e1 !important; }
+  :root[data-theme="dark"] .req-account-card input, :root[data-theme="dark"] .req-account-card select { background-color: #0c1829; color: #f1f5f9; border-color: #64748b; }
+  :root[data-theme="dark"] .req-account-card input::placeholder { color: #94a3b8; }
+  :root[data-theme="dark"] .login-page { background-color: #0B1F3A; }
+  :root[data-theme="dark"] .ward-select-page { background-color: #0B1F3A; }
+
+  /* Inline light backgrounds set from JSX (the browser serialises them as rgb()) */
+  :root[data-theme="dark"] [style*="background: rgb(249, 250, 251)"], :root[data-theme="dark"] [style*="background: rgb(243, 244, 246)"],
+  :root[data-theme="dark"] [style*="background: rgb(239, 246, 255)"], :root[data-theme="dark"] [style*="background: rgb(238, 242, 255)"],
+  :root[data-theme="dark"] [style*="background: rgb(242, 242, 242)"], :root[data-theme="dark"] [style*="background: rgb(255, 255, 255)"],
+  :root[data-theme="dark"] [style*="background-color: rgb(255, 255, 255)"], :root[data-theme="dark"] [style*="background: white"] {
+    background: #182a42 !important; color: #e8eefc !important; border-color: var(--border) !important;
+  }
+  :root[data-theme="dark"] [style*="background: rgb(254, 243, 199)"] { background: rgba(251,191,36,.18) !important; color: #fde68a !important; }
+}
