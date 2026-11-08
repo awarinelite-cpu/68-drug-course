@@ -156,6 +156,7 @@ export default function DrugCourseChart() {
   const [editingDrugRows, setEditingDrugRows] = useState({});
   const [chartRows, setChartRows] = useState([]);
   const lastNextDueRef = useRef(undefined);
+  const [chartNextDue, setChartNextDue] = useState(undefined);
   const [chartEditMode, setChartEditMode] = useState(false);
   const [editingChartRows, setEditingChartRows] = useState({});
   const [verbalOrders, setVerbalOrders] = useState([]);
@@ -287,12 +288,13 @@ export default function DrugCourseChart() {
         setCareInstructions(data.careInstructions || []);
         setAuditLog(data.auditLog || []);
         if (isArchived && admissionMetaData) setArchiveMeta(admissionMetaData);
-        // Opening a chart also refreshes the ward-list medication dot, even with no edits.
+        // Opening a chart can refresh the ward-list medication dot, even with no edits.
+        // The write itself happens in the effect below, and only if the value differs.
         if (!isArchived) {
           try {
             const nd = nextDueFromChartDoc(data);
             lastNextDueRef.current = nd;
-            updateDoc(doc(db, 'patients', patientId), { drugNextDueAt: nd }).catch(() => {});
+            setChartNextDue(nd);
           } catch (e) { /* ignore */ }
         }
       } else {
@@ -389,6 +391,14 @@ export default function DrugCourseChart() {
     document.addEventListener('visibilitychange', pullRemote);
     return () => document.removeEventListener('visibilitychange', pullRemote);
   }, [isArchived, chartEditMode, drugsEditMode]);
+
+  // Store the chart's next due time on the patient record only when it differs
+  // from what is already stored (no write on a plain chart open).
+  useEffect(() => {
+    if (isArchived || chartNextDue === undefined || !loadedPatient || !patientId) return;
+    if (loadedPatient.drugNextDueAt === chartNextDue) return;
+    updateDoc(doc(db, 'patients', patientId), { drugNextDueAt: chartNextDue }).catch(() => {});
+  }, [chartNextDue, loadedPatient, isArchived, patientId]);
 
   // --- Save -----------------------------------------------------------------
   function saveChart() {
