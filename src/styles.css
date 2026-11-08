@@ -2893,3 +2893,7 @@ html[data-phone-desktop] .drug-chart-page table.drugs-table td select { width: 1
 .drug-chart-page .tab-bottom-attached table tbody tr:last-child > :first-child { border-bottom-left-radius: 0; }
 .drug-chart-page .tab-top-attached table thead tr:first-child > :first-child { border-top-left-radius: 0; }
 @media print { .tab-bar { display: none; } }
+
+
+/* "Not given" reasons are shown in full, in smaller text, so they take little room in the Drug S/N cell */
+.sno-skip-reason { font-size: .72em; line-height: 1.15; font-weight: 600; overflow-wrap: anywhere; }

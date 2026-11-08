@@ -640,9 +640,9 @@ export function buildSnoSegments(sno, skipped) {
   });
   groups.forEach(g => {
     const nums = g.nums.slice().sort((a, b) => a - b);
-    const abbr = abbreviateReason(g.reason);
-    const label = '(' + nums.join(',') + ' ' + abbr + ')';
-    segments.push({ type: 'skip', text: label, nums, fullReason: g.reason });
+    // The reason is shown in full (the chart renders it in a smaller font) — no abbreviation.
+    const label = '(' + nums.join(',') + ' ' + g.reason + ')';
+    segments.push({ type: 'skip', text: label, nums, numsText: nums.join(','), fullReason: g.reason });
   });
   return segments;
 }

@@ -14,7 +14,7 @@ import {
   ROUTE_OPTIONS, FREQ_OPTIONS, ACTION_OPTIONS, REMARK_OPTIONS, STATUS_LABELS, WARD_OPTIONS, actionColor, defaultRow,
   dueLabelFor, withDrugCompletionChecked, activateFollowOnDrugs, computeRouteFromSno, parseBulkText,
   parseDoseSequence, administrationTimesFor, flaggedDrugRefs, flaggedDrugMessage, diffFields,
-  autoDurationForFrequency, buildSnoSegments, buildSnoText, abbreviateReason,
+  autoDurationForFrequency, buildSnoSegments, buildSnoText,
   parseWeeklyFrequency, weeklyDosesGivenThisWeek, formatHHMM12, earliestDueAt, nextDueFromChartDoc
 } from "../lib/drugChartHelpers.js";
 import { ROSTER_TAG_FOR_REASON, clearAllocationsForPatient, EXIT_STAT_KEY, EXIT_DEMOGRAPHIC_CATEGORY, setPatientParoleStatus, releaseParoleOnExit, markPatientNotAdmitted, markPatientOldPatient } from "../lib/patientAdmissionStatus.js";
@@ -1499,7 +1499,7 @@ export default function DrugCourseChart() {
                             {skip.map((s, idx) => (
                               <span key={'s' + idx} className="sno-skip-text sno-skip-tap"
                                 onClick={() => setSkipReasonPopup({ nums: s.nums, reason: s.fullReason })}>
-                                {(idx > 0 ? '. ' : '') + s.text}
+                                {(idx > 0 ? '. ' : '') + '(' + s.numsText + ' '}<span className="sno-skip-reason">{s.fullReason}</span>{')'}
                               </span>
                             ))}
                           </>
@@ -1686,7 +1686,7 @@ export default function DrugCourseChart() {
                       <button type="button" className="sno-picker-pencil-btn" title="Not given — write a reason" aria-label="Not given — write a reason" onClick={(e) => { e.preventDefault(); openSnoSkipEditor(num); }}>✏️</button>
                     </label>
                     {skipReason && !editingThis && (
-                      <div className="sno-picker-skip-note" onClick={() => openSnoSkipEditor(num)}>{num + ' ' + abbreviateReason(skipReason)}</div>
+                      <div className="sno-picker-skip-note" onClick={() => openSnoSkipEditor(num)}>{num + ' ' + skipReason}</div>
                     )}
                     {editingThis && (
                       <div className="sno-picker-skip-editor">
