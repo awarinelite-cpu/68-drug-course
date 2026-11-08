@@ -296,6 +296,18 @@ export function earliestDueAt(drugs, chartRows) {
   return best ? best.toISOString() : null;
 }
 
+// Same result as earliestDueAt, computed straight from a saved drugCourseChart
+// document (rows may be stored as arrays or objects). Used to backfill
+// drugNextDueAt for patients whose chart was saved before that field existed.
+export function nextDueFromChartDoc(data) {
+  if (!data) return null;
+  const rows = (data.rows || []).map(r => Array.isArray(r)
+    ? { date: r[0] || '', sno: r[1] || '', time: r[2] || '', dose: r[3] || 'AP', route: r[4] || '', nurse: r[5] || '', remark: r[6] || '', skipped: [] }
+    : { ...r, skipped: Array.isArray(r.skipped) ? r.skipped : [] });
+  const drugs = withDrugCompletionChecked(data.drugs || [], rows);
+  return earliestDueAt(drugs, rows);
+}
+
 export function dueLabelFor(d, i, chartRows, now) {
   const dueAt = computeDueAt(d, i, chartRows);
   if (!dueAt) return { text: '—', overdue: false, skippedPending: false };

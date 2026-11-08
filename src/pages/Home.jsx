@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { collection, doc, setDoc, serverTimestamp } from "firebase/firestore";
+import { collection, doc, setDoc, getDoc, updateDoc, serverTimestamp } from "firebase/firestore";
 import { db } from "../firebase.js";
 import { useAuth } from "../contexts/AuthContext.jsx";
 import { useExitOnDoubleBack } from "../hooks/useExitOnDoubleBack.js";
@@ -19,7 +19,7 @@ import { WARDS, OLD_IN_KEY } from "../lib/nurses-report-common.js";
 import { loadWardPatients, loadIncomingTransfers, searchPatients, findPatientByEmrExact, nameSearchTokens } from "../lib/patientDirectory.js";
 import { activeAdmissionTag, ADMISSION_TAG_LABEL, clearAdmissionTag, readmitLatestAdmission, READMIT_ELIGIBLE_TAGS, hasActiveAdmissionData } from "../lib/patientAdmissionStatus.js";
 import { bumpShiftStatForPatientWard, bumpDemographicStatForPatientWard } from "../lib/shiftStatsSync.js";
-import { WARD_OPTIONS } from "../lib/drugChartHelpers.js";
+import { WARD_OPTIONS, nextDueFromChartDoc } from "../lib/drugChartHelpers.js";
 import { classifyAffiliation, isOfficerArmyNumber } from "../lib/patientAffiliation.js";
 import { createPatientUnique } from '../lib/patientUnique.js';
 
@@ -343,6 +343,27 @@ export default function Home() {
     ]);
     setMyWardPatients(wardList);
     setIncomingTransfers(incoming);
+    backfillMedDue(wardList);
+  }
+
+  // Patients whose drug chart was last saved before drugNextDueAt existed have
+  // no value yet, so no dot. Read each such chart once, work out the next dose,
+  // and store it on the patient record (and in the list) — after that the list
+  // needs no chart reads.
+  async function backfillMedDue(list) {
+    const missing = (list || []).filter((p) => p.drugNextDueAt === undefined && !p.dischargeStatus);
+    if (!missing.length) return;
+    const results = await Promise.all(missing.map(async (p) => {
+      try {
+        const snap = await getDoc(doc(db, 'patients', p.id, 'drugCourseChart', 'main'));
+        const next = snap.exists() ? nextDueFromChartDoc(snap.data()) : null;
+        updateDoc(doc(db, 'patients', p.id), { drugNextDueAt: next }).catch(() => {});
+        return [p.id, next];
+      } catch (e) { return null; }
+    }));
+    const map = new Map(results.filter(Boolean));
+    if (!map.size) return;
+    setMyWardPatients((prev) => (prev ? prev.map((p) => (map.has(p.id) ? { ...p, drugNextDueAt: map.get(p.id) } : p)) : prev));
   }
 
   // Readmit action inline on the ward list — cancels a DISCHARGE/TRANS

@@ -15,7 +15,7 @@ import {
   dueLabelFor, withDrugCompletionChecked, activateFollowOnDrugs, computeRouteFromSno, parseBulkText,
   parseDoseSequence, administrationTimesFor, flaggedDrugRefs, flaggedDrugMessage, diffFields,
   autoDurationForFrequency, buildSnoSegments, buildSnoText, abbreviateReason,
-  parseWeeklyFrequency, weeklyDosesGivenThisWeek, formatHHMM12, earliestDueAt
+  parseWeeklyFrequency, weeklyDosesGivenThisWeek, formatHHMM12, earliestDueAt, nextDueFromChartDoc
 } from "../lib/drugChartHelpers.js";
 import { ROSTER_TAG_FOR_REASON, clearAllocationsForPatient, EXIT_STAT_KEY, EXIT_DEMOGRAPHIC_CATEGORY, setPatientParoleStatus, releaseParoleOnExit, markPatientNotAdmitted, markPatientOldPatient } from "../lib/patientAdmissionStatus.js";
 import { PAROLE_PATIENT_WARD_LABEL, todayISO } from "../lib/nurses-report-common.js";
@@ -286,6 +286,14 @@ export default function DrugCourseChart() {
         setCareInstructions(data.careInstructions || []);
         setAuditLog(data.auditLog || []);
         if (isArchived && admissionMetaData) setArchiveMeta(admissionMetaData);
+        // Opening a chart also refreshes the ward-list medication dot, even with no edits.
+        if (!isArchived) {
+          try {
+            const nd = nextDueFromChartDoc(data);
+            lastNextDueRef.current = nd;
+            updateDoc(doc(db, 'patients', patientId), { drugNextDueAt: nd }).catch(() => {});
+          } catch (e) { /* ignore */ }
+        }
       } else {
         setDrugs(blankDrugs());
         setChartRows(blankChartRows());
