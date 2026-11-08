@@ -2628,3 +2628,46 @@ h3.ward-report-subheading, .ward-report-subheading { font-size: clamp(28px, 3.4v
   .wh-brand-1 { font-size: 18px; } .wh-brand-2 { font-size: 20px; } .wh-logo { width: 38px; height: 38px; }
   .wh-card-main { padding-right: 0; } .wh-card .patient-status-wrap { position: static; margin-left: auto; }
 }
+
+/* ══ App-wide alignment with the ward-home design ═════════════════════ */
+.wh-header--page { border-radius: 0 0 32px 52px; padding-bottom: 18px; position: sticky; top: 0; z-index: 50; }
+.wh-header--page .wh-brand-text { min-width: 0; }
+.wh-brand-2--long { font-size: 18px; line-height: 1.15; }
+.wh-tools--top { margin-left: auto; margin-right: 30px; flex: 0 0 auto; }
+.wh-identity .whoami-link { color: #fff; }
+.wh-identity .whoami-name { color: #fff; }
+.wh-header .btn {
+  background: rgba(6,24,80,.55); background-image: none; color: #fff; text-shadow: none; box-shadow: none;
+  border: 1.5px solid rgba(255,255,255,.22); border-radius: 999px; padding: 8px 16px !important; font-size: 14.5px; font-weight: 600;
+}
+.wh-header .btn-purple { background: rgba(124,58,237,.75); }
+.wh-header .btn-danger { background: rgba(220,38,38,.75); }
+.wh-header .btn-success { background: rgba(22,163,74,.8); }
+.wh-header .btn-primary { background: rgba(29,107,255,.8); }
+.wh-header .btn:active { transform: scale(.96); box-shadow: none; }
+.wh-header .theme-toggle-btn { border-radius: 999px; }
+@media (max-width: 480px) { .wh-header--page { position: static; } }
+
+body, :root { --background: #EEF3FB; }
+:root[data-theme="dark"] { --background: #0B1F3A; }
+.card-box:not(.login-card), :root[data-theme="dark"] .card-box:not(.login-card) {
+  background: var(--surface-bg); border: 1px solid var(--border); border-radius: 22px;
+  box-shadow: 0 10px 22px -14px rgba(16,40,120,.4);
+}
+.search-result-item, .alloc-item, :root[data-theme="dark"] .search-result-item, :root[data-theme="dark"] .alloc-item {
+  background: var(--surface-bg); border: 1px solid var(--border); border-left: 1px solid var(--border);
+  border-radius: 24px; box-shadow: 0 10px 22px -14px rgba(16,40,120,.4); transform: none;
+}
+.search-result-item:hover, .alloc-item:hover { transform: none; box-shadow: 0 12px 24px -12px rgba(16,40,120,.5); }
+.btn { background-image: none; text-shadow: none; border-radius: 999px; box-shadow: 0 8px 16px -10px rgba(0,0,0,.45); }
+.btn:active { box-shadow: 0 2px 6px -3px rgba(0,0,0,.4); }
+.btn-primary { background: linear-gradient(180deg, #1d6bff, #0a3fd6); }
+.btn-success { background: linear-gradient(180deg, #2bc866, #14a04a); }
+.btn-secondary { background: #dde5f3; color: #2c3e73; }
+:root[data-theme="dark"] .btn-secondary { background: rgba(148,163,184,.22); color: #dbe6ff; }
+.btn-purple { background: linear-gradient(180deg, #8b5cf6, #6d28d9); }
+.btn-danger { background: linear-gradient(180deg, #ef4444, #cf1f1f); }
+input[type=text], input[type=email], input[type=tel], input[type=password], input[type=number],
+input[type=date], input[type=datetime-local], input[type=time], input[type=month], input[type=week], textarea, select { border-radius: 14px; }
+.gnav-drawer-head { background: linear-gradient(165deg, #0a3aa8, #05195a); }
+@media print { .wh-header { display: none !important; } }
