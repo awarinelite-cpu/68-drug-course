@@ -381,8 +381,8 @@ export async function applyPatientStatus({ patientId, reason, transferWard, from
         // D/Parole list too (they are the only way onto it now). No
         // 'paroleOut' bump here: the discharge already took them off Occ.
         ...(autoDParole
-          ? { paroleStatus: PAROLE_STATUS.dParole, paroleAt: serverTimestamp(), paroleWard: PAROLE_PATIENT_WARD_LABEL, paroleStart: todayISO(), paroleReturn: '' }
-          : { paroleStatus: '', paroleAt: null, paroleWard: '', paroleStart: '', paroleReturn: '' }),
+          ? { paroleStatus: PAROLE_STATUS.dParole, paroleAt: serverTimestamp(), paroleWard: PAROLE_PATIENT_WARD_LABEL, paroleStart: todayISO(), paroleReturn: '', paroleFromDischarge: true }
+          : { paroleStatus: '', paroleAt: null, paroleWard: '', paroleStart: '', paroleReturn: '', paroleFromDischarge: false }),
         dischargeStatShiftRef: exitStatRef, dischargeStatDemographicRef: demographicStatRef
       })
     ]);
@@ -580,8 +580,14 @@ export async function admitExistingPatientToWard({ patientId, currentWard, nurse
           }
           return await readmitFromParole({ patientId });
         }
+        if (pd.paroleFromDischarge) {
+          // Already discharged and archived: the return date passed, so the
+          // discharge is final. Just drop the tag, nothing more to archive.
+          await updateDoc(doc(db, 'patients', patientId), { paroleStatus: '', paroleAt: null, paroleWard: '', paroleStart: '', paroleReturn: '', paroleFromDischarge: false, updatedAt: serverTimestamp() });
+        } else {
         const arch = await applyPatientStatus({ patientId, reason: 'paroleExpired', transferWard: '', fromWard: '', transferredByName: '' });
         if (!arch.ok && !arch.archived) return { ok: false, message: 'Could not close out the expired parole: ' + arch.message };
+        }
       }
     } catch (e) {
       return { ok: false, message: 'Could not check parole status: ' + (e.code || e.message || 'unknown error') };
@@ -871,6 +877,7 @@ export async function setPatientParoleStatus({ patientId, kind, startDate, retur
       // optional — blank until the patient's return date is known).
       paroleStart: startDate || '',
       paroleReturn: returnDate || '',
+      paroleFromDischarge: false,
       updatedAt: serverTimestamp()
     } : {
       paroleStatus: '', paroleAt: null, paroleWard: '', paroleStart: '', paroleReturn: '',
@@ -964,4 +971,24 @@ export async function readmitFromParole({ patientId }) {
     }
   }
   return { ok: true, stillOnWard };
+}
+
+// D/Parole return date, set by the nurses on the A Ward report (a discharge
+// puts the patient on D/Parole with no return date). Blank clears it (stays
+// listed until readmitted). A date in the past is refused: it would drop the
+// patient off the list at once, which is what an expired date does by itself.
+export async function setParoleReturnDate({ patientId, returnDate }) {
+  try {
+    const ref = doc(db, 'patients', patientId);
+    const snap = await getDoc(ref);
+    if (!snap.exists()) return { ok: false, message: 'Patient record not found.' };
+    const d = snap.data();
+    if (!d.paroleStatus) return { ok: false, message: 'This patient is no longer on parole.' };
+    if (returnDate && returnDate < todayISO()) return { ok: false, message: 'Return date can\u2019t be in the past.' };
+    if (returnDate && d.paroleStart && returnDate < d.paroleStart) return { ok: false, message: 'Return date can\u2019t be before the commencement date.' };
+    await updateDoc(ref, { paroleReturn: returnDate || '', updatedAt: serverTimestamp() });
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, message: 'Could not save the return date: ' + (e.code || e.message || 'unknown error') };
+  }
 }

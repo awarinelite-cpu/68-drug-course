@@ -16,7 +16,7 @@ import { patientWardAndBedTypeForReportKey, wardSelectorKeyForPatientWard } from
 import { wardHeadcount } from "../../lib/wardCensus.js";
 import { buildLiveCensus } from "../../lib/liveCensus.js";
 import { loadPatientsForWardLabels, loadCensusPatients } from "../../lib/patientDirectory.js";
-import { applyPatientStatus, closeOutDischargedPatient, closeOutParolePatients, readmitFromParole, activeAdmissionTag, clearAdmissionTag, activeTransferOut, clearTransferOutMarker, ADMISSION_TAG_LABEL, ADMISSION_TAG_STATUS_STAMP } from "../../lib/patientAdmissionStatus.js";
+import { applyPatientStatus, closeOutDischargedPatient, closeOutParolePatients, readmitFromParole, setParoleReturnDate, activeAdmissionTag, clearAdmissionTag, activeTransferOut, clearTransferOutMarker, ADMISSION_TAG_LABEL, ADMISSION_TAG_STATUS_STAMP } from "../../lib/patientAdmissionStatus.js";
 import useArchiveSweep from "../../hooks/useArchiveSweep.js";
 import Topbar from "../../components/Topbar.jsx";
 import { PatientPopupProvider, PNum } from "../../components/PatientListModal.jsx";
@@ -1218,6 +1218,15 @@ function useWardReport(wardKey, isAdmin, profile, user) {
     setParoleReload((n) => n + 1);
   }
 
+  // D/Parole return date, editable by the nurses on the live list. When the
+  // date passes without the patient returning, the entry drops off the list
+  // by itself (see liveParole / isParoleActive).
+  async function changeDParoleReturn(entry, value) {
+    const r = await setParoleReturnDate({ patientId: entry.id, returnDate: value });
+    if (!r.ok) { window.alert(r.message); return; }
+    setParoleReload((n) => n + 1);
+  }
+
   async function saveReport() {
     if (!wardDoc || !editable) return;
     let doc_ = wardDoc;
@@ -1410,7 +1419,7 @@ function useWardReport(wardKey, isAdmin, profile, user) {
 
   return {
     w, wardDoc, adminEditOverride, setAdminEditOverride, nightOpenIds, topStatus, saveStatus, emrLookup,
-    wardPatientOptions, paroleView, paroleLoaded, readmitParolee, readmitBusyId,
+    wardPatientOptions, paroleView, paroleLoaded, readmitParolee, changeDParoleReturn, readmitBusyId,
     census, movementTotals, editable,
     updateWardDoc, updateShiftField, updateDuty, updateBeds, updateStartOcc,
     addPatient, removePatient, openPatientId, setOpenPatientId, updatePatientField, updateDiagnosisField, updateVitalsSnapshotField,
@@ -1598,7 +1607,7 @@ function WardPanelRest({ h, showLabel, isAdmin, navigate, includeShiftTable = tr
   const liveCensusMap = useLiveCensusMap();
   const {
     w, wardDoc, topStatus, saveStatus, editable, adminEditOverride, setAdminEditOverride,
-    census, movementTotals, emrLookup, wardPatientOptions, paroleView, paroleLoaded, readmitParolee, readmitBusyId,
+    census, movementTotals, emrLookup, wardPatientOptions, paroleView, paroleLoaded, readmitParolee, changeDParoleReturn, readmitBusyId,
     updateWardDoc, updateShiftField, updateDuty, updateBeds, updateStartOcc,
     addPatient, removePatient, openPatientId, setOpenPatientId, updatePatientField, updateDiagnosisField, updateVitalsSnapshotField,
     updatePatientStatus, lookupPatientByEmr, selectPatientFromWard, refreshPlan, applyNursingDiagnosis,
@@ -1723,7 +1732,7 @@ function WardPanelRest({ h, showLabel, isAdmin, navigate, includeShiftTable = tr
               {hasParole && (
                 <>
                   <h2 style={{ marginTop: 14 }}>{paroleHasAny(paroleView.parole) && paroleHasAny(paroleView.dParole) ? 'Parole / D/Parole' : paroleHasAny(paroleView.parole) ? 'Parole' : 'D/Parole'}</h2>
-                  <ParoleTables paroleList={paroleView.parole} dParoleList={paroleView.dParole} onReadmit={paroleLoaded ? readmitParolee : undefined} busyId={readmitBusyId} />
+                  <ParoleTables paroleList={paroleView.parole} dParoleList={paroleView.dParole} onReadmit={paroleLoaded ? readmitParolee : undefined} onChangeDParoleReturn={paroleLoaded ? changeDParoleReturn : undefined} busyId={readmitBusyId} />
                 </>
               )}
             </div>

@@ -1,6 +1,8 @@
-// Parole / D/Parole name tables for the A Ward report. Read-only: patients
+import { todayISO } from "../lib/nurses-report-common.js";
+
+// Parole / D/Parole name tables for the A Ward report. Mostly read-only: patients
 // get onto these lists from the Patient page's Status control (Parole /
-// D/Parole), and the ward report just displays them. Each entry is
+// D/Parole), and the ward report just displays them (the D/Parole return date is editable on the live A Ward report). Each entry is
 // { id, name, emr, age, sex, since } where `since` is the millisecond
 // timestamp the tag was set (0 when unknown). The counts of these two lists
 // feed the Parole / D/Parole columns of the ward and overall statistics
@@ -21,7 +23,7 @@ function fmtSince(ms) {
   return d.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: '2-digit' });
 }
 
-function ParoleTable({ title, rows, onReadmit, busyId }) {
+function ParoleTable({ title, rows, onReadmit, busyId, onChangeReturn }) {
   const list = Array.isArray(rows) ? rows : [];
   return (
     <div className="parole-block">
@@ -42,7 +44,13 @@ function ParoleTable({ title, rows, onReadmit, busyId }) {
                 <td>{p.age || '\u2014'}</td>
                 <td>{p.sex || '\u2014'}</td>
                 <td>{fmtDate(p.startDate, p.since)}</td>
-                <td>{fmtDate(p.returnDate)}</td>
+                <td>
+                  {onChangeReturn ? (
+                    <input type="date" value={p.returnDate || ''} min={p.startDate && p.startDate > todayISO() ? p.startDate : todayISO()}
+                      disabled={busyId === p.id} onChange={(e) => onChangeReturn(p, e.target.value)}
+                      style={{ fontSize: 12, padding: '2px 4px', maxWidth: 130 }} />
+                  ) : fmtDate(p.returnDate)}
+                </td>
                 {onReadmit && (
                   <td>
                     <button className="btn btn-primary" style={{ padding: '4px 10px', fontSize: 12 }}
@@ -63,11 +71,11 @@ function ParoleTable({ title, rows, onReadmit, busyId }) {
 // A table only appears while it has at least one patient.
 export function hasAny(list) { return Array.isArray(list) && list.length > 0; }
 
-export default function ParoleTables({ paroleList, dParoleList, onReadmit, busyId }) {
+export default function ParoleTables({ paroleList, dParoleList, onReadmit, busyId, onChangeDParoleReturn }) {
   return (
     <>
       {hasAny(paroleList) && <ParoleTable title="Parole" rows={paroleList} onReadmit={onReadmit} busyId={busyId} />}
-      {hasAny(dParoleList) && <ParoleTable title="D/Parole" rows={dParoleList} onReadmit={onReadmit} busyId={busyId} />}
+      {hasAny(dParoleList) && <ParoleTable title="D/Parole" rows={dParoleList} onReadmit={onReadmit} busyId={busyId} onChangeReturn={onChangeDParoleReturn} />}
     </>
   );
 }
