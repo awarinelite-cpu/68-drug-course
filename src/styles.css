@@ -782,7 +782,7 @@ table.chart td input { width:100%; border:none; background:transparent; text-ali
    markers. */
 .sno-picker-pencil-btn { background:none; border:none; cursor:pointer; font-size:15px; padding:2px 4px; line-height:1; flex-shrink:0; opacity:0.75; }
 .sno-picker-pencil-btn:hover, .sno-picker-pencil-btn:active { opacity:1; }
-.sno-picker-skip-note { margin-top:4px; margin-left:26px; font-size:12px; color:#d97706; cursor:pointer; }
+.sno-picker-skip-note { margin-top:4px; margin-left:26px; font-size:9px; color:#d97706; cursor:pointer; }
 .sno-picker-skip-editor { margin-top:6px; margin-left:26px; }
 .sno-picker-skip-editor textarea { width:100%; box-sizing:border-box; font-size:13px; font-family:inherit; padding:6px; resize:vertical; }
 /* "Not given" reason text on the Drug S/N chart column — same font size as
@@ -2896,4 +2896,4 @@ html[data-phone-desktop] .drug-chart-page table.drugs-table td select { width: 1
 
 
 /* "Not given" reasons are shown in full, in smaller text, so they take little room in the Drug S/N cell */
-.sno-skip-reason { font-size: .72em; line-height: 1.15; font-weight: 600; overflow-wrap: anywhere; }
+.sno-skip-reason { font-size: .5em; line-height: 1.1; font-weight: 600; overflow-wrap: anywhere; }
