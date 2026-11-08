@@ -26,10 +26,11 @@
 import { lookupEmrOwner } from "./patientUnique.js";
 import { WARD_OPTIONS } from "./drugChartHelpers.js";
 import { getDocsSafe } from "./firestoreOffline.js";
-import { collection, query, where, orderBy, limit, getDocs, writeBatch, doc as fsDoc } from "firebase/firestore";
+import { collection, query, where, orderBy, limit, getDocs, getDocsFromCache, writeBatch, doc as fsDoc } from "firebase/firestore";
 import { db } from "../firebase.js";
 
-const SEARCH_LIMIT = 30;
+// Smaller than before: each of the three search queries is billed per document returned.
+const SEARCH_LIMIT = 10;
 
 function toRecord(d) {
   return { id: d.id, ...d.data() };
@@ -59,6 +60,20 @@ export async function loadWardPatients(wardLabel) {
   if (!wardLabel) return [];
   const snap = await getDocs(query(collection(db, "patients"), where("ward", "==", wardLabel)));
   return snap.docs.map(toRecord).filter((p) => !p.pendingTransfer);
+}
+
+// Same as loadWardPatients / loadIncomingTransfers but read only from the
+// device's local cache — costs no Firestore reads. Used to paint the ward list
+// instantly; the server load that follows (when due) corrects anything stale.
+export async function loadWardPatientsFromCache(wardLabel) {
+  if (!wardLabel) return [];
+  const snap = await getDocsFromCache(query(collection(db, "patients"), where("ward", "==", wardLabel)));
+  return snap.docs.map(toRecord).filter((p) => !p.pendingTransfer);
+}
+export async function loadIncomingTransfersFromCache(wardLabel) {
+  if (!wardLabel) return [];
+  const snap = await getDocsFromCache(query(collection(db, "patients"), where("pendingTransfer.toWard", "==", wardLabel)));
+  return snap.docs.map(toRecord);
 }
 
 // Patients across several wards at once (e.g. Overall Nurse re-seeding

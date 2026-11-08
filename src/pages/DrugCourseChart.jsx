@@ -24,6 +24,7 @@ import { classifyAffiliation, isOfficerArmyNumber } from "../lib/patientAffiliat
 import { parsePatientFields, extractDrugSection } from "../lib/patientParse.js";
 import { readEmrStash } from "../lib/emrBridge.js";
 import { useTimeFormat, formatTime, formatDateTime } from "../lib/time-format.js";
+import { getDocCachedFirst, wasFetchedRecently, markFetched } from "../lib/firestoreOffline.js";
 import usePrintOrientation from "../hooks/usePrintOrientation.js";
 
 const FIELD_IDS = ['f_admission', 'f_discharge', 'f_diagnosis'];
@@ -267,7 +268,7 @@ export default function DrugCourseChart() {
         }
       } else {
         chartRefPath.current = doc(db, 'patients', patientId, 'drugCourseChart', 'main');
-        const snap = await getDoc(chartRefPath.current);
+        const snap = await getDocCachedFirst(chartRefPath.current);
         if (snap.exists()) { data = snap.data(); lastAppliedUpdatedAtRef.current = data.updatedAt || null; }
       }
 
@@ -359,8 +360,11 @@ export default function DrugCourseChart() {
       if (!chartRefPath.current || chartEditMode || drugsEditMode) return;
       const active = document.activeElement;
       if (active && /^(INPUT|TEXTAREA|SELECT)$/.test(active.tagName)) return;
+      // Already checked the server within the last couple of minutes: skip this read.
+      if (wasFetchedRecently(chartRefPath.current)) return;
       try {
         const snap = await getDoc(chartRefPath.current);
+        markFetched(chartRefPath.current);
         if (!snap.exists()) return;
         const data = snap.data();
         const remoteMs = data.updatedAt?.toMillis ? data.updatedAt.toMillis() : 0;

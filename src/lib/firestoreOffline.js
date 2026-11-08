@@ -41,3 +41,33 @@ export async function getDocsSafe(refOrQuery) {
     }
   }
 }
+
+
+// --- Cache-first reads --------------------------------------------------
+// Every server read of a document costs one Firestore read. For a document
+// that was fetched from the server within the last couple of minutes, the copy
+// in the device's persistent cache is current enough (it also already holds this
+// device's own saves), so serve that and skip the server. The stamp is kept in
+// memory, so a fresh app open always starts with one real read.
+const FRESH_MS = 2 * 60 * 1000;
+const serverStamps = new Map();
+
+export function wasFetchedRecently(ref, maxAgeMs = FRESH_MS) {
+  const t = serverStamps.get(ref.path);
+  return !!t && Date.now() - t < maxAgeMs;
+}
+export function markFetched(ref) { serverStamps.set(ref.path, Date.now()); }
+
+// Drop-in replacement for getDocSafe(ref) that avoids a server read when the
+// document was fetched less than maxAgeMs ago and is in the local cache.
+export async function getDocCachedFirst(ref, maxAgeMs = FRESH_MS) {
+  if (wasFetchedRecently(ref, maxAgeMs)) {
+    try {
+      const cached = await getDocFromCache(ref);
+      if (cached.exists()) return cached;
+    } catch (e) { /* not cached: fall through to the server */ }
+  }
+  const snap = await getDocSafe(ref);
+  if (snap && snap.metadata && !snap.metadata.fromCache) markFetched(ref);
+  return snap;
+}

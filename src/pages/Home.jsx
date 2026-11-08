@@ -16,7 +16,7 @@ import { takePendingEmrImport, stashEmrText } from "../lib/emrBridge.js";
 import { wardHeadcount } from "../lib/wardCensus.js";
 import { reportWardKeysForPatientWard, patientWardAndBedTypeForReportKey } from "../lib/wardNameMatch.js";
 import { WARDS, OLD_IN_KEY } from "../lib/nurses-report-common.js";
-import { loadWardPatients, loadIncomingTransfers, searchPatients, findPatientByEmrExact, nameSearchTokens } from "../lib/patientDirectory.js";
+import { loadWardPatients, loadIncomingTransfers, loadWardPatientsFromCache, loadIncomingTransfersFromCache, searchPatients, findPatientByEmrExact, nameSearchTokens } from "../lib/patientDirectory.js";
 import { activeAdmissionTag, ADMISSION_TAG_LABEL, clearAdmissionTag, readmitLatestAdmission, READMIT_ELIGIBLE_TAGS, hasActiveAdmissionData } from "../lib/patientAdmissionStatus.js";
 import { bumpShiftStatForPatientWard, bumpDemographicStatForPatientWard } from "../lib/shiftStatsSync.js";
 import { WARD_OPTIONS, nextDueFromChartDoc } from "../lib/drugChartHelpers.js";
@@ -210,11 +210,27 @@ function titleCase(str) {
   return (str || '').toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
+// The ward list is re-read from the server at most this often when the nurse
+// merely returns to the app; in between it is shown from the device cache (which
+// already includes this device's own saves). Forced reloads (after a status
+// change, a readmit, a transfer decision) always go to the server.
+const WARD_FRESH_MS = 2 * 60 * 1000;
+const wardSyncKey = (w) => 'wardcharts-ward-synced:' + w;
+function wardSyncedRecently(w) {
+  try { return Date.now() - Number(localStorage.getItem(wardSyncKey(w)) || 0) < WARD_FRESH_MS; } catch (e) { return false; }
+}
+function markWardSynced(w) { try { localStorage.setItem(wardSyncKey(w), String(Date.now())); } catch (e) { /* ignore */ } }
+
+// Search waits for typing to pause and for at least this many characters.
+const SEARCH_MIN_CHARS = 3;
+const SEARCH_DEBOUNCE_MS = 800;
+
 export default function Home() {
   const isOverallNurse = useOverallNurseThisWeek();
   const { user, profile } = useAuth();
   const navigate = useNavigate();
   const searchInputRef = useRef(null);
+  const incomingLoadedRef = useRef(false);
 
   const [searchQuery, setSearchQuery] = useState('');
   // Just this ward's patients (see patientDirectory.js) — replaces what
@@ -319,7 +335,7 @@ export default function Home() {
     const onVisible = () => {
       if (document.visibilityState !== 'visible') return;
       if (showNewForm || showEmrPaste) return;
-      loadWardData(true);
+      loadWardData('soft');
     };
     document.addEventListener('visibilitychange', onVisible);
     return () => document.removeEventListener('visibilitychange', onVisible);
@@ -334,13 +350,28 @@ export default function Home() {
   // (e.g. an admin account) now sees an empty list here rather than
   // everyone — the search box below is the way to find a specific
   // patient in that case.
-  async function loadWardData(force) {
-    if (myWardPatients && !force) return;
+  // mode: undefined = first load of this page; true = always go to the server;
+  // 'soft' = returning to the app (server only if the last server load is old).
+  async function loadWardData(mode) {
+    if (myWardPatients && !mode) return;
     const myWard = profile?.ward || '';
+    if (mode !== true && myWard) {
+      let cached = null;
+      try { cached = await loadWardPatientsFromCache(myWard); } catch (e) { /* nothing cached */ }
+      if (cached && cached.length) {
+        setMyWardPatients(cached);
+        if (!incomingLoadedRef.current) {
+          try { setIncomingTransfers(await loadIncomingTransfersFromCache(myWard)); } catch (e) { /* ignore */ }
+        }
+        if (wardSyncedRecently(myWard)) return; // recent server copy is in the cache: no reads needed
+      }
+    }
     const [wardList, incoming] = await Promise.all([
       loadWardPatients(myWard),
       loadIncomingTransfers(myWard)
     ]);
+    if (myWard) markWardSynced(myWard);
+    incomingLoadedRef.current = true;
     setMyWardPatients(wardList);
     setIncomingTransfers(incoming);
     backfillMedDue(wardList);
@@ -408,10 +439,12 @@ export default function Home() {
   useEffect(() => {
     const term = searchQuery.trim();
     if (!term) { setSearchResults(null); setSearching(false); return; }
+    // Too short to be worth a query: wait for more characters.
+    if (term.length < SEARCH_MIN_CHARS) { setSearchResults([]); setSearching(false); return; }
     setSearching(true);
     const t = setTimeout(() => {
       searchPatients(term).then(setSearchResults).finally(() => setSearching(false));
-    }, 300);
+    }, SEARCH_DEBOUNCE_MS);
     return () => clearTimeout(t);
   }, [searchQuery]);
 
@@ -833,7 +866,7 @@ export default function Home() {
             {!patientsLoaded && (searching ? 'Searching…' : 'Loading patients…')}
             {patientsLoaded && visiblePatients.length === 0 && (
               <div className="error-msg">
-                {q ? 'No patient matches that search.' :
+                {q ? (q.length < SEARCH_MIN_CHARS ? 'Type at least ' + SEARCH_MIN_CHARS + ' characters to search.' : 'No patient matches that search.') :
                   (myWard ? 'No patients on ' + myWard + ' yet. Use "+ New Patient" to register one.' : 'Set your ward to see patients in your ward. Click "Set your ward" above.')}
               </div>
             )}

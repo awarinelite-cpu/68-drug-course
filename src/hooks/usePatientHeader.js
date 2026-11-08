@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { doc } from "firebase/firestore";
 import { useNavigate } from "react-router-dom";
 import { db } from "../firebase.js";
-import { getDocSafe } from "../lib/firestoreOffline.js";
+import { getDocCachedFirst } from "../lib/firestoreOffline.js";
 
 // Returns { patient, loading }. Redirects to "/" if the patient doesn't exist
 // (mirrors chart-common.js's alert() + redirect behavior, minus the blocking alert).
@@ -18,7 +18,7 @@ export function usePatientHeader(patientId) {
     if (!patientId) { navigate("/"); return; }
     setLoading(true);
     setError(null);
-    getDocSafe(doc(db, "patients", patientId)).then((snap) => {
+    getDocCachedFirst(doc(db, "patients", patientId)).then((snap) => {
       if (cancelled) return;
       if (!snap.exists()) {
         setNotFound(true);
