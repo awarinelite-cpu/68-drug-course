@@ -9,7 +9,11 @@ function friendlyError(e) {
   if (code.includes('user-not-found') || code.includes('invalid-credential') || code.includes('wrong-password')) return 'Incorrect email or password.';
   if (code.includes('too-many-requests')) return 'Too many attempts. Please try again later.';
   if (code.includes('invalid-email')) return 'Enter a valid email address.';
-  return 'Something went wrong. Please try again.';
+  if (code.includes('network-request-failed')) return 'Cannot reach the server. Check your internet connection and try again. (' + code + ')';
+  if (code.includes('user-disabled')) return 'This account has been disabled. Contact the admin.';
+  // Show the real Firebase code so a failure on a device (e.g. the APK) can be diagnosed.
+  console.error('Login error', e);
+  return 'Login failed' + (code ? ' (' + code + ')' : (e && e.message ? ' (' + e.message + ')' : '')) + '. Please try again.';
 }
 
 export default function Login() {
