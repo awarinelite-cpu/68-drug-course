@@ -2823,3 +2823,9 @@ input[type=date], input[type=datetime-local], input[type=time], input[type=month
 .wh-due-summary .wh-due { margin-top: 0; }
 @keyframes wh-due-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .55; } }
 @media (prefers-reduced-motion: reduce) { .wh-due--overdue { animation: none; } }
+
+
+/* Phone in desktop mode: keep the desktop layout but enlarge everything so text is readable.
+   --phone-desktop-zoom is set by applyTextScale() in lib/viewMode.js. */
+html[data-phone-desktop] body { zoom: var(--phone-desktop-zoom, 1.4); }
+@media print { html[data-phone-desktop] body { zoom: 1; } }
