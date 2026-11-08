@@ -2744,3 +2744,29 @@ input[type=date], input[type=datetime-local], input[type=time], input[type=month
   }
   :root[data-theme="dark"] [style*="background: rgb(254, 243, 199)"] { background: rgba(251,191,36,.18) !important; color: #fde68a !important; }
 }
+
+/* ══ Full desktop layout (real desktop browsers AND the app's "desktop mode") ══
+   Bigger text (the whole app shell is scaled up) and the content fills the
+   screen instead of sitting in a narrow centred column. */
+@media screen and (min-width: 900px) {
+  :root { --dz: 1.2; }
+  .app-shell { zoom: var(--dz); min-height: calc(100vh / var(--dz)); min-height: calc(100dvh / var(--dz)); }
+  .gnav-drawer { zoom: var(--dz); }
+
+  .container { max-width: none; padding: 24px 32px 48px; }
+  .wh-header-inner { max-width: none; }
+  .wh-header { padding-left: 32px; padding-right: 32px; }
+  .wh-page { max-width: none; padding: 24px 32px 48px; }
+
+  .wh-new, .wh-clip { display: inline-flex; vertical-align: top; width: calc(50% - 8px); }
+  .wh-new { margin-right: 16px; }
+  .wh-search-field { height: 56px; }
+  .wh-search-field input[type=text] { font-size: 17px; }
+
+  .wh-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(520px, 1fr)); gap: 16px; align-items: start; }
+  .wh-list .wh-card { margin-bottom: 0; }
+  .wh-list > div:not(.wh-card) { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(auto-fill, minmax(520px, 1fr)); gap: 16px; align-items: start; }
+  .wh-list > div:not(.wh-card) > div:not(.wh-card) { grid-column: 1 / -1; }
+  .wh-ward-card { padding: 18px 24px; }
+}
+@media screen and (min-width: 1600px) { :root { --dz: 1.35; } }
