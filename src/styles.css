@@ -2771,3 +2771,38 @@ input[type=date], input[type=datetime-local], input[type=time], input[type=month
   .wh-ward-card { padding: 18px 24px; }
 }
 @media screen and (min-width: 1600px) { :root { --dz: 1.35; } }
+
+/* ══ Menu / tile cards in the ward-home style ═════════════════════════ */
+.chart-card, .role-card, .archive-card, .stat-box, .patient-card, .ward-card,
+:root[data-theme="dark"] .role-card, :root[data-theme="dark"] .chart-card, :root[data-theme="dark"] .archive-card {
+  background: var(--surface-bg); border: 1px solid var(--border);
+  box-shadow: 0 10px 22px -14px rgba(16,40,120,.4);
+}
+.chart-card, .archive-card, .stat-box, .patient-card .pc-name, .patient-card .pc-num, .ward-card-header, .role-card .title,
+.archive-card .file-name, .stat-box .n, .stat-box .l { color: var(--text-primary); text-shadow: none; }
+.role-card .desc, .archive-card .file-meta { color: var(--text-secondary); text-shadow: none; font-weight: 500; }
+.chart-card { border-radius: 24px; }
+.archive-card { border-radius: 24px; }
+.stat-box { border-radius: 22px; }
+.chart-card:hover, .role-card:hover, .archive-card:hover { transform: none; border-color: var(--primary-blue); box-shadow: 0 12px 24px -12px rgba(16,40,120,.5); }
+.chart-card:active, .role-card:active, .archive-card:active { transform: scale(.992); }
+
+.role-card {
+  display: grid; grid-template-columns: 68px 1fr 18px; column-gap: 16px; align-items: center; text-align: left;
+  border-radius: 26px; padding: 18px 22px 18px 16px; position: relative;
+}
+.role-card .icon {
+  grid-column: 1; grid-row: 1 / span 3; width: 68px; height: 68px; margin: 0; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center; font-size: 32px; background: #d9e8ff;
+}
+:root[data-theme="dark"] .role-card .icon { background: rgba(59,130,246,.22); }
+.role-card .title { grid-column: 2; font-size: 17px; font-weight: 800; letter-spacing: .3px; }
+.role-card .desc { grid-column: 2; margin: 4px 0 0; max-width: none; font-size: 14.5px; line-height: 1.35; }
+.role-card .status, .role-card > div { grid-column: 2; margin-top: 8px; font-size: 14px; }
+.role-card::after {
+  content: ""; grid-column: 3; grid-row: 1 / span 3; justify-self: end; width: 10px; height: 10px;
+  border-right: 3px solid var(--text-primary); border-top: 3px solid var(--text-primary); transform: rotate(45deg);
+}
+@media (min-width: 900px) {
+  .role-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)); gap: 16px; }
+}

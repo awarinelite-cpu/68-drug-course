@@ -68,7 +68,7 @@ export default function RoleSelect() {
         <button className="btn btn-secondary" style={{ padding: '6px 12px' }} onClick={goBack}>Back</button>
       </Topbar>
       <div className="container">
-        <p style={{ fontSize: 'clamp(16px, 2vw, 22px)', color: '#555' }}>Choose your role for this shift. The Overall Nurse role runs for the whole week.</p>
+        <p style={{ fontSize: 'clamp(16px, 2vw, 22px)', color: 'var(--text-secondary)' }}>Choose your role for this shift. The Overall Nurse role runs for the whole week.</p>
         <div className="role-grid">
           <button className="role-card" onClick={assumeOverall}>
             <span className="icon">🗂️</span>
