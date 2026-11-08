@@ -4,6 +4,8 @@ import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.os.Build;
 import android.os.Bundle;
+import android.webkit.WebSettings;
+import android.webkit.WebView;
 
 import com.getcapacitor.BridgeActivity;
 
@@ -19,6 +21,22 @@ public class MainActivity extends BridgeActivity {
   public void onCreate(Bundle savedInstanceState) {
     super.onCreate(savedInstanceState);
     createDoseDueAlertsChannel();
+    enableWideViewport();
+  }
+
+  // The in-app "desktop mode" button swaps the page's viewport meta tag to a
+  // wide 1100px canvas. Android WebView ignores a viewport width unless wide
+  // viewport support is switched on, which is why the button did nothing in the
+  // APK (it works in Chrome). Mobile mode still uses width=device-width, so the
+  // normal phone layout is unaffected.
+  private void enableWideViewport() {
+    if (getBridge() == null) return;
+    WebView webView = getBridge().getWebView();
+    if (webView == null) return;
+    WebSettings settings = webView.getSettings();
+    settings.setUseWideViewPort(true);
+    settings.setLoadWithOverviewMode(true);
+    settings.setSupportZoom(true);
   }
 
   private void createDoseDueAlertsChannel() {
