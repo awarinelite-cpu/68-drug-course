@@ -94,8 +94,25 @@ jobs:
         with:
           gradle-version: 8.14.3
 
+      # Fixed signing key so updates install over older versions. Needs two repo secrets:
+      # ANDROID_KEYSTORE_BASE64 and ANDROID_KEYSTORE_PASSWORD. Without them the build still works,
+      # signed with a random per-build debug key (nurses must uninstall before updating).
+      - name: Prepare signing key
+        env:
+          KS_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          if [ -n "$KS_B64" ]; then
+            echo "$KS_B64" | base64 -d > "$RUNNER_TEMP/narhy.keystore"
+            echo "ANDROID_KEYSTORE_FILE=$RUNNER_TEMP/narhy.keystore" >> "$GITHUB_ENV"
+            echo "Using fixed signing key."
+          else
+            echo "No ANDROID_KEYSTORE_BASE64 secret; using a random debug key."
+          fi
+
       - name: Build debug APK
         working-directory: android
+        env:
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
         run: gradle assembleDebug --stacktrace
 
       - name: Upload APK
