@@ -16,6 +16,9 @@ on:
       - '.github/workflows/android-debug.yml'
   workflow_dispatch: {}
 
+permissions:
+  contents: write   # lets the job publish the APK to a GitHub Release
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -101,3 +104,17 @@ jobs:
           name: narhy-ward-charts-debug-apk
           path: android/app/build/outputs/apk/debug/app-debug.apk
           retention-days: 30
+
+      # Stable public download link, used by the /install page:
+      # https://github.com/awarinelite-cpu/68-drug-course/releases/latest/download/narhy-ward-charts.apk
+      # Replaces the previous release on every build so the link always serves the newest APK.
+      - name: Publish APK to GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cp android/app/build/outputs/apk/debug/app-debug.apk narhy-ward-charts.apk
+          gh release delete apk-latest --cleanup-tag --yes || true
+          gh release create apk-latest narhy-ward-charts.apk \
+            --title "NARHY Ward Charts (Android)" \
+            --notes "Latest Android build. Install page: https://68-drug-course-26mw.vercel.app/install" \
+            --latest

@@ -1,5 +1,6 @@
 {
   "rewrites": [
+    { "source": "/install", "destination": "/install.html" },
     { "source": "/(.*)", "destination": "/index.html" }
   ]
 }
